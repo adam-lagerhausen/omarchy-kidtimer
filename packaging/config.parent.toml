@@ -1,0 +1,4 @@
+kids = [
+  { name = "kid-a", url = "http://kid-a:8742" },
+  { name = "kid-b", url = "http://kid-b:8742" },
+]

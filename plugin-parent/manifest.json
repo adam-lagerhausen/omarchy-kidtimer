@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "kidtimer.parent",
+  "name": "Kidtimer parent",
+  "version": "0.1.0",
+  "author": "Adam",
+  "description": "Till tape for two kids. Remaining time, lock, asks, bedtime. Talks to kid daemons.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Kidtimer",
+    "description": "Kid remaining time and grants",
+    "category": "Time",
+    "allowMultiple": false
+  }
+}

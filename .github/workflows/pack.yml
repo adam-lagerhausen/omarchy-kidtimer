@@ -1,0 +1,22 @@
+name: pack
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Pack
+        run: bash packaging/pack.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kidtimer-linux
+          path: dist/*.tar.gz

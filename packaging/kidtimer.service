@@ -1,0 +1,16 @@
+[Unit]
+Description=Kidtimer ledger daemon
+After=network-online.target tailscaled.service
+Wants=tailscaled.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/kidtimer daemon
+Restart=on-failure
+RestartSec=2
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

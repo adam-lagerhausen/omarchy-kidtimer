@@ -1,0 +1,38 @@
+kid_name = "parent-lab"
+timezone = "America/New_York"
+enforcer = false
+advertise = false
+listen = "127.0.0.1:8742"
+bedtime_lock = false
+empty_lock = false
+bedtime_start = "21:00"
+bedtime_end = "07:00"
+always_on = [
+  "omarchy-shell",
+  "omarchy.lock",
+  "omarchy.menu",
+  "omarchy.notifications",
+  "omarchy.polkit",
+]
+never_signal = ["sshd", "tailscaled", "systemd", "Hyprland", "omarchy-shell"]
+remote_lock = false
+
+[lab]
+enabled = true
+classes = ["kidtimer-lab"]
+
+[groups.fun]
+policy = "metered"
+daily_seconds = 3600
+match = [
+  { class = "kidtimer-lab" },
+]
+
+[modes.morning]
+fun = 0
+
+[modes.homework]
+fun = 0
+
+[modes.evening]
+fun = 0

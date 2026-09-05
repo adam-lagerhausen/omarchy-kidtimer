@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "kidtimer.kid",
+  "name": "Kidtimer",
+  "version": "0.1.0",
+  "author": "Adam",
+  "description": "Time left today, request-more-time, and the bedtime overlay. Talks to localhost daemon. Not the bank.",
+  "kinds": ["service", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Overlay.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Kidtimer",
+    "description": "Time left today",
+    "category": "Time",
+    "allowMultiple": false
+  }
+}

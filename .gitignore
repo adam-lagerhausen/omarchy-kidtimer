@@ -1,0 +1,14 @@
+/daemon/kidtimer
+/daemon/kidtimer-daemon
+*.sqlite
+*.sqlite-journal
+dist/
+.idea/
+.vscode/
+*.swp
+.audit/
+.grok/
+scratch/parent-v1/
+scratch/
+docs/open-source-plan.md
+docs/pin-ux/

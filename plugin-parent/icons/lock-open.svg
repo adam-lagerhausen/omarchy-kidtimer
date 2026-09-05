@@ -1,0 +1,2 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><!-- stroke is white so MultiEffect can tint the shackle -->
+<path d="M5 7V4.2A2.8 2.8 0 0 1 12.4 3.2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round"/><rect x="2" y="7" width="10" height="8" rx="1.2" fill="#ffffff"/></svg>

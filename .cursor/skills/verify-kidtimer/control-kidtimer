@@ -1,0 +1,556 @@
+#!/usr/bin/env bash
+# Isolated Stage B driver for Kidtimer.
+# Binds a free 127.0.0.1 port, never :8742, never the lab sqlite, never systemd.
+set -euo pipefail
+
+SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SKILL_DIR/../../.." && pwd)"
+RUN_ID="${KIDTIMER_VERIFY_ID:-current}"
+STATE_DIR="${KIDTIMER_VERIFY_DIR:-/tmp/kidtimer-verify-${RUN_ID}}"
+ENV_FILE="${STATE_DIR}/run.env"
+LOG_FILE="${STATE_DIR}/daemon.stderr"
+ARTIFACTS="${SKILL_DIR}/artifacts"
+CONFIG="${KIDTIMER_VERIFY_CONFIG:-$REPO_ROOT/packaging/config.parent-lab.toml}"
+LAB_PORT=8742
+LAB_DATA="${HOME:-/home/parent}/.local/share/kidtimer-lab"
+
+die() {
+  echo "control-kidtimer: $*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+control-kidtimer launch
+control-kidtimer doctor
+control-kidtimer status [--token parent|ask|read|<secret>]
+control-kidtimer grant [--group fun] [--seconds 900] [--reason TEXT] [--idempotency-key KEY] [--token parent|app|<secret>]
+control-kidtimer ask [--group fun] [--seconds 900] [--reason TEXT] [--token ask|<secret>]
+control-kidtimer asks [--token parent|<secret>]
+control-kidtimer decide <ask-id> approve|deny [--token parent|<secret>]
+control-kidtimer token-create --name NAME --kind parent|read|ask|app
+control-kidtimer testdata grant.sh|status.sh|ask.sh|decide.sh|token-create.sh [args]
+control-kidtimer cli -- grant|status|lock|unlock|asks|decide|token ...
+control-kidtimer http GET|POST <path> [--token parent|ask|read|<secret>] [--body JSON] [--idempotency-key KEY]
+control-kidtimer sqlite <sql>
+control-kidtimer env
+control-kidtimer cleanup
+
+State lives in /tmp/kidtimer-verify-$KIDTIMER_VERIFY_ID (default current).
+Proof files go in .cursor/skills/verify-kidtimer/artifacts/. Cleanup does not delete them.
+EOF
+}
+
+find_go() {
+  if command -v go >/dev/null 2>&1; then
+    command -v go
+    return
+  fi
+  local p candidate
+  if command -v mise >/dev/null 2>&1; then
+    p="$(mise which go 2>/dev/null || true)"
+    if [[ -n "$p" && -x "$p" ]]; then
+      echo "$p"
+      return
+    fi
+  fi
+  for candidate in "$HOME/.local/share/mise/installs/go/"*/bin/go; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return
+    fi
+  done
+  die "go not found. Put Go on PATH, or install it with mise."
+}
+
+json_get() {
+  python3 -c 'import json,sys
+d=json.load(sys.stdin)
+path=sys.argv[1].split(".")
+for p in path:
+  if isinstance(d, dict):
+    d=d[p]
+  else:
+    raise SystemExit("not an object")
+if isinstance(d, (dict, list)):
+  json.dump(d, sys.stdout)
+else:
+  print(d)
+' "$1"
+}
+
+assert_safe_config() {
+  if [[ ! -f "$CONFIG" ]]; then
+    die "config missing: $CONFIG"
+  fi
+  local base
+  base="$(basename "$CONFIG")"
+  if [[ "$base" == "config.kid.toml" ]]; then
+    die "refuse config.kid.toml on the parent desk"
+  fi
+  if ! grep -q '^enforcer = false$' "$CONFIG"; then
+    die "refuse config unless enforcer = false: $CONFIG"
+  fi
+  if ! grep -q '^bedtime_lock = false$' "$CONFIG"; then
+    die "refuse config unless bedtime_lock = false: $CONFIG"
+  fi
+  if ! grep -q '^empty_lock = false$' "$CONFIG"; then
+    die "refuse config unless empty_lock = false: $CONFIG"
+  fi
+  if ! grep -q '^kid_name = "parent-lab"$' "$CONFIG"; then
+    die "refuse config unless kid_name is parent-lab: $CONFIG"
+  fi
+}
+
+port_of() {
+  python3 -c 'import sys; print(sys.argv[1].rsplit(":",1)[-1])' "$1"
+}
+
+assert_not_lab_listen() {
+  local port
+  port="$(port_of "$1")"
+  if [[ "$port" == "$LAB_PORT" ]]; then
+    die "refuse listen port $LAB_PORT (live lab). Isolated runs use a free port."
+  fi
+}
+
+load_env() {
+  [[ -f "$ENV_FILE" ]] || die "no run at $ENV_FILE. Launch first."
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  [[ -n "${PID:-}" && -n "${URL:-}" && -n "${DATA:-}" && -n "${PARENT_TOKEN:-}" ]] || die "run.env incomplete"
+}
+
+resolve_token() {
+  local spec="${1:-parent}"
+  case "$spec" in
+    parent) echo "$PARENT_TOKEN" ;;
+    ask) echo "${ASK_TOKEN:?ask token missing. Launch mints verify-ask.}" ;;
+    read) echo "${READ_TOKEN:?read token missing. Launch mints verify-read.}" ;;
+    app) echo "${APP_TOKEN:?app token not minted. Use token-create.}" ;;
+    *) echo "$spec" ;;
+  esac
+}
+
+http_do() {
+  local method="$1" path="$2" token="$3" body="${4:-}" idem="${5:-}"
+  local tmp headers
+  tmp="$(mktemp)"
+  headers=(-H "Authorization: Bearer $token")
+  if [[ -n "$idem" ]]; then
+    headers+=(-H "Idempotency-Key: $idem")
+  fi
+  if [[ "$method" == "GET" ]]; then
+    curl -sS -o "$tmp" -w '%{http_code}' "$URL$path" "${headers[@]}"
+  else
+    headers+=(-H "Content-Type: application/json")
+    curl -sS -o "$tmp" -w '%{http_code}' -X "$method" "$URL$path" "${headers[@]}" -d "$body"
+  fi >"${STATE_DIR}/last.status"
+  cp "$tmp" "${STATE_DIR}/last.body"
+  cat "$tmp"
+  echo
+  rm -f "$tmp"
+}
+
+cmd_launch() {
+  assert_safe_config
+  mkdir -p "$STATE_DIR" "$ARTIFACTS"
+  if [[ -f "$ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$ENV_FILE" || true
+    if [[ -n "${PID:-}" ]] && kill -0 "$PID" 2>/dev/null; then
+      die "already running pid=$PID url=${URL:-}. Run cleanup first."
+    fi
+  fi
+  rm -rf "$STATE_DIR"
+  mkdir -p "$STATE_DIR"
+
+  local go bin addr port
+  go="$(find_go)"
+  bin="${STATE_DIR}/kidtimer"
+  (cd "$REPO_ROOT" && "$go" build -o "$bin" ./daemon/cmd/kidtimer) || die "go build failed"
+
+  addr="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[0]+":"+str(s.getsockname()[1])); s.close()')"
+  assert_not_lab_listen "$addr"
+  port="$(port_of "$addr")"
+
+  local data="$STATE_DIR/ledger.sqlite"
+  if [[ "$data" == "$LAB_DATA"* ]]; then
+    die "refuse lab data dir"
+  fi
+  if [[ "$data" == /var/lib/kidtimer* ]]; then
+    die "refuse production data dir"
+  fi
+  if [[ "$data" == /etc/kidtimer* ]]; then
+    die "refuse /etc/kidtimer"
+  fi
+
+  setsid "$bin" daemon -config "$CONFIG" -data "$data" -listen "$addr" </dev/null >"$LOG_FILE" 2>&1 &
+  local pid=$!
+  disown "$pid" 2>/dev/null || true
+  echo "$pid" >"${STATE_DIR}/pid"
+
+  local url="http://$addr" ready=0 i
+  for i in $(seq 1 50); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      die "daemon exited during startup. Log:\n$(cat "$LOG_FILE")"
+    fi
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' "$url/v1/status" 2>/dev/null || true)"
+    if [[ "$code" == "401" ]]; then
+      ready=1
+      break
+    fi
+    sleep 0.1
+  done
+  if [[ "$ready" != 1 ]]; then
+    kill -TERM "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    die "daemon not ready (want GET /v1/status -> 401). Log:\n$(cat "$LOG_FILE")"
+  fi
+
+  local parent
+  parent="$(python3 -c '
+import re,sys
+text=open(sys.argv[1]).read()
+m=re.search(r"bootstrap parent token \S+ \(shown once\): (\S+)", text)
+if not m:
+    sys.exit("bootstrap token missing")
+print(m.group(1))
+' "$LOG_FILE")" || die "bootstrap token missing in $LOG_FILE"
+
+  cat >"$ENV_FILE" <<EOF
+RUN_ID=$(printf '%q' "$RUN_ID")
+PID=$pid
+LISTEN=$(printf '%q' "$addr")
+URL=$(printf '%q' "$url")
+DATA=$(printf '%q' "$data")
+BIN=$(printf '%q' "$bin")
+CONFIG=$(printf '%q' "$CONFIG")
+PARENT_TOKEN=$(printf '%q' "$parent")
+ASK_TOKEN=
+READ_TOKEN=
+APP_TOKEN=
+EOF
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+
+  local ask_json read_json
+  ask_json="$("$bin" token create -url "$url" -token "$parent" -name verify-ask -kind ask)"
+  read_json="$("$bin" token create -url "$url" -token "$parent" -name verify-read -kind read)"
+  ASK_TOKEN="$(printf '%s\n' "$ask_json" | json_get secret)"
+  READ_TOKEN="$(printf '%s\n' "$read_json" | json_get secret)"
+  cat >"$ENV_FILE" <<EOF
+RUN_ID=$(printf '%q' "$RUN_ID")
+PID=$pid
+LISTEN=$(printf '%q' "$addr")
+URL=$(printf '%q' "$url")
+DATA=$(printf '%q' "$data")
+BIN=$(printf '%q' "$bin")
+CONFIG=$(printf '%q' "$CONFIG")
+PARENT_TOKEN=$(printf '%q' "$parent")
+ASK_TOKEN=$(printf '%q' "$ASK_TOKEN")
+READ_TOKEN=$(printf '%q' "$READ_TOKEN")
+APP_TOKEN=
+EOF
+
+  echo "launched pid=$pid url=$url data=$data kid_name=parent-lab enforcer=false bedtime_lock=false empty_lock=false"
+}
+
+cmd_doctor() {
+  load_env
+  local fail=0
+  say() { echo "$*"; }
+  bad() { echo "FAIL: $*"; fail=1; }
+
+  local alive=0
+  if kill -0 "$PID" 2>/dev/null; then
+    alive=1
+    say "ok pid=$PID"
+  else
+    bad "pid $PID is not running"
+  fi
+
+  local port cmdline
+  port="$(port_of "$LISTEN")"
+  if [[ "$port" == "$LAB_PORT" ]]; then
+    bad "listen is lab port $LAB_PORT"
+  else
+    say "ok listen=$LISTEN"
+  fi
+
+  if [[ "$alive" == 1 ]]; then
+    cmdline="$(tr '\0' ' ' <"/proc/$PID/cmdline" 2>/dev/null || true)"
+    if [[ "$cmdline" != *"-data $DATA"* ]]; then
+      bad "pid $PID cmdline does not include this run's sqlite: $DATA"
+    else
+      say "ok data=$DATA"
+    fi
+    if [[ "$cmdline" != *"-listen $LISTEN"* ]]; then
+      bad "pid $PID cmdline does not include -listen $LISTEN"
+    fi
+  fi
+  if [[ "$DATA" == "$LAB_DATA"* ]]; then
+    bad "data is the live lab sqlite"
+  fi
+  if [[ "$DATA" != /tmp/kidtimer-verify-* ]]; then
+    bad "data is not under /tmp/kidtimer-verify-"
+  fi
+
+  if ! grep -q '^enforcer = false$' "$CONFIG"; then
+    bad "enforcer is not false in $CONFIG"
+  fi
+  if ! grep -q '^bedtime_lock = false$' "$CONFIG"; then
+    bad "bedtime_lock is not false in $CONFIG"
+  fi
+  if ! grep -q '^remote_lock = false$' "$CONFIG"; then
+    bad "remote_lock is not false in $CONFIG"
+  fi
+  if ! grep -q '^empty_lock = false$' "$CONFIG"; then
+    bad "empty_lock is not false in $CONFIG"
+  fi
+  say "ok config=$(basename "$CONFIG") enforcer=false bedtime_lock=false empty_lock=false remote_lock=false"
+
+  local code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "$URL/v1/status" || true)"
+  if [[ "$code" != "401" ]]; then
+    bad "GET /v1/status without bearer returned ${code:-none}, want 401"
+  else
+    say "ok unauth GET /v1/status -> 401"
+  fi
+
+  local body kid
+  body="$(curl -sS "$URL/v1/status" -H "Authorization: Bearer $PARENT_TOKEN" || true)"
+  kid="$(printf '%s' "$body" | json_get kid_name 2>/dev/null || true)"
+  if [[ "$kid" != "parent-lab" ]]; then
+    bad "status kid_name is '$kid', want parent-lab. body=$body"
+  else
+    say "ok kid_name=parent-lab"
+  fi
+  if printf '%s' "$body" | python3 -c 'import json,sys; s=sys.stdin.read().strip()
+if not s:
+    raise SystemExit(1)
+d=json.loads(s)
+if "bedtime_in" in d:
+    raise SystemExit(1)
+if d.get("parent_locked") is not False:
+    raise SystemExit(2)
+if d.get("remote_lock") is not False:
+    raise SystemExit(3)
+raise SystemExit(0)' 2>/dev/null; then
+    say "ok bedtime_in omitted parent_locked=false remote_lock=false"
+  else
+    bad "status missing, invalid, included bedtime_in, or parent_locked/remote_lock not false"
+  fi
+
+  if [[ "$fail" != 0 ]]; then
+    die "doctor failed. This instance is not safe to drive."
+  fi
+  echo "doctor ok url=$URL pid=$PID"
+}
+
+cmd_status() {
+  load_env
+  local token_spec="parent"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --token) token_spec="$2"; shift 2 ;;
+      *) die "status: unknown arg $1" ;;
+    esac
+  done
+  http_do GET /v1/status "$(resolve_token "$token_spec")"
+}
+
+cmd_grant() {
+  load_env
+  local group="fun" seconds="900" reason="good afternoon" key="" token_spec="parent"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --group) group="$2"; shift 2 ;;
+      --seconds) seconds="$2"; shift 2 ;;
+      --reason) reason="$2"; shift 2 ;;
+      --idempotency-key) key="$2"; shift 2 ;;
+      --token) token_spec="$2"; shift 2 ;;
+      *) die "grant: unknown arg $1" ;;
+    esac
+  done
+  [[ -n "$key" ]] || key="verify-grant-$(date +%s%N)"
+  local body
+  body="$(python3 -c 'import json,sys; print(json.dumps({"group":sys.argv[1],"seconds":int(sys.argv[2]),"reason":sys.argv[3]}))' "$group" "$seconds" "$reason")"
+  http_do POST /v1/grants "$(resolve_token "$token_spec")" "$body" "$key"
+}
+
+cmd_ask() {
+  load_env
+  local group="fun" seconds="900" reason="one more video" token_spec="ask"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --group) group="$2"; shift 2 ;;
+      --seconds) seconds="$2"; shift 2 ;;
+      --reason) reason="$2"; shift 2 ;;
+      --token) token_spec="$2"; shift 2 ;;
+      *) die "ask: unknown arg $1" ;;
+    esac
+  done
+  local body
+  body="$(python3 -c 'import json,sys; print(json.dumps({"group":sys.argv[1],"seconds":int(sys.argv[2]),"reason":sys.argv[3]}))' "$group" "$seconds" "$reason")"
+  http_do POST /v1/asks "$(resolve_token "$token_spec")" "$body"
+}
+
+cmd_asks() {
+  load_env
+  local token_spec="parent"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --token) token_spec="$2"; shift 2 ;;
+      *) die "asks: unknown arg $1" ;;
+    esac
+  done
+  http_do GET /v1/asks "$(resolve_token "$token_spec")"
+}
+
+cmd_decide() {
+  load_env
+  [[ $# -ge 2 ]] || die "usage: control-kidtimer decide <ask-id> approve|deny"
+  local ask_id="$1" decision="$2" token_spec="parent"
+  shift 2
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --token) token_spec="$2"; shift 2 ;;
+      *) die "decide: unknown arg $1" ;;
+    esac
+  done
+  [[ "$decision" == "approve" || "$decision" == "deny" ]] || die "decision must be approve or deny"
+  local body
+  body="$(python3 -c 'import json,sys; print(json.dumps({"decision":sys.argv[1]}))' "$decision")"
+  http_do POST "/v1/asks/${ask_id}/decide" "$(resolve_token "$token_spec")" "$body"
+}
+
+cmd_token_create() {
+  load_env
+  local name="" kind="app"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name) name="$2"; shift 2 ;;
+      --kind) kind="$2"; shift 2 ;;
+      *) die "token-create: unknown arg $1" ;;
+    esac
+  done
+  [[ -n "$name" ]] || die "token-create: --name is required"
+  local body
+  body="$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"kind":sys.argv[2]}))' "$name" "$kind")"
+  http_do POST /v1/tokens "$PARENT_TOKEN" "$body"
+}
+
+cmd_http() {
+  load_env
+  [[ $# -ge 2 ]] || die "usage: control-kidtimer http GET|POST|PUT|PATCH <path> ..."
+  local method="$1" path="$2" token_spec="parent" body="" key=""
+  shift 2
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --token) token_spec="$2"; shift 2 ;;
+      --body) body="$2"; shift 2 ;;
+      --idempotency-key) key="$2"; shift 2 ;;
+      *) die "http: unknown arg $1" ;;
+    esac
+  done
+  http_do "$method" "$path" "$(resolve_token "$token_spec")" "$body" "$key"
+}
+
+cmd_testdata() {
+  load_env
+  [[ $# -ge 1 ]] || die "usage: control-kidtimer testdata grant.sh|..."
+  local script="$1"
+  shift
+  local path="$REPO_ROOT/testdata/$script"
+  [[ -f "$path" ]] || die "missing $path"
+  local token="$PARENT_TOKEN"
+  case "$script" in
+    ask.sh) token="$ASK_TOKEN" ;;
+  esac
+  KIDTIMER_URL="$URL" KIDTIMER_TOKEN="$token" sh "$path" "$@"
+}
+
+cmd_cli() {
+  load_env
+  if [[ "${1:-}" == "--" ]]; then shift; fi
+  [[ $# -ge 1 ]] || die "usage: control-kidtimer cli -- grant|status|lock|unlock|asks|decide|token ..."
+  KIDTIMER_URL="$URL" KIDTIMER_TOKEN="$PARENT_TOKEN" "$BIN" "$@"
+}
+
+cmd_sqlite() {
+  load_env
+  [[ $# -ge 1 ]] || die "usage: control-kidtimer sqlite <sql>"
+  sqlite3 -cmd ".timeout 3000" -header -column "$DATA" "$@"
+}
+
+cmd_env() {
+  load_env
+  echo "RUN_ID=$RUN_ID"
+  echo "PID=$PID"
+  echo "URL=$URL"
+  echo "LISTEN=$LISTEN"
+  echo "DATA=$DATA"
+  echo "BIN=$BIN"
+  echo "CONFIG=$CONFIG"
+  echo "PARENT_TOKEN set"
+  echo "ASK_TOKEN set"
+  echo "READ_TOKEN set"
+}
+
+cmd_cleanup() {
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "nothing to clean ($ENV_FILE missing)"
+    return 0
+  fi
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  if [[ -n "${PID:-}" ]] && kill -0 "$PID" 2>/dev/null; then
+    local cmdline
+    cmdline="$(tr '\0' ' ' <"/proc/$PID/cmdline" 2>/dev/null || true)"
+    if [[ "$cmdline" == *"$DATA"* ]]; then
+      kill -TERM "$PID" 2>/dev/null || true
+      local i
+      for i in $(seq 1 20); do
+        kill -0 "$PID" 2>/dev/null || break
+        sleep 0.1
+      done
+      if kill -0 "$PID" 2>/dev/null; then
+        kill -KILL "$PID" 2>/dev/null || true
+      fi
+      echo "stopped pid=$PID"
+    else
+      die "refuse to kill pid $PID: cmdline does not contain this run's data path"
+    fi
+  else
+    echo "pid ${PID:-unknown} already gone"
+  fi
+  rm -rf "$STATE_DIR"
+  echo "removed $STATE_DIR"
+  echo "artifacts kept at $ARTIFACTS"
+}
+
+main() {
+  [[ $# -ge 1 ]] || { usage; exit 2; }
+  case "$1" in
+    -h|--help|help) usage ;;
+    launch) shift; cmd_launch "$@" ;;
+    doctor) shift; cmd_doctor "$@" ;;
+    status) shift; cmd_status "$@" ;;
+    grant) shift; cmd_grant "$@" ;;
+    ask) shift; cmd_ask "$@" ;;
+    asks) shift; cmd_asks "$@" ;;
+    decide) shift; cmd_decide "$@" ;;
+    token-create) shift; cmd_token_create "$@" ;;
+    testdata) shift; cmd_testdata "$@" ;;
+    cli) shift; cmd_cli "$@" ;;
+    http) shift; cmd_http "$@" ;;
+    sqlite) shift; cmd_sqlite "$@" ;;
+    env) shift; cmd_env "$@" ;;
+    cleanup) shift; cmd_cleanup "$@" ;;
+    *) usage; die "unknown command $1" ;;
+  esac
+}
+
+main "$@"
