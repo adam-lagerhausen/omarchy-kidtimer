@@ -1,42 +1,36 @@
 # Kidtimer
 
-Kidtimer enforces screen-time limits on an Omarchy 4 kid box. The parent desk runs a control panel. Apps grant time through the grant API. This is not a screen-time tracker.
+Screen time limits for an Omarchy kid computer. You get a panel on your desk.
 
 This project is unofficial. Kidtimer is not affiliated with Omarchy.
 
 ## Install
 
-Unpack the pack on each machine, then run one command. Do not guess parent vs kid.
+Do the kid's computer first, then yours. Same Wi-Fi.
 
-On the parent Omarchy 4 desk:
-
-```
-./install.sh parent
-```
-
-That command copies the parent plugin into `~/.local/share/kidtimer/src` and installs `~/.local/bin/kidtimer`.
-
-The kid daemon binds 0.0.0.0 port 8742 with no TLS. Run the next command only on a trusted LAN.
-
-On the kid Omarchy 4 box:
+1. Open a terminal. Super + Enter.
+2. Paste this. Press Enter.
 
 ```
-sudo ./install.sh kid
+curl -fsSL https://raw.githubusercontent.com/adam-lagerhausen/omarchy-kidtimer/master/install.sh | bash
 ```
 
-That command copies the kid plugin into `/usr/local/share/kidtimer`. It installs `/usr/local/bin/kidtimer`. It writes kid config. Then it enables the systemd unit.
+3. When it asks, pick Mine or The kid's.
+4. On the kid's computer it may ask for your password.
 
-If the bar does not update: `omarchy restart shell`.
+The kid's computer shows up on your bar. No codes to copy.
 
-Do not run `omarchy plugin add` on this repo URL. That path does not work. The install script already symlinks the matching plugin.
+If the bar does not change: `omarchy restart shell`.
 
-A kid with sudo can stop the unit.
+## Notes
 
-Stolen app token equals that token's daily cap.
+The kid computer listens on the LAN, port 8742, with no TLS. Only do this at home.
 
-## Pair on the LAN
+A kid who knows the computer password can turn it off.
 
-Same LAN is enough. The kid advertises. The parent pairs. Do not paste a token.
+If an app token is stolen, that token's daily cap is all they get.
+
+Do not run `omarchy plugin add` on this repo URL. That path does not work.
 
 ## From source
 
@@ -53,7 +47,7 @@ go build -o kidtimer ./daemon/cmd/kidtimer
 
 Then `./kidtimer setup parent` on the parent desk, or `sudo ./kidtimer setup kid` on the kid box, from that checkout.
 
-`packaging/pack.sh` writes `dist/kidtimer-linux-amd64.tar.gz` and `dist/kidtimer-linux-arm64.tar.gz`. Unpack one of those and run `./install.sh parent` or `sudo ./install.sh kid`.
+`packaging/pack.sh` writes the tarballs. `packaging/install.sh` is the unpack installer.
 
 ## License
 

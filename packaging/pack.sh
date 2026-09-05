@@ -21,3 +21,5 @@ pack_one() {
 
 pack_one amd64
 pack_one arm64
+(cd "$dist" && sha256sum kidtimer-linux-amd64.tar.gz kidtimer-linux-arm64.tar.gz >SHA256SUMS)
+echo "wrote $dist/SHA256SUMS"

@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -391,6 +394,117 @@ func TestInstallScriptParentHasNoSudo(t *testing.T) {
 	}
 	if !strings.Contains(body, "/usr/local/share/kidtimer") {
 		t.Fatal("kid share dir")
+	}
+}
+
+func TestBootstrapScriptDoesNotGuessRole(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	if !strings.Contains(body, "/dev/tty") {
+		t.Fatal("must ask on /dev/tty")
+	}
+	if !strings.Contains(body, "releases/download/latest") {
+		t.Fatal("must fetch the latest pack")
+	}
+	if !strings.Contains(body, "SHA256SUMS") {
+		t.Fatal("must check SHA256SUMS")
+	}
+	if strings.Contains(body, `exec sudo "$0"`) {
+		t.Fatal("curl pipe cannot re-exec $0")
+	}
+	if !strings.Contains(body, `sudo bash "$dir/install.sh" kid`) {
+		t.Fatal("kid must sudo the unpacked install.sh")
+	}
+	if strings.Count(body, "sudo") != 1 {
+		t.Fatalf("sudo only for kid, got %d", strings.Count(body, "sudo"))
+	}
+	script := filepath.Join(repoRoot(t), "install.sh")
+	out, err := exec.Command("bash", script, "nope").CombinedOutput()
+	if err == nil {
+		t.Fatal("expected usage error")
+	}
+	if !strings.Contains(string(out), "parent or kid") {
+		t.Fatalf("usage: %s", out)
+	}
+}
+
+func TestPackScriptWritesSums(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), "packaging", "pack.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	if !strings.Contains(body, "SHA256SUMS") {
+		t.Fatal("pack must write SHA256SUMS")
+	}
+	if !strings.Contains(body, "sha256sum kidtimer-linux-amd64.tar.gz kidtimer-linux-arm64.tar.gz") {
+		t.Fatal("pack must hash both tarballs")
+	}
+}
+
+func TestBootstrapFetchesPack(t *testing.T) {
+	arch := bootstrapArch(t)
+	dist := t.TempDir()
+	packName := "kidtimer-linux-" + arch
+	packDir := filepath.Join(dist, packName)
+	if err := os.Mkdir(packDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	stub := fmt.Sprintf("#!/bin/bash\nprintf '%%s\\n' \"$1\" > %s\n", strconv.Quote(marker))
+	if err := os.WriteFile(filepath.Join(packDir, "install.sh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tarPath := filepath.Join(dist, packName+".tar.gz")
+	tar := exec.Command("tar", "-C", dist, "-czf", tarPath, packName)
+	if out, err := tar.CombinedOutput(); err != nil {
+		t.Fatalf("tar: %v %s", err, out)
+	}
+	sum := exec.Command("sha256sum", packName+".tar.gz")
+	sum.Dir = dist
+	sumOut, err := sum.CombinedOutput()
+	if err != nil {
+		t.Fatalf("sha256sum: %v %s", err, sumOut)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "SHA256SUMS"), sumOut, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.FileServer(http.Dir(dist)))
+	t.Cleanup(srv.Close)
+
+	script := filepath.Join(repoRoot(t), "install.sh")
+	cmd := exec.Command("bash", script, "parent")
+	cmd.Env = append(os.Environ(), "KIDTIMER_PACK_URL="+srv.URL+"/"+packName+".tar.gz")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("install: %v %s", err, out)
+	}
+	got, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("inner install did not run: %v %s", err, out)
+	}
+	if strings.TrimSpace(string(got)) != "parent" {
+		t.Fatalf("role %q", got)
+	}
+}
+
+func bootstrapArch(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	switch strings.TrimSpace(string(out)) {
+	case "x86_64", "amd64":
+		return "amd64"
+	case "aarch64", "arm64":
+		return "arm64"
+	default:
+		t.Fatalf("arch %s", out)
+		return ""
 	}
 }
 
