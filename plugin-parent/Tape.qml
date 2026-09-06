@@ -26,13 +26,16 @@ Rectangle {
     },
     kids: [], asks: [], bellCount: 0,
     track: { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
-    showLock: true, showStamp: false, lockLabel: "Lock", pinSet: false, lockArmed: false
+    showLock: true, showStamp: false, lockLabel: "Lock", pinSet: false, lockArmed: false, ours: true
   })
   readonly property bool settingsOn: t.chrome.face === "settings"
   readonly property bool waitingHome: !!t.waiting
   readonly property bool needsPin: !!t.needsPin
   readonly property bool liveHome: !waitingHome && !needsPin
+  readonly property bool ours: t.ours !== false
+  readonly property bool controlsOn: liveHome && ours
   readonly property var howTo: t.howTo || { title: "", lines: [] }
+  readonly property var adopt: t.adopt || null
   readonly property bool coralKid: !!t.kid.face.coral
   readonly property bool searchFocused: (settingsOn || needsPin) && !pinCommitted && pinTrap.activeFocus
   readonly property bool pinReady: Model.validPin(root.pinDraft) && !root.pinCommitted
@@ -401,6 +404,68 @@ Rectangle {
 
     Column {
       width: parent.width
+      visible: liveHome && !!adopt
+      spacing: 8
+      topPadding: 8
+      Rectangle {
+        width: parent.width
+        implicitHeight: adoptCol.implicitHeight + 16
+        height: implicitHeight
+        color: "transparent"
+        border.width: 1
+        border.color: foreground
+        Column {
+          id: adoptCol
+          x: 10
+          y: 8
+          width: parent.width - 20
+          spacing: 6
+          Text {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: adopt ? adopt.title : ""
+            color: foreground
+            font.family: root.plex
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+          }
+          Text {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: adopt ? adopt.body : ""
+            color: quiet
+            font.family: root.plex
+            font.pixelSize: 12
+          }
+          Row {
+            width: parent.width
+            spacing: 8
+            Repeater {
+              model: [
+                { kind: "adoptNo", label: "No" },
+                { kind: "adoptYes", label: "Yes" }
+              ]
+              SquareBtn {
+                required property var modelData
+                width: (adoptCol.width - 8) / 2
+                height: 24
+                onClicked: root.act({ kind: modelData.kind })
+                Text {
+                  anchors.centerIn: parent
+                  text: modelData.label
+                  color: parent.contentColor
+                  font.family: root.plex
+                  font.pixelSize: 11
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    Column {
+      width: parent.width
       visible: t.chrome.bell && liveHome && t.asks.length > 0
       spacing: 8
       topPadding: 8
@@ -456,11 +521,11 @@ Rectangle {
       }
     }
 
-    DashedRule { visible: liveHome; width: parent.width; topPad: 10; bottomPad: 10 }
+    DashedRule { visible: controlsOn; width: parent.width; topPad: 10; bottomPad: 10 }
 
     Column {
       width: parent.width
-      visible: !settingsOn && liveHome
+      visible: !settingsOn && controlsOn
       spacing: 0
       Item {
         width: parent.width
@@ -749,7 +814,7 @@ Rectangle {
     Item { width: 1; height: liveHome && settingsOn ? 2 : (needsPin ? 0 : 8) }
 
     DayTrack {
-      visible: liveHome
+      visible: controlsOn
       width: parent.width
       height: settingsOn ? 32 : 28
       track: t.track
@@ -757,7 +822,7 @@ Rectangle {
     }
 
     Item {
-      visible: liveHome
+      visible: controlsOn
       width: parent.width
       height: 16
       Repeater {
@@ -777,7 +842,7 @@ Rectangle {
 
     Column {
       width: parent.width
-      visible: !settingsOn && liveHome
+      visible: !settingsOn && controlsOn
       topPadding: 2
       Repeater {
         model: t.track.log
@@ -815,7 +880,7 @@ Rectangle {
 
     Column {
       width: parent.width
-      visible: settingsOn && liveHome
+      visible: settingsOn && controlsOn
       spacing: 0
       DashedRule { width: parent.width; topPad: 10; bottomPad: 8 }
       Text {
@@ -1110,8 +1175,32 @@ Rectangle {
   }
 
   component DayTrack: Item {
+    id: dayTrack
     property var track: ({ beds: [], blocks: [], needle: null })
     property bool settingsFace: false
+
+    function blockRight(b) {
+      var left = width * Number(b.leftPct) / 100
+      var right = left + width * Number(b.widthPct) / 100
+      if (track.needle != null) {
+        var cap = width * Number(track.needle) / 100
+        if (right > cap) right = cap
+      }
+      return right
+    }
+
+    function blockLeft(b) {
+      var left = width * Number(b.leftPct) / 100
+      var right = blockRight(b)
+      if (right - left < 4) left = right - 4
+      if (left < 0) left = 0
+      return left
+    }
+
+    function blockWidth(b) {
+      return Math.max(0, blockRight(b) - blockLeft(b))
+    }
+
     Rectangle {
       anchors.fill: parent
       color: root.wash
@@ -1134,9 +1223,9 @@ Rectangle {
       model: track.blocks
       Rectangle {
         required property var modelData
-        x: parent.width * modelData.leftPct / 100
+        x: dayTrack.blockLeft(modelData)
         y: 1
-        width: Math.max(4, parent.width * modelData.widthPct / 100)
+        width: dayTrack.blockWidth(modelData)
         height: parent.height - 2
         color: root.accent
       }

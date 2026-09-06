@@ -80,6 +80,12 @@ type Status struct{}
 
 func (Status) action() {}
 
+type Export struct {
+	JSON bool
+}
+
+func (Export) action() {}
+
 type Asks struct{}
 
 func (Asks) action() {}
@@ -111,6 +117,7 @@ func Parse(verb string, args []string) (Request, error) {
 	}
 	var grant Grant
 	var minutes int
+	asJSON := false
 	switch verb {
 	case "grant":
 		fs.StringVar(&grant.Group, "group", "", "group id")
@@ -118,12 +125,25 @@ func Parse(verb string, args []string) (Request, error) {
 		fs.StringVar(&grant.Reason, "reason", "", "reason")
 		fs.StringVar(&grant.IdempotencyKey, "idempotency-key", "", "Idempotency-Key")
 		fs.IntVar(&minutes, "minutes", 0, "minutes to credit")
+	case "export":
+		fs.BoolVar(&asJSON, "json", false, "print today as JSON")
 	case "lock", "unlock", "status", "asks", "decide":
 	default:
 		return Request{}, fmt.Errorf("usage: kidtimer lock|unlock|grant|status|asks|decide")
 	}
 	if err := fs.Parse(args); err != nil {
 		return Request{}, err
+	}
+	kid := *kidFlag
+	if verb == "export" {
+		rest := fs.Args()
+		if kid == "" && len(rest) == 1 {
+			kid = rest[0]
+			rest = nil
+		}
+		if len(rest) > 0 {
+			return Request{}, fmt.Errorf("usage: kidtimer parent export [kid]")
+		}
 	}
 	minutesSet := false
 	fs.Visit(func(f *flag.Flag) {
@@ -135,7 +155,7 @@ func Parse(verb string, args []string) (Request, error) {
 	if homeFlag != nil {
 		home = *homeFlag
 	}
-	target, err := selectTarget(*urlFlag, *tokenFlag, *deskFlag, *kidFlag, home, pinHome)
+	target, err := selectTarget(*urlFlag, *tokenFlag, *deskFlag, kid, home, pinHome)
 	if err != nil {
 		return Request{}, err
 	}
@@ -155,6 +175,8 @@ func Parse(verb string, args []string) (Request, error) {
 		action = grant
 	case "status":
 		action = Status{}
+	case "export":
+		action = Export{JSON: asJSON}
 	case "asks":
 		action = Asks{}
 	case "decide":
@@ -270,7 +292,14 @@ func Do(req Request) error {
 	if err != nil {
 		return err
 	}
-	return dump(send(method, addr, tok, body, idem))
+	resp, err := send(method, addr, tok, body, idem)
+	if err != nil {
+		return err
+	}
+	if exp, ok := req.Action.(Export); ok {
+		return writeExport(resp, exp.JSON)
+	}
+	return dump(resp, nil)
 }
 
 func encodeAction(a Action) (method, rest string, body []byte, idem string, err error) {
@@ -294,6 +323,8 @@ func encodeAction(a Action) (method, rest string, body []byte, idem string, err 
 		})
 		return http.MethodPost, "/grants", body, idem, nil
 	case Status:
+		return http.MethodGet, "/status", nil, "", nil
+	case Export:
 		return http.MethodGet, "/status", nil, "", nil
 	case Asks:
 		return http.MethodGet, "/asks", nil, "", nil

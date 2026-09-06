@@ -3,6 +3,10 @@
 var DAY_MIN = 1440
 var MIN_BED = 60
 var MAX_FUN_MIN = 480
+var SIT_GAP_MIN = 10
+var DUST_MIN = 2
+var LOG_MAX = 6
+var LOG_KEEP = 5
 var DAY = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 var CATALOG = [
   { id: "minecraft", name: "Minecraft" },
@@ -145,23 +149,31 @@ function parseHousehold(raw) {
       return []
     }
   }
-  var list = doc && doc.kids ? doc.kids : []
   var out = []
-  for (var i = 0; i < list.length; i++) {
-    var row = list[i] || {}
-    if (!row.id && !row.url) continue
+  var seenKey = {}
+  function add(row, claimed) {
+    if (!row || (!row.id && !row.url)) return
+    var k = row.id || row.url || ""
+    if (k && seenKey[k]) return
+    if (k) seenKey[k] = true
+    var isClaimed = claimed === true || row.claimed === true
     out.push({
       id: row.id || "",
       name: row.name || "",
       url: row.url || "",
-      token: row.token || "",
+      token: isClaimed ? "" : (row.token || ""),
+      claimed: isClaimed,
       live: row.live === true,
       status: row.status || {},
       asks: row.asks || [],
       look: row.look || null,
-      reachable: row.live === true || row.reachable === true
+      reachable: isClaimed || row.live === true || row.reachable === true
     })
   }
+  var list = doc && doc.kids ? doc.kids : []
+  for (var i = 0; i < list.length; i++) add(list[i], false)
+  var seen = doc && doc.seen ? doc.seen : []
+  for (var j = 0; j < seen.length; j++) add(seen[j], true)
   return out
 }
 
@@ -185,7 +197,8 @@ function mergeKids(settings, discovered) {
       id: row.id || "",
       name: row.name || "",
       url: row.url || "http://127.0.0.1:8742",
-      token: row.token || s.parentToken || ""
+      token: row.claimed ? "" : (row.token || s.parentToken || ""),
+      claimed: !!row.claimed
     })
   }
   for (var i = 0; i < pins.length; i++) add(pins[i])
@@ -350,11 +363,11 @@ function weekdayMondayFirst(now) {
 }
 
 function chromeHome() {
-  return { face: "home", picker: false, bell: false, query: { fun: "", school: "" }, hits: { fun: [], school: [] } }
+  return { face: "home", picker: false, bell: false, adopt: null, query: { fun: "", school: "" }, hits: { fun: [], school: [] } }
 }
 
 function chromeSettings() {
-  return { face: "settings", picker: false, bell: false, query: { fun: "", school: "" }, hits: { fun: [], school: [] } }
+  return { face: "settings", picker: false, bell: false, adopt: null, query: { fun: "", school: "" }, hits: { fun: [], school: [] } }
 }
 
 function emptyLookRaw() {
@@ -423,6 +436,14 @@ function parseAsks(raw) {
   return out
 }
 
+function minutesFromUnix(unix) {
+  var n = Number(unix)
+  if (!isFinite(n) || n <= 0) return null
+  var d = new Date(n * 1000)
+  if (isNaN(d.getTime())) return null
+  return d.getHours() * 60 + d.getMinutes()
+}
+
 function parseSessions(list) {
   var src = list || []
   var out = []
@@ -430,9 +451,14 @@ function parseSessions(list) {
     var b = src[i] || {}
     var kind = b.kind || "on"
     if (kind !== "on" && kind !== "free") kind = "on"
-    var start = b.start
-    if (typeof start === "number" && start >= 0 && start <= 24) start = Math.round(start * 60)
-    else start = Number(start) || 0
+    var start
+    var fromUnix = minutesFromUnix(b.start_unix != null ? b.start_unix : b.startUnix)
+    if (fromUnix != null) start = fromUnix
+    else {
+      start = b.start
+      if (typeof start === "number" && start >= 0 && start <= 24) start = Math.round(start * 60)
+      else start = Number(start) || 0
+    }
     var dur = b.dur
     if (dur === undefined || dur === null) dur = b.duration
     dur = Number(dur) || 0
@@ -530,6 +556,7 @@ function asStatus(s) {
 }
 
 function hostFace(snap) {
+  if (snap && snap.claimed) return faceOf("claimed")
   var s = asStatus(snap && snap.status)
   var reachable = !snap || snap.reachable !== false
   if (snap && snap.error) return faceOf("error")
@@ -544,7 +571,9 @@ function faceOf(kind, app) {
   var caption = ""
   var live = false
   var coral = false
-  if (kind === "error") {
+  if (kind === "claimed") {
+    caption = "Already claimed"
+  } else if (kind === "error") {
     caption = "Error"
     coral = true
   } else if (kind === "offline") {
@@ -641,30 +670,172 @@ function activitySessions(status, nowHour) {
   return spentAsSession(status, nowHour)
 }
 
+function friendlyApp(label) {
+  var s = String(label || "").trim()
+  if (!s) return "on"
+  var k = s.toLowerCase()
+  if (k === "on" || k === "free") return s
+  if (k === "foot" || k === "footclient" || k.indexOf("dnkl.foot") >= 0) return "Terminal"
+  if (k.indexOf("youtube") >= 0) return "YouTube"
+  if (k.indexOf("khan") >= 0) return "Khan Academy"
+  if (k.indexOf("minecraft") >= 0 || k.indexOf("prism") >= 0) return "Minecraft"
+  if (k.indexOf("roblox") >= 0) return "Roblox"
+  if (k.indexOf("discord") >= 0) return "Discord"
+  if (k.indexOf("spotify") >= 0) return "Spotify"
+  if (k.indexOf("twitch") >= 0) return "Twitch"
+  if (k.indexOf("steam") >= 0) return "Steam"
+  if (k.indexOf("epic") >= 0 || k.indexOf("unreal") >= 0) return "Epic"
+  if (k === "chromium" || k.indexOf("chromium") >= 0) return "Chromium"
+  if (k === "chrome" || k.indexOf("google-chrome") >= 0 || k.indexOf("chrome") >= 0) return "Chrome"
+  return s
+}
+
+function sortedSpans(sessions) {
+  var src = sessions || []
+  var out = []
+  for (var i = 0; i < src.length; i++) {
+    var s = src[i]
+    var start = Number(s && s.start) || 0
+    var dur = Math.max(0, Math.round(Number(s && s.dur) || 0))
+    if (dur < 1) continue
+    out.push({
+      kind: (s && s.kind) || "on",
+      start: start,
+      dur: dur,
+      end: start + dur,
+      label: String((s && s.label) || (s && s.kind) || "on")
+    })
+  }
+  out.sort(function (a, b) {
+    if (a.start !== b.start) return a.start - b.start
+    return a.end - b.end
+  })
+  return out
+}
+
+function occupancyBlocks(sessions, nowMin) {
+  var src = sortedSpans(sessions)
+  var cap = nowMin == null ? null : Math.round(Number(nowMin))
+  if (!isFinite(cap)) cap = null
+  var merged = []
+  for (var i = 0; i < src.length; i++) {
+    var s = src[i]
+    var last = merged.length ? merged[merged.length - 1] : null
+    if (last && s.start <= last.end) {
+      if (s.end > last.end) last.end = s.end
+      continue
+    }
+    merged.push({ kind: s.kind, start: s.start, end: s.end, label: s.label })
+  }
+  var blocks = []
+  for (var j = 0; j < merged.length; j++) {
+    var b = merged[j]
+    var start = b.start
+    var end = b.end
+    if (cap != null) {
+      if (start > cap) continue
+      if (end > cap) end = cap
+      if (end < start) continue
+    }
+    var dur = end - start
+    if (dur < 0) continue
+    if (dur < 1 && (cap == null || start !== cap)) continue
+    var widthPct = (dur / DAY_MIN) * 100
+    blocks.push({
+      kind: b.kind,
+      leftPct: (start / DAY_MIN) * 100,
+      widthPct: widthPct,
+      label: b.label,
+      named: b.kind === "on" && widthPct >= 4
+    })
+  }
+  return blocks
+}
+
+function sittingName(apps) {
+  var rows = []
+  for (var name in apps) {
+    if (!Object.prototype.hasOwnProperty.call(apps, name)) continue
+    rows.push({ name: name, dur: apps[name] })
+  }
+  rows.sort(function (a, b) {
+    if (b.dur !== a.dur) return b.dur - a.dur
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+  })
+  if (!rows.length) return "ON"
+  var named = []
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].dur >= DUST_MIN) named.push(rows[i].name)
+  }
+  if (!named.length) named.push(rows[0].name)
+  if (named.length > 2) named = named.slice(0, 2)
+  return named.join(" + ").toUpperCase()
+}
+
+function sittingsFrom(sessions) {
+  var src = sortedSpans(sessions)
+  var sits = []
+  for (var i = 0; i < src.length; i++) {
+    var s = src[i]
+    var last = sits.length ? sits[sits.length - 1] : null
+    var name = friendlyApp(s.label)
+    if (last && s.start <= last.end + SIT_GAP_MIN) {
+      if (s.end > last.end) last.end = s.end
+      last.apps[name] = (last.apps[name] || 0) + s.dur
+      continue
+    }
+    var apps = {}
+    apps[name] = s.dur
+    sits.push({ start: s.start, end: s.end, apps: apps })
+  }
+  var out = []
+  for (var j = 0; j < sits.length; j++) {
+    var sit = sits[j]
+    out.push({
+      start: sit.start,
+      dur: sit.end - sit.start,
+      clock: clock24(sit.start),
+      name: sittingName(sit.apps),
+      durLabel: minutesLabel(sit.end - sit.start)
+    })
+  }
+  return out
+}
+
+function sittingLog(sessions) {
+  var sits = sittingsFrom(sessions)
+  if (sits.length <= LOG_MAX) {
+    var all = []
+    for (var i = 0; i < sits.length; i++) {
+      all.push({ clock: sits[i].clock, name: sits[i].name, dur: sits[i].durLabel })
+    }
+    return all
+  }
+  var fold = sits.slice(0, sits.length - LOG_KEEP)
+  var rest = sits.slice(sits.length - LOG_KEEP)
+  var earlierDur = 0
+  for (var f = 0; f < fold.length; f++) earlierDur += fold[f].dur
+  var log = [{
+    clock: fold[0].clock,
+    name: "EARLIER",
+    dur: minutesLabel(earlierDur)
+  }]
+  for (var r = 0; r < rest.length; r++) {
+    log.push({ clock: rest[r].clock, name: rest[r].name, dur: rest[r].durLabel })
+  }
+  return log
+}
+
 function layoutTrack(sessions, policy, nowHour, withToday) {
   var beds = bedSpans(policy.bed, policy.up)
   var bedPct = []
   for (var i = 0; i < beds.length; i++) bedPct.push(spanPct(beds[i]))
   var blocks = []
   var log = []
+  var nowMin = nowHour == null ? null : Math.round(Number(nowHour) * 60)
   if (withToday) {
-    var src = sessions || []
-    for (var j = 0; j < src.length; j++) {
-      var s = src[j]
-      var widthPct = (s.dur / DAY_MIN) * 100
-      blocks.push({
-        kind: s.kind,
-        leftPct: (s.start / DAY_MIN) * 100,
-        widthPct: widthPct,
-        label: s.label,
-        named: s.kind === "on" && widthPct >= 4
-      })
-      log.push({
-        clock: clock24(s.start),
-        name: String(s.label || s.kind).toUpperCase(),
-        dur: minutesLabel(Math.round(s.dur))
-      })
-    }
+    blocks = occupancyBlocks(sessions, nowMin)
+    log = sittingLog(sessions)
   }
   var needle = null
   if (withToday && nowHour != null) needle = (Number(nowHour) / 24) * 100
@@ -711,13 +882,15 @@ function projectKid(snap, index, now, allotOverride) {
     school: policy.school || []
   }
   var reachable = !snap || snap.reachable !== false
-  var faceSnap = { reachable: reachable, error: !!(snap && snap.error), status: status }
+  var claimed = !!(snap && snap.claimed)
+  var faceSnap = { reachable: reachable, error: !!(snap && snap.error), claimed: claimed, status: status }
   var face = hostFace(faceSnap)
   var today = weekdayMondayFirst(now)
   var allot = allotOverride != null ? allotOverride : policy.funDay[today]
   var schoolSec = status.spentSchool
   return {
     index: index,
+    claimed: claimed,
     name: (snap && snap.name) || "kid",
     nameUp: String((snap && snap.name) || "kid").toUpperCase(),
     face: face,
@@ -754,6 +927,7 @@ function householdAsks(snapshots) {
   var list = snapshots || []
   var out = []
   for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].claimed) continue
     var name = (list[i] && list[i].name) || "kid"
     var asks = snapshotAsks(list[i])
     for (var j = 0; j < asks.length; j++) {
@@ -802,8 +976,19 @@ function emptyChrome(chrome) {
     face: ch.face,
     picker: !!ch.picker,
     bell: !!ch.bell,
+    adopt: ch.adopt || null,
     query: ch.query || { fun: "", school: "" },
     hits: ch.hits || { fun: [], school: [] }
+  }
+}
+
+function adoptPrompt(kid) {
+  var name = String((kid && (kid.nameUp || kid.name)) || "this computer").toUpperCase()
+  return {
+    index: kid && kid.index,
+    name: (kid && kid.name) || "",
+    title: "Take over " + name + "?",
+    body: "Another parent already claimed this computer. Yes makes it yours."
   }
 }
 
@@ -816,11 +1001,13 @@ function setupPinTape() {
       face: "home",
       picker: false,
       bell: false,
+      adopt: null,
       query: { fun: "", school: "" },
       hits: { fun: [], school: [] }
     },
     kid: blankKid(),
     kids: [],
+    ours: false,
     asks: [],
     bellCount: 0,
     track: { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
@@ -840,6 +1027,8 @@ function emptyWaitingTape(chrome) {
     chrome: emptyChrome(chrome),
     kid: blankKid(),
     kids: [],
+    ours: false,
+    adopt: null,
     asks: [],
     bellCount: 0,
     track: { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
@@ -868,26 +1057,32 @@ function projectTape(snapshots, selectedIndex, chrome, now, household) {
   var nowHour = hourFromNow(now)
   var withToday = ch.face !== "settings"
   var track = layoutTrack(activitySessions(status, nowHour), kid.policy, nowHour, withToday)
+  var ours = !kid.claimed
+  var adopt = ch.adopt ? adoptPrompt(kids[ch.adopt.index] || kid) : null
   return {
     waiting: false,
     needsPin: false,
+    howTo: { title: "", lines: [] },
     chrome: {
       face: ch.face,
       picker: !!ch.picker,
       bell: !!ch.bell,
+      adopt: ch.adopt || null,
       query: ch.query || { fun: "", school: "" },
       hits: ch.hits || { fun: [], school: [] }
     },
     kid: kid,
     kids: kids,
-    asks: asks,
-    bellCount: asks.length,
-    track: track,
-    showLock: ch.face === "home",
-    showStamp: ch.face === "home" && kid.locked,
+    ours: ours,
+    adopt: adopt,
+    asks: ours ? asks : [],
+    bellCount: ours ? asks.length : 0,
+    track: ours ? track : { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
+    showLock: ch.face === "home" && ours,
+    showStamp: ch.face === "home" && ours && kid.locked,
     lockLabel: lockLabel(kid.name, kid.locked),
     pinSet: pinSet,
-    lockArmed: pinSet
+    lockArmed: pinSet && ours
   }
 }
 
@@ -896,6 +1091,7 @@ function reduceChrome(chrome, act, tape) {
     face: (chrome && chrome.face) || "home",
     picker: !!(chrome && chrome.picker),
     bell: !!(chrome && chrome.bell),
+    adopt: chrome && chrome.adopt ? chrome.adopt : null,
     query: (chrome && chrome.query) ? chrome.query : { fun: "", school: "" },
     hits: (chrome && chrome.hits) ? chrome.hits : { fun: [], school: [] }
   }
@@ -906,11 +1102,21 @@ function reduceChrome(chrome, act, tape) {
   } else if (kind === "settings") {
     ch.face = ch.face === "settings" ? "home" : "settings"
     ch.picker = false
+    ch.adopt = null
   } else if (kind === "pick") {
     ch.picker = !ch.picker
+    ch.adopt = null
   } else if (kind === "select") {
     ch.picker = false
     out.selectIndex = act.kidIndex
+    var row = tape && tape.kids && tape.kids[act.kidIndex]
+    if (row && row.claimed) ch.adopt = { index: act.kidIndex }
+    else ch.adopt = null
+  } else if (kind === "adoptNo") {
+    ch.adopt = null
+  } else if (kind === "adoptYes") {
+    out.adopt = ch.adopt
+    ch.adopt = null
   } else if (kind === "query") {
     var list = act.list === "school" ? "school" : "fun"
     ch.query = { fun: ch.query.fun, school: ch.query.school }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/grandcat/zeroconf"
 
@@ -16,7 +17,12 @@ import (
 )
 
 const ServiceType = "_kidtimer._tcp"
+const ServiceLegacy = "_allowance._tcp"
 const ServiceParent = "_kidtimer-parent._tcp"
+
+func KidServices() []string {
+	return []string{ServiceType, ServiceLegacy}
+}
 
 type Found struct {
 	ID   string
@@ -156,7 +162,27 @@ func RegisterService(name, service, id string, port int) (Closer, error) {
 }
 
 func Browse(ctx context.Context, out chan<- Found) error {
-	return BrowseService(ctx, ServiceType, out)
+	return browseKids(ctx, out, BrowseService)
+}
+
+func browseKids(ctx context.Context, out chan<- Found, one func(context.Context, string, chan<- Found) error) error {
+	if one == nil {
+		one = BrowseService
+	}
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(KidServices()))
+	for _, svc := range KidServices() {
+		wg.Add(1)
+		go func(svc string) {
+			defer wg.Done()
+			if err := one(ctx, svc, out); err != nil {
+				errCh <- err
+			}
+		}(svc)
+	}
+	wg.Wait()
+	close(errCh)
+	return <-errCh
 }
 
 func BrowseParent(ctx context.Context, out chan<- Found) error {
@@ -185,7 +211,7 @@ func BrowseService(ctx context.Context, service string, out chan<- Found) error 
 				continue
 			}
 			url := "http://" + host
-			if service == ServiceType {
+			if service == ServiceType || service == ServiceLegacy {
 				url = KidURL(ips, e.Port)
 				if url == "" {
 					continue

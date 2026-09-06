@@ -59,9 +59,13 @@ Each day has its own number. Sample: Monday through Friday one hour, Saturday an
 
 The dropdown is a real control: border, chevron, name, what they are on. Click it for every computer. Two kids or five, same control.
 
-A circle sits to the left of the name. Accent means they are on the computer. Urgent means they are off it. Quieter type under the name always has a status: `Active`, `Active · minecraft`, `Offline`, `Error`, `Locked`, or `Bedtime`. Error wins over everything. Offline wins over lock and bedtime. Locked wins over bedtime. If it is locked, the dropdown and the lock go urgent. Error is urgent too. Never `down`, never blank, never `on minecraft`.
+A circle sits to the left of the name. Accent means they are on the computer. Urgent means they are off it. Quieter type under the name always has a status: `Active`, `Active · minecraft`, `Offline`, `Error`, `Locked`, `Bedtime`, or `Already claimed`. Error wins over everything. Offline wins over lock and bedtime. Locked wins over bedtime. If it is locked, the dropdown and the lock go urgent. Error is urgent too. Never `down`, never blank, never `on minecraft`.
 
-Picking a computer aims remaining, lock, the day log, and settings at that kid. It does not close the bell and it does not hide other kids' asks.
+Picking a computer you already own aims remaining, lock, the day log, and settings at that kid. It does not close the bell and it does not hide other kids' asks.
+
+A computer another parent already claimed stays in the list. Clicking it asks to adopt: “Take over NAME? Another parent already claimed this computer. Yes makes it yours.” Yes takeovers. No closes the prompt only. The row stays. There is no blacklist. +10, lock, and asks stay off until Yes.
+
+“No computers found” / “Install Kidtimer on the kid computer” only when scan found nobody. Claimed-only still opens the dropdown.
 
 Do not show `reachable: yes`.
 
@@ -83,7 +87,7 @@ Under that, a remaining bar. Fill is minutes left against today's allotment. It 
 
 The 24 hour track is what they already did, not a schedule to edit. Hatched night is bedtime. Accent marks are time on the computer. The needle is now.
 
-Short sessions are slivers. The log under the track is how you read them: time, name, duration.
+The log under the track is sittings, not every window. A sitting is one stretch at the computer. Split when they leave for more than ten minutes. One row: when it started, what they were on, how long they sat. `foot` is Terminal. Two apps that both lasted two minutes or more share a row: `MINECRAFT + CHROME`. At most six rows. If they sat down more than that, the oldest fold into `EARLIER` and the five newest stay. `kidtimer parent export` prints every window.
 
 `07:40  CHROME      30m`
 `15:58  MINECRAFT   44m`

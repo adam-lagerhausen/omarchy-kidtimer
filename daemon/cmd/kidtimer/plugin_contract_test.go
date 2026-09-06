@@ -111,6 +111,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, `"parent"`, "start kidtimer parent")
 	mustContain(t, parentBar, "kidtimerBin", "parent binary helper")
 	mustContain(t, parentBar, "/v1/household", "desk household")
+	mustContain(t, parentBar, "/v1/adopt", "desk adopt")
 	mustContain(t, parentBar, "/v1/kids/", "desk kid routes")
 	mustContain(t, parentBar, "sendKid", "paired kid policy via desk")
 	mustContain(t, parentModel, "mergeKids", "merge pins and pair")
@@ -122,6 +123,12 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidModel, "/usr/local/bin/kidtimer", "kid system binary")
 	if strings.Contains(parentBar+parentPanel+parentModel, "/v1/mode") {
 		t.Fatal("parent plugin must not call /v1/mode")
+	}
+	if strings.Contains(parentBar+parentPanel+parentModel, "/v1/pair") {
+		t.Fatal("parent plugin must not pair")
+	}
+	if strings.Contains(parentBar+parentPanel+parentModel, "/v1/reclaim") {
+		t.Fatal("parent plugin must not reclaim")
 	}
 	mustContain(t, parentPanel, "+10", "+10")
 	mustContain(t, parentPanel, "−10", "minus 10")
@@ -140,6 +147,9 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, "Change", "pin change")
 	mustContain(t, parentPanel, "model: track.blocks", "activity on the track")
 	mustContain(t, parentPanel, "color: root.accent", "activity uses theme accent")
+	mustContain(t, parentPanel, "function blockLeft", "track grows min width left of now")
+	mustContain(t, parentModel, "start_unix", "parent reads UTC sit start")
+	mustContain(t, parentModel, "if (start > cap) continue", "occupancy clips to now")
 	mustContain(t, parentBar, `"pin"`, "pin set cli")
 	mustContain(t, parentBar, `"approve"`, "approve decision")
 	if strings.Contains(parentPanel, "GIVE 10") || strings.Contains(parentBar, "giveTen") {

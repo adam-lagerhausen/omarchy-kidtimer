@@ -277,6 +277,36 @@ func TestPairPublicForbidden(t *testing.T) {
 	}
 }
 
+func TestReclaimPrivateRemints(t *testing.T) {
+	h, parent, _ := start(t)
+	first := post(t, h, "", "/v1/pair", map[string]any{}, "")
+	if first.StatusCode != 200 {
+		t.Fatalf("pair: %d %s", first.StatusCode, first.Body)
+	}
+	old := asMap(t, first.Body)["token"].(string)
+	again := post(t, h, "", "/v1/reclaim", map[string]any{}, "")
+	if again.StatusCode != 200 {
+		t.Fatalf("reclaim: %d %s", again.StatusCode, again.Body)
+	}
+	body := asMap(t, again.Body)
+	next := body["token"].(string)
+	if next == "" || next == old {
+		t.Fatalf("token: %s", again.Body)
+	}
+	if get(t, h, old, "/v1/status").StatusCode != 401 {
+		t.Fatal("old pair")
+	}
+	if get(t, h, next, "/v1/status").StatusCode != 200 {
+		t.Fatal("new pair")
+	}
+	if get(t, h, parent, "/v1/status").StatusCode != 200 {
+		t.Fatal("bootstrap")
+	}
+	if post(t, h, "", "/v1/pair", map[string]any{}, "").StatusCode != 409 {
+		t.Fatal("pair stays 409")
+	}
+}
+
 func TestGrantAndApproveInvokeResume(t *testing.T) {
 	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
 	if err != nil {

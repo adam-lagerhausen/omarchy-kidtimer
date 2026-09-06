@@ -66,15 +66,19 @@ Panel {
     if (ev.kind === "lock") {
       if (!root.tape.lockArmed) {
         root.chrome = Model.chromeSettings()
-      } else {
+      } else if (root.tape.ours !== false) {
         root.hostWidget.setLock(!root.tape.kid.locked)
       }
     }
     if (ev.kind === "pinSet" && ev.pin) root.hostWidget.setParentPin(ev.pin)
-    if (ev.kind === "minus10") root.hostWidget.grantFun(-600)
-    if (ev.kind === "plus10") root.hostWidget.grantFun(600)
+    if (ev.kind === "minus10" && root.tape.ours !== false) root.hostWidget.grantFun(-600)
+    if (ev.kind === "plus10" && root.tape.ours !== false) root.hostWidget.grantFun(600)
     if (ev.kind === "deny" && ev.ask) root.hostWidget.denyAsk(ev.ask)
     if (ev.kind === "approve" && ev.ask) root.hostWidget.approveAsk(ev.ask)
+    if (r.adopt) {
+      var adoptSnap = (root.snapshots || [])[r.adopt.index]
+      if (adoptSnap && root.hostWidget && root.hostWidget.adoptKid) root.hostWidget.adoptKid(adoptSnap)
+    }
     if (ev.kind === "bed" || ev.kind === "up" || ev.kind === "funDay" || ev.kind === "addThing" || ev.kind === "removeThing") {
       var snap = (root.snapshots || [])[root.selectedIndex]
       if (!snap) return
@@ -92,6 +96,7 @@ Panel {
       face: ch.face,
       picker: false,
       bell: ch.bell,
+      adopt: ch.adopt || null,
       query: ch.query || { fun: "", school: "" },
       hits: ch.hits || { fun: [], school: [] }
     }

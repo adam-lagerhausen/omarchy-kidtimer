@@ -1,6 +1,7 @@
 package advertise
 
 import (
+	"context"
 	"net"
 	"os"
 	"path/filepath"
@@ -76,5 +77,41 @@ func TestPortOf(t *testing.T) {
 	n, err := PortOf("127.0.0.1:8742")
 	if err != nil || n != 8742 {
 		t.Fatalf("%d %v", n, err)
+	}
+}
+
+func TestKidServicesIncludeLegacy(t *testing.T) {
+	got := KidServices()
+	if len(got) != 2 || got[0] != ServiceType || got[1] != ServiceLegacy {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestBrowseKidsRequestsBothServices(t *testing.T) {
+	seen := map[string]bool{}
+	one := func(ctx context.Context, service string, out chan<- Found) error {
+		seen[service] = true
+		if service == ServiceLegacy {
+			select {
+			case out <- Found{ID: "kid-1", Name: "testMax", URL: "http://192.168.1.20:8742"}:
+			case <-ctx.Done():
+			}
+		}
+		return nil
+	}
+	ch := make(chan Found, 4)
+	if err := browseKids(context.Background(), ch, one); err != nil {
+		t.Fatal(err)
+	}
+	close(ch)
+	if !seen[ServiceType] || !seen[ServiceLegacy] {
+		t.Fatalf("services %v", seen)
+	}
+	var got Found
+	for f := range ch {
+		got = f
+	}
+	if got.ID != "kid-1" || got.Name != "testMax" {
+		t.Fatalf("found %+v", got)
 	}
 }

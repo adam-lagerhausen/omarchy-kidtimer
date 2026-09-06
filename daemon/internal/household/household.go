@@ -14,6 +14,48 @@ func Path(home string) string {
 	return filepath.Join(home, "kids.json")
 }
 
+func LegacyDir(dir string) string {
+	return filepath.Join(filepath.Dir(dir), "allowance")
+}
+
+func HasUsableToken(kids []reverse.Record) bool {
+	for _, k := range kids {
+		if k.Token != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func ImportIfEmpty(dir string) error {
+	kids, err := Load(Path(dir))
+	if err != nil {
+		return err
+	}
+	if HasUsableToken(kids) {
+		return nil
+	}
+	legacy := LegacyDir(dir)
+	old, err := Load(Path(legacy))
+	if err != nil {
+		return err
+	}
+	if !HasUsableToken(old) {
+		return nil
+	}
+	if err := Save(Path(dir), old); err != nil {
+		return err
+	}
+	if _, ok, err := ReadPin(dir); err != nil || ok {
+		return err
+	}
+	pin, ok, err := ReadPin(legacy)
+	if err != nil || !ok {
+		return err
+	}
+	return WritePin(dir, pin)
+}
+
 func PinPath(home string) string {
 	return filepath.Join(home, "parent-pin")
 }
@@ -139,6 +181,21 @@ func Upsert(kids []reverse.Record, row reverse.Record) []reverse.Record {
 		}
 	}
 	return append(kids, row)
+}
+
+func TokenRows(groups ...[]reverse.Record) []reverse.Record {
+	seen := map[string]bool{}
+	var out []reverse.Record
+	for _, kids := range groups {
+		for _, k := range kids {
+			if k.Token == "" || seen[k.Token] {
+				continue
+			}
+			seen[k.Token] = true
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 func Lookup(kids []reverse.Record, id reverse.KidID) (reverse.Record, bool) {

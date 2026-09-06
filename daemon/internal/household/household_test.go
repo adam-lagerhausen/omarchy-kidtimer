@@ -21,6 +21,80 @@ func TestUpsertKeepsID(t *testing.T) {
 	}
 }
 
+func TestImportIfEmptyCopiesLegacyHousehold(t *testing.T) {
+	share := t.TempDir()
+	dir := filepath.Join(share, "kidtimer")
+	legacy := filepath.Join(share, "allowance")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(Path(dir), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(Path(legacy), []reverse.Record{{ID: "kid-1", Name: "testMax", URL: "http://100.64.1.2:8742", Token: "secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePin(legacy, "$argon2id$v=19$m=8,t=1,p=1$YWFhYWFhYWE$YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ImportIfEmpty(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(Path(dir))
+	if err != nil || len(got) != 1 || got[0].Name != "testMax" || got[0].Token != "secret" {
+		t.Fatalf("imported %+v %v", got, err)
+	}
+	pin, ok, err := ReadPin(dir)
+	if err != nil || !ok || pin == "" {
+		t.Fatalf("pin %q %v %v", pin, ok, err)
+	}
+}
+
+func TestImportIfEmptyLeavesExistingKids(t *testing.T) {
+	share := t.TempDir()
+	dir := filepath.Join(share, "kidtimer")
+	legacy := filepath.Join(share, "allowance")
+	if err := Save(Path(dir), []reverse.Record{{ID: "keep", Name: "Ada", Token: "now"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(Path(legacy), []reverse.Record{{ID: "kid-1", Name: "testMax", Token: "old"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ImportIfEmpty(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(Path(dir))
+	if err != nil || len(got) != 1 || got[0].ID != "keep" {
+		t.Fatalf("kept %+v %v", got, err)
+	}
+}
+
+func TestImportIfEmptyNoLegacyIsFine(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "kidtimer")
+	if err := ImportIfEmpty(dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestImportIfEmptyCopiesWhenNoUsableToken(t *testing.T) {
+	share := t.TempDir()
+	dir := filepath.Join(share, "kidtimer")
+	legacy := filepath.Join(share, "allowance")
+	if err := Save(Path(dir), []reverse.Record{{ID: "stub", Name: "Ada"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(Path(legacy), []reverse.Record{{ID: "kid-1", Name: "testMax", Token: "secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ImportIfEmpty(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(Path(dir))
+	if err != nil || len(got) != 1 || got[0].ID != "kid-1" || got[0].Token != "secret" {
+		t.Fatalf("imported %+v %v", got, err)
+	}
+}
+
 func TestSaveLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "kidtimer", "kids.json")
 	want := []reverse.Record{{ID: "a", Name: "Sam", URL: "http://192.168.1.20:8742", Token: "secret", TicketHash: "hash"}}

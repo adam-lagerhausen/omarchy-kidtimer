@@ -135,10 +135,11 @@ type Status struct {
 }
 
 type TodaySpan struct {
-	Kind  string `json:"kind"`
-	Start int    `json:"start"`
-	Dur   int    `json:"dur"`
-	Label string `json:"label"`
+	Kind      string `json:"kind"`
+	Start     int    `json:"start"`
+	StartUnix int64  `json:"start_unix,omitempty"`
+	Dur       int    `json:"dur"`
+	Label     string `json:"label"`
 }
 
 type GroupRemaining struct {
@@ -272,10 +273,15 @@ CREATE TABLE IF NOT EXISTS today_spans (
   start_min INTEGER NOT NULL,
   seconds INTEGER NOT NULL,
   label TEXT NOT NULL,
-  updated_unix INTEGER NOT NULL
+  updated_unix INTEGER NOT NULL,
+  start_unix INTEGER NOT NULL DEFAULT 0
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	_, _ = db.Exec(`ALTER TABLE today_spans ADD COLUMN start_unix INTEGER NOT NULL DEFAULT 0`)
+	return nil
 }
 
 func (b *Bank) Close() error {
@@ -469,6 +475,22 @@ func (b *Bank) checkGroups(groups []string) ([]string, error) {
 		out = append(out, id)
 	}
 	return out, nil
+}
+
+func (b *Bank) Reclaim() (string, *Token, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.prepareLocked(); err != nil {
+		return "", nil, err
+	}
+	v, ok, err := b.metaGet(metaPaired)
+	if err != nil {
+		return "", nil, err
+	}
+	if !ok || v != "true" {
+		return "", nil, ErrConflict
+	}
+	return b.replaceLocked(Token{Name: "parent-pair", Kind: KindParent})
 }
 
 func (b *Bank) Pair() (string, *Token, error) {
@@ -1079,13 +1101,25 @@ func (b *Bank) noteTodayLocked(label string) error {
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	_, err = b.db.Exec(`INSERT INTO today_spans (day, start_min, seconds, label, updated_unix) VALUES (?, ?, 1, ?, ?)`, day, startMin, label, unix)
+	_, err = b.db.Exec(`INSERT INTO today_spans (day, start_min, seconds, label, updated_unix, start_unix) VALUES (?, ?, 1, ?, ?, ?)`, day, startMin, label, unix, unix)
 	return err
+}
+
+func (b *Bank) spanStartUnix(day string, startMin int, stored int64) int64 {
+	if stored > 0 {
+		return stored
+	}
+	t, err := time.ParseInLocation("2006-01-02", day, b.cfg.Location)
+	if err != nil {
+		return 0
+	}
+	return t.Add(time.Duration(startMin) * time.Minute).Unix()
 }
 
 func (b *Bank) todayLocked() []TodaySpan {
 	out := []TodaySpan{}
-	rows, err := b.db.Query(`SELECT start_min, seconds, label FROM today_spans WHERE day = ? ORDER BY id`, b.day())
+	day := b.day()
+	rows, err := b.db.Query(`SELECT start_min, seconds, label, start_unix FROM today_spans WHERE day = ? ORDER BY id`, day)
 	if err != nil {
 		return out
 	}
@@ -1093,7 +1127,8 @@ func (b *Bank) todayLocked() []TodaySpan {
 	for rows.Next() {
 		var start, seconds int
 		var label string
-		if err := rows.Scan(&start, &seconds, &label); err != nil {
+		var startUnix int64
+		if err := rows.Scan(&start, &seconds, &label, &startUnix); err != nil {
 			return out
 		}
 		dur := (seconds + 59) / 60
@@ -1101,10 +1136,11 @@ func (b *Bank) todayLocked() []TodaySpan {
 			dur = 1
 		}
 		out = append(out, TodaySpan{
-			Kind:  "on",
-			Start: start,
-			Dur:   dur,
-			Label: label,
+			Kind:      "on",
+			Start:     start,
+			StartUnix: b.spanStartUnix(day, start, startUnix),
+			Dur:       dur,
+			Label:     label,
 		})
 	}
 	return out

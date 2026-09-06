@@ -456,6 +456,51 @@ func TestTodaySpansMergeAcrossTicksAndSplitOnGap(t *testing.T) {
 	}
 }
 
+func TestTodaySpanStartUnix(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 8, 26, 15, 0, 0, 0, loc)
+	c := &clock{t: start}
+	b, parent := openTestClock(t, c.now)
+	if err := b.NoteToday("chrome"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Today) != 1 {
+		t.Fatalf("today: %+v", st.Today)
+	}
+	if st.Today[0].Start != 15*60 {
+		t.Fatalf("start min: %+v", st.Today[0])
+	}
+	if st.Today[0].StartUnix != start.Unix() {
+		t.Fatalf("start_unix %d want %d", st.Today[0].StartUnix, start.Unix())
+	}
+
+	_, err = b.db.Exec(`INSERT INTO today_spans (day, start_min, seconds, label, updated_unix, start_unix) VALUES (?, ?, 60, 'legacy', ?, 0)`, "2026-08-26", 16*60, start.Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacy TodaySpan
+	for _, row := range st.Today {
+		if row.Label == "legacy" {
+			legacy = row
+		}
+	}
+	want := time.Date(2026, 8, 26, 16, 0, 0, 0, loc).Unix()
+	if legacy.StartUnix != want {
+		t.Fatalf("legacy unix %d want %d from %+v", legacy.StartUnix, want, st.Today)
+	}
+}
+
 func TestMidnightUsesSaturdayHours(t *testing.T) {
 	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
@@ -709,6 +754,36 @@ func TestPairFirstWins(t *testing.T) {
 	on, err = b.Paired()
 	if err != nil || !on {
 		t.Fatal("claimed")
+	}
+}
+
+func TestReclaimRemintsParentPair(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	if _, _, err := b.Reclaim(); err != ErrConflict {
+		t.Fatalf("unclaimed reclaim: %v", err)
+	}
+	secret, _, err := b.Pair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, tok, err := b.Reclaim()
+	if err != nil || next == "" || next == secret || tok == nil || tok.Name != "parent-pair" {
+		t.Fatalf("reclaim: %v %s %+v", err, next, tok)
+	}
+	if _, err := b.LookupSecret(secret); err != ErrUnauthorized {
+		t.Fatalf("old pair: %v", err)
+	}
+	if _, err := b.LookupSecret(next); err != nil {
+		t.Fatal(err)
+	}
+	if on, err := b.Paired(); err != nil || !on {
+		t.Fatal("still claimed")
+	}
+	if _, _, err := b.Pair(); err != ErrConflict {
+		t.Fatalf("pair still first-wins: %v", err)
+	}
+	if _, err := b.Status(parent); err != nil {
+		t.Fatalf("bootstrap: %v", err)
 	}
 }
 

@@ -32,6 +32,23 @@ func TestEnsureHouseholdCreatesKidsFile(t *testing.T) {
 	}
 }
 
+func TestEnsureHouseholdImportsLegacy(t *testing.T) {
+	share := t.TempDir()
+	dir := filepath.Join(share, "kidtimer")
+	legacy := filepath.Join(share, "allowance")
+	if err := household.Save(household.Path(legacy), []reverse.Record{{ID: "kid-1", Name: "testMax", Token: "secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	path, err := ensureHousehold(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := household.Load(path)
+	if err != nil || len(got) != 1 || got[0].Name != "testMax" {
+		t.Fatalf("imported %+v %v", got, err)
+	}
+}
+
 func TestLockParentExclusive(t *testing.T) {
 	dir := t.TempDir()
 	a, err := lockParent(dir)

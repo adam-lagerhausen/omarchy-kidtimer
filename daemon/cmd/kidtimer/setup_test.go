@@ -55,6 +55,53 @@ func TestSetupParentLeavesBankAlone(t *testing.T) {
 	}
 }
 
+func TestSetupParentImportsLegacyAllowance(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	legacy := filepath.Join(env.Home, ".local", "share", "allowance")
+	if err := household.Save(household.Path(legacy), []reverse.Record{{
+		ID: "kid-1", Name: "testMax", URL: "http://100.64.1.2:8742", Token: "secret",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := setupParent(env); err != nil {
+		t.Fatal(err)
+	}
+	got, err := household.Load(household.Path(filepath.Join(env.Home, ".local", "share", "kidtimer")))
+	if err != nil || len(got) != 1 || got[0].Name != "testMax" || got[0].Token != "secret" {
+		t.Fatalf("imported %+v %v", got, err)
+	}
+}
+
+func TestSetupParentRemovesAllowanceChip(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	plug := filepath.Join(env.Home, ".config", "omarchy", "plugins", "allowance.parent")
+	if err := os.MkdirAll(filepath.Dir(plug), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/tmp/allowance-parent", plug); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
+	if err := ensureWidget(shell, "allowance.parent", map[string]any{"parentBin": "old"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := setupParent(env); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(plug); !os.IsNotExist(err) {
+		t.Fatalf("plugin leftover %v", err)
+	}
+	ids := widgetIDs(t, shell)
+	if strings.Contains(ids, "allowance.parent") {
+		t.Fatalf("widget leftover %s", ids)
+	}
+	if !strings.Contains(ids, "kidtimer.parent") {
+		t.Fatalf("kidtimer widget %s", ids)
+	}
+}
+
 func TestSetupKidMintsBarTokens(t *testing.T) {
 	root := t.TempDir()
 	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}

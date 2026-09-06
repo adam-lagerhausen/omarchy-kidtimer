@@ -34,6 +34,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/asks", s.handleListAsks)
 	mux.HandleFunc("POST /v1/asks/{id}/decide", s.handleDecide)
 	mux.HandleFunc("POST /v1/pair", s.handlePair)
+	mux.HandleFunc("POST /v1/reclaim", s.handleReclaim)
 	mux.HandleFunc("POST /v1/tokens", s.handleMint)
 	mux.HandleFunc("POST /v1/lock", s.handleLock)
 	mux.HandleFunc("PUT /v1/parent-pin", s.handlePutPin)
@@ -203,12 +204,20 @@ func (s *Server) handleDecide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
+	s.writePair(w, r, s.Bank.Pair)
+}
+
+func (s *Server) handleReclaim(w http.ResponseWriter, r *http.Request) {
+	s.writePair(w, r, s.Bank.Reclaim)
+}
+
+func (s *Server) writePair(w http.ResponseWriter, r *http.Request, fn func() (string, *bank.Token, error)) {
 	ip := netaddr.PeerIP(r.RemoteAddr)
 	if !netaddr.IsHousehold(ip) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "pair is LAN only"})
 		return
 	}
-	secret, tok, err := s.Bank.Pair()
+	secret, tok, err := fn()
 	if err != nil {
 		writeErr(w, err)
 		return

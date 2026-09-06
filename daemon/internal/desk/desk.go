@@ -40,13 +40,15 @@ type TestConfig = Config
 var errOffline = errors.New("offline")
 
 type Registry struct {
-	mu     sync.Mutex
-	path   string
-	links  map[reverse.KidID]*link
-	corr   atomic.Uint64
-	browse func(ctx context.Context, out chan<- advertise.Found) error
-	probe  func(ctx context.Context) []string
-	pair   func(ctx context.Context, url string) (pairResult, error)
+	mu      sync.Mutex
+	path    string
+	links   map[reverse.KidID]*link
+	corr    atomic.Uint64
+	browse  func(ctx context.Context, out chan<- advertise.Found) error
+	probe   func(ctx context.Context) []string
+	pair    func(ctx context.Context, url string) (pairResult, error)
+	reclaim func(ctx context.Context, url string) (pairResult, error)
+	seen    []reverse.Seen
 }
 
 type link struct {
@@ -68,6 +70,9 @@ func (r *Registry) Household(records []reverse.Record) reverse.Household {
 		if res, _ := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/status"}); res.Status == 200 {
 			m.Live = true
 			m.Status = res.Body
+			if n := statusKidName(res.Body); n != "" && nameIsFallback(rec.Name) {
+				m.Name = reverse.KidName(n)
+			}
 		}
 		if res, _ := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/asks"}); res.Status == 200 {
 			m.Asks = asksArray(res.Body)
@@ -77,7 +82,53 @@ func (r *Registry) Household(records []reverse.Record) reverse.Household {
 		}
 		out = append(out, m)
 	}
-	return reverse.Household{Kids: out}
+	return reverse.Household{Kids: out, Seen: r.seenNotOwned(records)}
+}
+
+func statusKidName(raw json.RawMessage) string {
+	var st struct {
+		KidName string `json:"kid_name"`
+	}
+	if json.Unmarshal(raw, &st) != nil {
+		return ""
+	}
+	return st.KidName
+}
+
+func nameIsFallback(name reverse.KidName) bool {
+	s := string(name)
+	return s == "" || net.ParseIP(s) != nil
+}
+
+func (r *Registry) seenNotOwned(records []reverse.Record) []reverse.Seen {
+	owned := map[string]bool{}
+	for _, rec := range records {
+		if rec.ID != "" {
+			owned[string(rec.ID)] = true
+		}
+		if rec.URL != "" {
+			owned[rec.URL] = true
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.seen) == 0 {
+		return nil
+	}
+	out := make([]reverse.Seen, 0, len(r.seen))
+	for _, s := range r.seen {
+		if s.ID != "" && owned[string(s.ID)] {
+			continue
+		}
+		if s.URL != "" && owned[s.URL] {
+			continue
+		}
+		out = append(out, s)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func asksArray(raw json.RawMessage) json.RawMessage {
@@ -441,6 +492,10 @@ func (r *Registry) serveHTTP(w http.ResponseWriter, req *http.Request) {
 			kids = []reverse.Record{}
 		}
 		writeJSON(w, http.StatusOK, r.Household(kids))
+		return
+	}
+	if req.URL.Path == "/v1/adopt" && req.Method == http.MethodPost {
+		r.handleAdopt(w, req)
 		return
 	}
 	id, rest, ok := kidPath(req.URL.Path)

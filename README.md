@@ -86,7 +86,55 @@ Five wrong guesses start a 30-second cooldown.
 
 ### If you are not home
 
-The kid computer keeps counting, and the overlay still works. Your desk needs the home network to see them, approve asks, grant +10 or −10, and lock.
+The kid computer keeps counting, and the overlay still works. Your desk needs the home network to see them, approve asks, grant +10 or −10, and lock. SSH into that desk and use the [command line](#command-line) if you are away from the screen.
+
+## Command line
+
+Install puts `kidtimer` in `~/.local/bin`. Run it from a terminal on your desk. The panel has to be up; these commands talk to it, not to the kid computer directly. Left-click the chip if you have not opened it yet.
+
+With one kid computer connected, the commands pick it. With two, pass `-kid` and the name from the dropdown.
+
+```
+kidtimer pin set
+kidtimer pin status
+```
+
+`pin set` asks twice. Same 4-digit PIN as the settings row. Until it exists, lock and the overlay do nothing.
+
+```
+kidtimer grant -minutes 10
+kidtimer grant -minutes=-10
+kidtimer lock
+kidtimer unlock
+kidtimer status
+```
+
+`grant -minutes 10` is the same as +10 on the panel. `-minutes=-10` takes ten minutes away. `status` prints JSON.
+
+```
+kidtimer asks
+kidtimer decide <id> approve
+kidtimer decide <id> deny
+```
+
+`asks` lists pending requests as JSON. Copy the `id` into `decide`.
+
+```
+kidtimer parent export
+kidtimer parent export Ada
+```
+
+That prints every window from today: start time, what they were on, how long. The panel log folds those into sittings. Add `--json` for the raw list.
+
+Two computers:
+
+```
+kidtimer grant -kid Ada -minutes 10
+kidtimer lock -kid Ada
+kidtimer parent export -kid Ada
+```
+
+`kidtimer` with no arguments lists the verbs. `kidtimer grant -h` and the others print flags.
 
 ## Limits
 

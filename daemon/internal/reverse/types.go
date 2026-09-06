@@ -63,8 +63,16 @@ type Member struct {
 	Look   json.RawMessage `json:"look,omitempty"`
 }
 
+type Seen struct {
+	ID      KidID   `json:"id,omitempty"`
+	Name    KidName `json:"name,omitempty"`
+	URL     string  `json:"url,omitempty"`
+	Claimed bool    `json:"claimed"`
+}
+
 type Household struct {
 	Kids []Member `json:"kids"`
+	Seen []Seen   `json:"seen,omitempty"`
 }
 
 type Offer struct {

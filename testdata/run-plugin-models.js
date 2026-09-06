@@ -177,6 +177,44 @@ assertEqual(parent.projectTape(parent.fixtureSnapshots(), 0, parent.chromeHome()
 assertEqual(parent.projectTape(parent.fixtureSnapshots(), 0, parent.chromeHome(), null, { pinSet: true }).needsPin, false, "kids with pin skip pin screen")
 assertEqual(parent.projectTape(parent.fixtureSnapshots(), 0, parent.chromeHome(), null, { pinSet: true }).waiting, false, "kids with pin show home")
 
+const claimedRows = parent.parseHousehold({
+  kids: [],
+  seen: [{ id: "kid-1", name: "testMax", url: "http://100.64.1.2:8742", claimed: true }]
+})
+assertEqual(claimedRows.length, 1, "seen rows in household")
+assertEqual(claimedRows[0].claimed, true, "seen claimed")
+assertEqual(claimedRows[0].token, "", "seen has no token")
+const mixedHH = parent.parseHousehold({
+  kids: [{ id: "m1", name: "ada-box" }],
+  seen: [{ id: "kid-1", name: "testMax", url: "http://100.64.1.2:8742", claimed: true }]
+})
+assertEqual(mixedHH.map(k => k.name), ["ada-box", "testMax"], "ours plus claimed")
+const claimedTape = parent.projectTape([{
+  name: "testMax", claimed: true, reachable: true, status: {}
+}], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(claimedTape.waiting, false, "claimed-only is not waiting")
+assertEqual(claimedTape.howTo.title || "", "", "claimed-only has no empty how-to")
+assertEqual(claimedTape.ours, false, "claimed-only is not ours")
+assertEqual(claimedTape.showLock, false, "claimed-only hides lock")
+assertEqual(claimedTape.kid.face.caption, "Already claimed", "claimed caption")
+assertEqual(claimedTape.kids.length, 1, "claimed stays in picker")
+const pickClaimed = parent.reduceChrome(claimedTape.chrome, { kind: "pick" }, claimedTape)
+assertEqual(pickClaimed.chrome.picker, true, "claimed picker opens")
+const selClaimed = parent.reduceChrome(pickClaimed.chrome, { kind: "select", kidIndex: 0 }, claimedTape)
+assertEqual(selClaimed.chrome.picker, false, "claimed select closes picker")
+assertEqual(selClaimed.selectIndex, 0, "claimed select aims")
+assertEqual(selClaimed.chrome.adopt.index, 0, "claimed select asks adopt")
+const adoptNo = parent.reduceChrome(selClaimed.chrome, { kind: "adoptNo" }, claimedTape)
+assertEqual(adoptNo.chrome.adopt, null, "no closes prompt")
+assertEqual(claimedTape.kids.length, 1, "no keeps the row")
+const adoptYes = parent.reduceChrome(selClaimed.chrome, { kind: "adoptYes" }, claimedTape)
+assertEqual(adoptYes.adopt.index, 0, "yes takeovers")
+assertEqual(adoptYes.chrome.adopt, null, "yes closes prompt")
+const oursTape = parent.projectTape(parent.fixtureSnapshots(), 0, parent.chromeHome(), null, { pinSet: true })
+const oursSel = parent.reduceChrome(oursTape.chrome, { kind: "select", kidIndex: 1 }, oursTape)
+assertEqual(oursSel.chrome.adopt, null, "ours click does not adopt")
+assertEqual(oursSel.selectIndex, 1, "ours click selects")
+
 function assertFace(snap, kind, cap, msg) {
   const f = parent.hostFace(snap)
   assertEqual(f.kind, kind, msg + " kind")
@@ -565,12 +603,30 @@ assertEqual(parent.parseStatus({
   today: [{ kind: "on", start: 15 * 60, dur: 1, label: "chrome" }]
 }).today[0].dur, 1, "status today minutes")
 
+const localUnix = Math.floor(new Date(2026, 8, 5, 15, 30, 0).getTime() / 1000)
+assertEqual(parent.parseSessions([{ start_unix: localUnix, dur: 12, label: "chrome" }])[0].start, 15 * 60 + 30, "start_unix is parent local")
+assertEqual(parent.parseSessions([{ start: 8 * 60, start_unix: localUnix, dur: 12 }])[0].start, 15 * 60 + 30, "start_unix wins over start")
+
 assertEqual(parent.friendlyApp("foot"), "Terminal", "foot is terminal")
 assertEqual(parent.friendlyApp("footclient"), "Terminal", "footclient is terminal")
 assertEqual(parent.friendlyApp("google-chrome"), "Chrome", "google-chrome")
 assertEqual(parent.friendlyApp("on"), "on", "on stays on")
 
 const policy = parent.defaultPolicy()
+const endsAtNow = parent.layoutTrack([
+  { kind: "on", start: 16 * 60 + 39, dur: 3, label: "chrome" }
+], policy, 16 + 42 / 60, true)
+assertEqual(endsAtNow.blocks.length, 1, "three minutes at now stays visible")
+assertEqual(Math.round(endsAtNow.blocks[0].widthPct), Math.round(3 / 1440 * 100), "three minutes wide")
+assertEqual(endsAtNow.blocks[0].leftPct + endsAtNow.blocks[0].widthPct <= endsAtNow.needle + 1e-9, true, "three minutes does not pass needle")
+
+const pastNeedle = parent.layoutTrack([
+  { kind: "on", start: 16 * 60, dur: 90, label: "chrome" }
+], policy, 16.5, true)
+const pastEnd = pastNeedle.blocks[0].leftPct + pastNeedle.blocks[0].widthPct
+assertEqual(pastEnd <= pastNeedle.needle + 1e-9, true, "long sit clipped to now")
+assertEqual(Math.round(pastNeedle.blocks[0].widthPct), Math.round(30 / 1440 * 100), "clipped width is elapsed")
+
 const footFlicker = parent.layoutTrack([
   { kind: "on", start: 16 * 60 + 59, dur: 16, label: "foot" },
   { kind: "on", start: 17 * 60 + 14, dur: 1, label: "foot" },
@@ -584,7 +640,9 @@ assertEqual(footFlicker.log[0].clock, "16:59", "foot sitting clock")
 assertEqual(footFlicker.log[0].name, "TERMINAL", "foot sitting name")
 assertEqual(footFlicker.log[0].dur, "1h 16m", "foot sitting wall clock")
 assertEqual(footFlicker.blocks.length, 1, "foot occupancy merges")
-assertEqual(Math.round(footFlicker.blocks[0].widthPct), Math.round(76 / 1440 * 100), "foot occupancy width")
+assertEqual(Math.round(footFlicker.blocks[0].widthPct), Math.round(16 / 1440 * 100), "foot occupancy clipped to now")
+const flickerEnd = footFlicker.blocks[0].leftPct + footFlicker.blocks[0].widthPct
+assertEqual(flickerEnd <= footFlicker.needle + 1e-9, true, "foot occupancy stays left of needle")
 
 const overlap = parent.layoutTrack([
   { kind: "on", start: 17 * 60 + 14, dur: 1, label: "foot" },

@@ -59,7 +59,7 @@ Do not put balances on the parent laptop. Do not enforce only inside Quickshell.
 
 One daemon, one API, callers with different keys.
 
-Install is two commands: `kidtimer setup parent` on the parent desk, `sudo kidtimer setup kid` on the kid box. Same LAN is enough. The kid advertises `_kidtimer._tcp`. The parent claims the first unseen machine with `POST /v1/pair` and remembers it in `~/.local/share/kidtimer/kids.json`. No token paste. No Tailscale name list. Set the household 4-digit parent PIN with `kidtimer pin set` or parent settings before lock or overlay can fire.
+Install is two commands: `kidtimer setup parent` on the parent desk, `sudo kidtimer setup kid` on the kid box. Same LAN is enough. The kid advertises `_kidtimer._tcp`. The parent browses `_kidtimer._tcp` and `_allowance._tcp`, claims an unclaimed machine with `POST /v1/pair`, and remembers it in `~/.local/share/kidtimer/kids.json`. Leftover Allowance household tokens on the same desk are adopted with no prompt. A claimed machine this tape does not own shows in the picker until the parent says Yes. No token paste. No Tailscale name list. Set the household 4-digit parent PIN with `kidtimer pin set` or parent settings before lock or overlay can fire.
 
 If the parent laptop is asleep, enforcement still works. Request-more-time waits until the parent desk is back. No always-on hub in v1. No Tailscale Funnel. No public internet. Do not bind `0.0.0.0` on a public address.
 
@@ -179,13 +179,13 @@ A kid "I finished the worksheet" is an ask, not a grant. The parent approves, an
 
 ## HTTP API
 
-Listen is the bind set from `-listen` or config `listen` (comma-separated). Default `127.0.0.1:8742`. Kid packaging ships `listen = "0.0.0.0:8742"` so the parent can reach IPv4 on the LAN. `advertise` is mDNS only; it does not add extra bind addresses. A failed address is skipped. IPv6 link-local binds with the `%iface` zone. Need at least one successful listen. parent-lab and isolated verify stay `127.0.0.1`. No TLS in v1. Bearer tokens are the API identity except `POST /v1/pair`.
+Listen is the bind set from `-listen` or config `listen` (comma-separated). Default `127.0.0.1:8742`. Kid packaging ships `listen = "0.0.0.0:8742"` so the parent can reach IPv4 on the LAN. `advertise` is mDNS only; it does not add extra bind addresses. A failed address is skipped. IPv6 link-local binds with the `%iface` zone. Need at least one successful listen. parent-lab and isolated verify stay `127.0.0.1`. No TLS in v1. Bearer tokens are the API identity except `POST /v1/pair` and `POST /v1/reclaim`.
 
-A kid box with `advertise = true` announces `_kidtimer._tcp` with TXT `id` (stable `/var/lib/kidtimer/machine-id`) and `name` (`kid_name`).
+A kid box with `advertise = true` announces `_kidtimer._tcp` with TXT `id` (stable `/var/lib/kidtimer/machine-id`) and `name` (`kid_name`). The parent also browses leftover `_allowance._tcp` advertisements. Kid dual-advertise is not required.
 
-All other mutating routes require `Authorization: Bearer <token>`.
+All other mutating routes require `Authorization: Bearer <token>`. `POST /v1/pair` and `POST /v1/reclaim` are the LAN exceptions.
 
-`kidtimer lock`, `kidtimer unlock`, `kidtimer grant`, `kidtimer status`, `kidtimer asks`, and `kidtimer decide` are HTTP clients. They talk to the parent desk on loopback, or to a kid daemon when both a URL and a token are set. `kidtimer token create` and `kidtimer pin set` (against a daemon URL) are HTTP clients of the running daemon. They do not open sqlite. The daemon is the only writer of the ledger. `kidtimer pin set` also writes the household hash file on the parent desk.
+`kidtimer lock`, `kidtimer unlock`, `kidtimer grant`, `kidtimer status`, `kidtimer asks`, `kidtimer decide`, and `kidtimer parent export` are HTTP clients. They talk to the parent desk on loopback, or to a kid daemon when both a URL and a token are set. `kidtimer token create` and `kidtimer pin set` (against a daemon URL) are HTTP clients of the running daemon. They do not open sqlite. The daemon is the only writer of the ledger. `kidtimer pin set` also writes the household hash file on the parent desk.
 
 ### `POST /v1/grants`
 
@@ -205,7 +205,7 @@ A token may only credit groups in its list. Parent tokens may credit any group.
 
 ### `GET /v1/status`
 
-Remaining seconds (`groups.fun`), spend-path remaining (`path_remaining.fun`), whether bedtime is active, focused clock `fun` or none (`focused_group`), caption or none (`focused_app`), `spent.fun` seconds today, `today` (spans of time on the computer: `kind`, `start` minutes from midnight, `dur` minutes, `label`), `look_version`, pending ask count, leftover `mode` (ignored for remaining), `parent_locked`, `remote_lock`, `parent_pin_set`, `overlay` (true when the kid plugin should cover the screen), `bedtime_hold` (stay-up while remaining is greater than zero), effective `bedtime_start` and `bedtime_end` as `HH:MM`. When effective `bedtime_lock` is on, also `bedtime_in`: seconds until the bedtime window starts, or 0 if it is already active. Omit `bedtime_in` when lock is off. Kid plugin and parent plugin both use this. Read tokens allowed. Never send the PIN or its hash.
+Remaining seconds (`groups.fun`), spend-path remaining (`path_remaining.fun`), whether bedtime is active, focused clock `fun` or none (`focused_group`), caption or none (`focused_app`), `spent.fun` seconds today, `today` (spans of time on the computer: `kind`, `start` minutes from midnight on the kid box, `start_unix` UTC seconds, `dur` minutes, `label`). The parent plugin converts `start_unix` with the parent desk clock., `look_version`, pending ask count, leftover `mode` (ignored for remaining), `parent_locked`, `remote_lock`, `parent_pin_set`, `overlay` (true when the kid plugin should cover the screen), `bedtime_hold` (stay-up while remaining is greater than zero), effective `bedtime_start` and `bedtime_end` as `HH:MM`. When effective `bedtime_lock` is on, also `bedtime_in`: seconds until the bedtime window starts, or 0 if it is already active. Omit `bedtime_in` when lock is off. Kid plugin and parent plugin both use this. Read tokens allowed. Never send the PIN or its hash.
 
 ### `POST /v1/asks`
 
@@ -246,6 +246,12 @@ Otherwise mint a parent token named `parent-pair` and return the secret once:
 ```
 
 Grant, ask, lock, and the rest stay bearer-only.
+
+### `POST /v1/reclaim`
+
+No bearer. Household IP only, same as pair. The box must already be claimed (`meta.paired`). Otherwise 409.
+
+Replaces the `parent-pair` token hash and returns the new secret once, same body as pair. App, read, ask, and the local bootstrap parent stay. Unattended `POST /v1/pair` stays 409. Scan never calls this. The parent desk calls it only after an explicit Yes on loopback `POST /v1/adopt`.
 
 ### `POST /v1/tokens`
 
@@ -495,7 +501,9 @@ Parent household file, user-owned, written by `kidtimer parent` after pair:
 }
 ```
 
-Path is `~/.local/share/kidtimer/kids.json` mode `0600`. The household PIN hash is `~/.local/share/kidtimer/parent-pin` mode `0600`. The parent plugin watches both. Optional `settings.kids` in `shell.json` stays as a localhost lab pin. Auto-paired machines appear beside pins. They do not replace them. Pairing a new kid pushes the stored hash.
+Path is `~/.local/share/kidtimer/kids.json` mode `0600`. The household PIN hash is `~/.local/share/kidtimer/parent-pin` mode `0600`. The parent plugin watches both. If the live household has no usable parent-pair token, `kidtimer setup parent` and `kidtimer parent` copy leftover `~/.local/share/allowance/{kids.json,parent-pin}`. They do not merge two households that already each have a token-bearing kid. Optional `settings.kids` in `shell.json` stays as a localhost lab pin. Auto-paired machines appear beside pins. They do not replace them. Pairing a new kid pushes the stored hash.
+
+Desk `GET /v1/household` returns owned `kids` plus `seen` computers this tape does not own yet (`claimed: true`, name and url, no token). Loopback `POST /v1/adopt` `{ "id", "url" }` takeovers a seen computer. The plugin does not POST `/v1/pair` or `/v1/reclaim`.
 
 `kid_name` empty in TOML means the machine hostname.
 
@@ -525,7 +533,8 @@ This repo ships two plugins, because parent and kid are different machines.
 - Settings: Parent PIN row first, then Bed / Up, then weekday hours. Set invokes `kidtimer pin set`.
 - Lock square does nothing until the household PIN exists
 - Paired kids go through the parent desk on loopback. Optional `settings.kids` pins stay as a localhost lab path.
-- Starts `~/.local/bin/kidtimer parent`, which browses `_kidtimer._tcp` and pairs. The widget restarts that process if it exits. It does not depend on `PATH`.
+- Starts `~/.local/bin/kidtimer parent`, which browses `_kidtimer._tcp` and `_allowance._tcp` and pairs. The widget restarts that process if it exits. It does not depend on `PATH`.
+- `setup parent` retires leftover `allowance.parent` plugin symlink and bar widget so two chips do not fight on `:8741`.
 - Poll `GET /v1/asks` about every 5 seconds. Compare pending ids. On a new id, fire an Omarchy notification
 
 Do not implement a Quickshell `service` that thinks it is the bank. A plugin `service` kind still runs as the user inside the shell. The bank is systemd. The kid overlay service is a screen, not the bank.
@@ -541,6 +550,7 @@ kidtimer daemon          # systemd ExecStart
 kidtimer setup parent    # user install on the parent desk
 kidtimer setup kid       # root install on the kid box
 kidtimer parent          # browse LAN, pair, write kids.json
+kidtimer parent export    # GET /v1/status today spans; table or --json
 kidtimer pin set         # household PIN; hash file plus PUT to kids
 kidtimer pin status      # whether the household PIN file exists
 kidtimer token create    # HTTP POST /v1/tokens, print secret once
@@ -552,7 +562,7 @@ kidtimer asks            # HTTP GET /v1/asks
 kidtimer decide          # HTTP POST /v1/asks/{id}/decide
 ```
 
-`lock`, `unlock`, `grant`, `status`, `asks`, and `decide` are HTTP clients of the parent desk on loopback, or of a kid daemon when both a URL and a token are set. They do not open sqlite.
+`lock`, `unlock`, `grant`, `status`, `asks`, `decide`, and `parent export` are HTTP clients of the parent desk on loopback, or of a kid daemon when both a URL and a token are set. They do not open sqlite.
 
 State:
 

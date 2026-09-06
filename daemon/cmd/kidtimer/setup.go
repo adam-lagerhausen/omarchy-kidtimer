@@ -143,11 +143,15 @@ func setupParent(env setupEnv) error {
 	if err := linkPlugin(filepath.Join(env.Repo, "plugin-parent"), filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.parent")); err != nil {
 		return err
 	}
+	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "allowance.parent"))
 	share := filepath.Join(env.Home, ".local", "share", "kidtimer")
 	if err := os.MkdirAll(share, 0o700); err != nil {
 		return err
 	}
 	if err := household.WriteRole(share, reverse.RoleParent); err != nil {
+		return err
+	}
+	if err := household.ImportIfEmpty(share); err != nil {
 		return err
 	}
 	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
@@ -156,7 +160,7 @@ func setupParent(env setupEnv) error {
 	}); err != nil {
 		return err
 	}
-	return nil
+	return removeWidget(shell, "allowance.parent")
 }
 
 func (env setupEnv) etc() string {
@@ -587,6 +591,42 @@ func ensureWidget(shell, id string, extra map[string]any) error {
 		right = append(right, w)
 	}
 	layout["right"] = right
+	raw, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(shell, append(raw, '\n'), 0o644)
+}
+
+func removeWidget(shell, id string) error {
+	doc, err := readJSON(shell)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	bar, _ := doc["bar"].(map[string]any)
+	if bar == nil {
+		return nil
+	}
+	layout, _ := bar["layout"].(map[string]any)
+	if layout == nil {
+		return nil
+	}
+	right := asSlice(layout["right"])
+	out := make([]any, 0, len(right))
+	for _, raw := range right {
+		w, _ := raw.(map[string]any)
+		if str(w["id"]) == id {
+			continue
+		}
+		out = append(out, raw)
+	}
+	if len(out) == len(right) {
+		return nil
+	}
+	layout["right"] = out
 	raw, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return err

@@ -76,11 +76,13 @@ BarWidget {
       var cur = prev[i] || {}
       next.push({
         name: rows[i].name,
+        id: rows[i].id || "",
         url: rows[i].url,
         token: rows[i].token,
+        claimed: !!rows[i].claimed,
         status: cur.status || {},
         asks: cur.asks || { asks: [] },
-        reachable: cur.reachable === true,
+        reachable: cur.reachable === true || !!rows[i].claimed,
         error: cur.error === true,
         look: cur.look || null
       })
@@ -120,8 +122,10 @@ BarWidget {
     if (patch.fromPoll && (root.holdLook() || hold)) look = cur.look
     next[index] = {
       name: row.name,
+      id: row.id || cur.id || "",
       url: row.url,
       token: row.token,
+      claimed: !!(row.claimed || cur.claimed),
       status: patch.status !== undefined ? patch.status : cur.status,
       asks: patch.asks !== undefined ? patch.asks : cur.asks,
       reachable: patch.reachable !== undefined ? patch.reachable : !!cur.reachable,
@@ -132,6 +136,11 @@ BarWidget {
     snapshots = next
     statusText = Model.householdBarLabel(next)
     syncPanel()
+  }
+
+  function adoptKid(row) {
+    if (!row) return
+    deskPost("/v1/adopt", { id: row.id || "", url: row.url || "" })
   }
 
   function deskUrl() {
@@ -146,12 +155,28 @@ BarWidget {
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i]
       var cur = prev[i] || {}
+      if (row.claimed) {
+        next.push({
+          id: row.id,
+          name: row.name,
+          url: row.url || "",
+          token: "",
+          claimed: true,
+          status: {},
+          asks: [],
+          look: null,
+          reachable: true,
+          error: false
+        })
+        continue
+      }
       if (row.id && !row.url) {
         next.push({
           id: row.id,
           name: row.name,
           url: "",
           token: "",
+          claimed: false,
           status: row.status && row.status.groups ? Model.parseStatus(row.status) : (cur.status || {}),
           asks: row.asks ? Model.parseAsks(row.asks) : (cur.asks || []),
           look: row.look ? Model.parseLook(row.look) : cur.look,
@@ -162,8 +187,10 @@ BarWidget {
       }
       next.push({
         name: row.name,
+        id: row.id || "",
         url: row.url,
         token: row.token,
+        claimed: false,
         status: cur.status || {},
         asks: cur.asks || { asks: [] },
         reachable: cur.reachable === true,
@@ -175,6 +202,7 @@ BarWidget {
     statusText = Model.householdBarLabel(next)
     syncPanel()
     for (var j = 0; j < rows.length; j++) {
+      if (rows[j].claimed) continue
       if (rows[j].url) {
         pollStatus(j, rows[j])
         pollAsks(j, rows[j])
@@ -192,6 +220,7 @@ BarWidget {
         seedFromSettings()
         var rows = kidRows()
         for (var i = 0; i < rows.length; i++) {
+          if (rows[i].claimed) continue
           if (rows[i].url) {
             pollStatus(i, rows[i])
             pollAsks(i, rows[i])
@@ -389,6 +418,7 @@ BarWidget {
 
   function grantFun(seconds) {
     var kid = aimedKid()
+    if (kid && kid.claimed) return
     if (kid && kid.id && !kid.url) {
       deskPost("/v1/kids/" + kid.id + "/grants", Model.grantPayload("fun", seconds))
       return
@@ -419,6 +449,7 @@ BarWidget {
 
   function setLock(locked) {
     var kid = aimedKid()
+    if (kid && kid.claimed) return
     if (kid && kid.id && !kid.url) {
       deskPost("/v1/kids/" + kid.id + "/lock", Model.lockPayload(locked))
       return
