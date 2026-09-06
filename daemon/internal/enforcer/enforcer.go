@@ -150,6 +150,7 @@ func (e *Enforcer) Tick() error {
 	}
 	cfg := e.Bank.Config()
 	if e.Session != nil && (e.Session.Locked() || e.Session.Idle()) {
+		e.Bank.SetFocus("", "")
 		return nil
 	}
 	win, ok, err := e.Focus.Active()

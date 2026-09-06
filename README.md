@@ -58,7 +58,7 @@ The log under the day is sittings: one stretch at the computer. Two apps in the 
 
 ![Settings](docs/screenshots/settings.png)
 
-Games and apps spend the hour. The bar, the launcher, idle time, and the session lock do not.
+Games and apps spend the hour. The bar, the launcher, idle time, and the session lock do not. Idle is about a minute with no keyboard or mouse, even if a game is still on the screen.
 
 At midnight the clock refills from that day's hours. Extra time from yesterday does not stack.
 

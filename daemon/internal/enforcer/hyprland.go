@@ -49,11 +49,12 @@ func (h Hyprland) Active() (Window, bool, error) {
 }
 
 type LogindSession struct {
-	UID int
+	UID   int
+	Watch *InputIdle
 }
 
-func (s LogindSession) Locked() bool {
-	if s.UID <= 0 {
+func (s *LogindSession) Locked() bool {
+	if s == nil || s.UID <= 0 {
 		return false
 	}
 	if omarchySessionLocked(s.UID) {
@@ -74,10 +75,6 @@ func omarchySessionLocked(uid int) bool {
 	}
 	cmd.Env = env
 	return cmd.Run() == nil
-}
-
-func (s LogindSession) Idle() bool {
-	return loginctlBool(s.UID, "IdleHint")
 }
 
 func loginctlBool(uid int, prop string) bool {

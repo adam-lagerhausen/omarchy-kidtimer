@@ -84,7 +84,7 @@ func runDaemon(args []string) error {
 
 	api := httpapi.New(b)
 	hypr := &enforcer.Hyprland{}
-	logind := &enforcer.LogindSession{}
+	logind := &enforcer.LogindSession{Watch: &enforcer.InputIdle{}}
 	attachSession := func() int {
 		uid, err := session.GraphicalUID()
 		if err != nil || uid <= 0 {

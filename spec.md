@@ -127,7 +127,7 @@ Each tick:
 
 1. If a parent PIN is set and `(bedtime_lock and bedtime is active and not (stay-up hold and remaining > 0)) or (remote_lock and parent_lock)`, freeze: do not decrement, do not call `omarchy system lock`. The kid plugin shows the overlay. Bedtime window wraps midnight. 21:00 to 07:00 is inside. Overlay is a window, not a pulse. Parent lock on the parent desk does not freeze because `remote_lock` is false. Stop.
 2. If a parent PIN is set and `empty_lock` is on, lab is off, and remaining is 0, freeze the same way. Do not set `parent_locked`. Asks stay allowed. Stop. The parent lab keeps `empty_lock = false`.
-3. If the session is locked, or idle for 60 seconds, do not decrement. Idle source is `loginctl IdleHint` or Hyprland idle. Stop.
+3. If the session is locked, or idle for 60 seconds, do not decrement. Idle is Hyprland `ext_idle_notifier_v1.get_input_idle_notification`: no keyboard or mouse for 60 seconds, ignoring screensaver inhibitors. A leftover fullscreen game still goes idle. If that protocol is missing, do not decrement. Stop.
 4. Read focused class, title, and pid. If Hyprland is down, skip the sample. Do not crash. Do not overlay. Stop.
 5. If class is in `always_on`, or class is empty, ignore. Stop.
 6. If `lab.enabled` and the class is not in `lab.classes`, ignore. Stop.
@@ -145,7 +145,7 @@ Do not count time in the parent plugin. The daemon samples focus on the kid box.
 
 ## Tracking
 
-Apps: focused window class and title from Hyprland (`hyprctl activewindow -j`). Do not count idle, lock, always-on classes, or the empty desktop. Any other focused window spends the one clock. Minecraft, Khan, Chrome, and a terminal are the same.
+Apps: focused window class and title from Hyprland (`hyprctl activewindow -j`). Do not count idle, lock, always-on classes, or the empty desktop. Idle is 60 seconds without keyboard or mouse, even when a game or video is inhibiting the screensaver. Any other focused window spends the one clock. Minecraft, Khan, Chrome, and a terminal are the same.
 
 Sites do not get a separate clock. A browser window spends like any other window.
 

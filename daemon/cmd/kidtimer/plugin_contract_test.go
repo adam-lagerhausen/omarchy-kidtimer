@@ -217,6 +217,7 @@ func TestDaemonRefreshesSessionUID(t *testing.T) {
 	}
 	mustContain(t, src, "GraphicalUID", "per-tick session uid")
 	mustContain(t, src, "SessionUID", "enforcer session uid")
+	mustContain(t, src, "InputIdle", "input idle watch")
 	mustContain(t, src, "enforcer:", "log tick errors")
 }
 
