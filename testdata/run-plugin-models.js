@@ -387,13 +387,22 @@ assertEqual(kid.clockFace({ groups: { fun: 0 }, spent: { fun: 3600 } }).empty, t
 assertEqual(kid.clockFace({ groups: { fun: 0 } }).fill, 0, "clock empty fill")
 assertEqual(kid.clockFace({ groups: { fun: 1800 } }, "fun").waiting, true, "clock waiting")
 assertEqual(kid.barLabel({ focused_app: "minecraft", groups: { fun: 3600 } }), "1h left", "freetime still shows remaining")
-assertEqual(kid.askBlocked({ bedtime_active: true }), true, "ask blocked bedtime")
-assertEqual(kid.askBlocked({ parent_locked: true }), true, "ask blocked lock")
+assertEqual(kid.askBlocked({ bedtime_active: true }), false, "ask open bedtime")
+assertEqual(kid.askBlocked({ parent_locked: true }), false, "ask open lock")
 assertEqual(kid.askBlocked({ groups: { fun: 0 } }), false, "ask open at empty")
 assertEqual(kid.askBlocked({ mode: "freetime" }), false, "ask open in leftover mode")
 assertEqual(kid.clockEmpty({ groups: { fun: 0 } }), true, "empty clock")
 assertEqual(kid.clockEmpty({ groups: { fun: 1 } }), false, "has remaining")
 assertEqual(kid.askBlocked({}), false, "ask open")
+assertEqual(kid.overlayAskWaiting({ pending_ask_count: 1 }), true, "overlay waiting")
+assertEqual(kid.overlayAskWaiting({ pending_ask_count: 0 }), false, "overlay not waiting")
+assertEqual(kid.overlayAskWaiting({}), false, "overlay waiting missing")
+assertEqual(kid.clampOverlayAskMinutes(0), 10, "overlay ask clamp min")
+assertEqual(kid.clampOverlayAskMinutes(200), 120, "overlay ask clamp max")
+assertEqual(kid.nudgeOverlayAskMinutes(30, -10), 20, "overlay ask nudge down")
+assertEqual(kid.nudgeOverlayAskMinutes(10, -10), 10, "overlay ask nudge floor")
+assertEqual(kid.nudgeOverlayAskMinutes(120, 10), 120, "overlay ask nudge ceil")
+assertEqual(kid.overlayAskStepperLabel(30), "30", "overlay ask stepper")
 assertEqual(kid.clampAskMinutes(0), 5, "ask clamp min")
 assertEqual(kid.clampAskMinutes(200), 120, "ask clamp max")
 assertEqual(kid.nudgeAskMinutes(30, -5), 25, "ask nudge down")
@@ -525,6 +534,7 @@ assertEqual(kid.overlayFace({ overlay: true, bedtime_active: true }), "bedtime",
 assertEqual(kid.overlayFace({ overlay: true, groups: { fun: 0 } }), "empty", "overlay empty")
 assertEqual(kid.overlayStepperLabel(30), "30", "overlay stepper")
 assertEqual(kid.nudgeAskMinutes(30, -5), 25, "overlay nudge")
+assertEqual(kid.nudgeOverlayAskMinutes(30, 10), 40, "overlay ask nudge up")
 assertEqual(kid.pinApprovePayload("1234", "ask-1"), { pin: "1234", ask_id: "ask-1" }, "pin approve payload")
 assertEqual(kid.pinGrantPayload("1234", 600), { pin: "1234", seconds: 600 }, "pin grant payload")
 assertEqual(kid.kidSettingsFromShell({
@@ -554,5 +564,65 @@ assertEqual(parent.parseSessions([{ start: 8.0, dur: 0.5, label: "Chrome" }])[0]
 assertEqual(parent.parseStatus({
   today: [{ kind: "on", start: 15 * 60, dur: 1, label: "chrome" }]
 }).today[0].dur, 1, "status today minutes")
+
+assertEqual(parent.friendlyApp("foot"), "Terminal", "foot is terminal")
+assertEqual(parent.friendlyApp("footclient"), "Terminal", "footclient is terminal")
+assertEqual(parent.friendlyApp("google-chrome"), "Chrome", "google-chrome")
+assertEqual(parent.friendlyApp("on"), "on", "on stays on")
+
+const policy = parent.defaultPolicy()
+const footFlicker = parent.layoutTrack([
+  { kind: "on", start: 16 * 60 + 59, dur: 16, label: "foot" },
+  { kind: "on", start: 17 * 60 + 14, dur: 1, label: "foot" },
+  { kind: "on", start: 17 * 60 + 14, dur: 1, label: "foot" },
+  { kind: "on", start: 17 * 60 + 14, dur: 60, label: "foot" },
+  { kind: "on", start: 18 * 60 + 14, dur: 1, label: "foot" },
+  { kind: "on", start: 18 * 60 + 14, dur: 1, label: "foot" }
+], policy, 17.25, true)
+assertEqual(footFlicker.log.length, 1, "foot flicker is one sitting")
+assertEqual(footFlicker.log[0].clock, "16:59", "foot sitting clock")
+assertEqual(footFlicker.log[0].name, "TERMINAL", "foot sitting name")
+assertEqual(footFlicker.log[0].dur, "1h 16m", "foot sitting wall clock")
+assertEqual(footFlicker.blocks.length, 1, "foot occupancy merges")
+assertEqual(Math.round(footFlicker.blocks[0].widthPct), Math.round(76 / 1440 * 100), "foot occupancy width")
+
+const overlap = parent.layoutTrack([
+  { kind: "on", start: 17 * 60 + 14, dur: 1, label: "foot" },
+  { kind: "on", start: 17 * 60 + 14, dur: 60, label: "foot" }
+], policy, 18.5, true)
+assertEqual(overlap.log[0].dur, "1h", "overlapping durs do not stack")
+assertEqual(overlap.blocks.length, 1, "overlap one block")
+
+const mixed = parent.layoutTrack([
+  { kind: "on", start: 15 * 60, dur: 20, label: "minecraft" },
+  { kind: "on", start: 15 * 60 + 20, dur: 12, label: "chrome" }
+], policy, 16, true)
+assertEqual(mixed.log.length, 1, "mixed one sitting")
+assertEqual(mixed.log[0].name, "MINECRAFT + CHROME", "mixed names longest first")
+assertEqual(mixed.log[0].dur, "32m", "mixed wall clock")
+
+const dust = parent.layoutTrack([
+  { kind: "on", start: 15 * 60, dur: 20, label: "minecraft" },
+  { kind: "on", start: 15 * 60 + 20, dur: 1, label: "chrome" }
+], policy, 16, true)
+assertEqual(dust.log[0].name, "MINECRAFT", "dust chrome omitted")
+
+const seven = []
+for (let i = 0; i < 7; i++) {
+  seven.push({ kind: "on", start: (8 + i) * 60, dur: 10, label: "chrome" })
+}
+const capped = parent.layoutTrack(seven, policy, 15, true)
+assertEqual(capped.log.length, 6, "seven sittings cap at six")
+assertEqual(capped.log[0].name, "EARLIER", "earlier row")
+assertEqual(capped.log[0].clock, "08:00", "earlier clock is oldest folded")
+assertEqual(capped.log[0].dur, "20m", "earlier sums folded sitting lengths")
+assertEqual(capped.log[1].clock, "10:00", "five newest start")
+assertEqual(capped.log[5].clock, "14:00", "newest sitting kept")
+assertEqual(capped.blocks.length, 7, "track keeps every sit")
+
+const six = seven.slice(0, 6)
+const sixLog = parent.layoutTrack(six, policy, 14, true)
+assertEqual(sixLog.log.length, 6, "six sittings stay six")
+assertEqual(sixLog.log[0].name, "CHROME", "six has no earlier")
 
 console.log("ok")

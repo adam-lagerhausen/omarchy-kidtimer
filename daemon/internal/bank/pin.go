@@ -74,7 +74,13 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 	}
 	idem := fmt.Sprintf("parent-pin:%s:%d", actor.ID, b.now().UnixNano())
 	bodyHash := grantBodyHash("fun", seconds, "parent-pin")
-	g, err := b.postLocked(actor, "fun", seconds, "parent-pin", idem, "parent-pin", bodyHash)
+	var g *Grant
+	var err error
+	if b.bedtimeStayUpLocked() {
+		g, err = b.grantStayUpLocked(actor, "fun", seconds, "parent-pin", idem, "parent-pin", bodyHash)
+	} else {
+		g, err = b.postLocked(actor, "fun", seconds, "parent-pin", idem, "parent-pin", bodyHash)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +89,6 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 		if err := b.metaSet(metaParentLock, boolMeta(false)); err != nil {
 			return nil, err
 		}
-	}
-	until := b.nextWakeLocked()
-	b.ov.holdUntil = until
-	if err := b.metaSet(metaBedtimeHold, until.UTC().Format(time.RFC3339)); err != nil {
-		return nil, err
 	}
 	return g, nil
 }
@@ -102,7 +103,7 @@ func (b *Bank) overlayActiveLocked() bool {
 	if b.ov.parentPin == "" {
 		return false
 	}
-	if b.effectiveBedtimeLockLocked() && b.bedtimeActiveLocked() && !b.holdActiveLocked() {
+	if b.effectiveBedtimeLockLocked() && b.bedtimeActiveLocked() && !b.stayUpActiveLocked() {
 		return true
 	}
 	if b.cfg.RemoteLock && b.ov.parentLock {
@@ -122,6 +123,40 @@ func (b *Bank) holdActiveLocked() bool {
 		return false
 	}
 	return b.now().Before(b.ov.holdUntil)
+}
+
+func (b *Bank) stayUpActiveLocked() bool {
+	if !b.holdActiveLocked() {
+		return false
+	}
+	left, err := b.remainingLocked("fun")
+	return err == nil && left > 0
+}
+
+func (b *Bank) setStayUpHoldLocked() error {
+	until := b.nextWakeLocked()
+	b.ov.holdUntil = until
+	return b.metaSet(metaBedtimeHold, until.UTC().Format(time.RFC3339))
+}
+
+func (b *Bank) clearHoldLocked() error {
+	b.ov.holdUntil = time.Time{}
+	return b.metaSet(metaBedtimeHold, "")
+}
+
+func (b *Bank) grantStayUpLocked(actor *Token, group string, seconds int, reason, idemKey, source, bodyHash string) (*Grant, error) {
+	g, err := b.postSetLocked(actor, group, seconds, reason, idemKey, source, bodyHash)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.setStayUpHoldLocked(); err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+func (b *Bank) bedtimeStayUpLocked() bool {
+	return b.effectiveBedtimeLockLocked() && b.bedtimeActiveLocked()
 }
 
 func (b *Bank) bedtimeActiveLocked() bool {

@@ -242,6 +242,13 @@ func TestAppGrantDoesNotSkipBedtime(t *testing.T) {
 	if !b.BedtimeActive() {
 		t.Fatal("parent grant must not skip bedtime")
 	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BedtimeHold {
+		t.Fatal("parent grant must not set stay-up")
+	}
 }
 
 func TestAskDoesNotCreditUntilDecide(t *testing.T) {
@@ -273,6 +280,13 @@ func TestAskDoesNotCreditUntilDecide(t *testing.T) {
 	}
 	if remaining(t, b, "fun") != 4500 {
 		t.Fatalf("fun after approve: %d", remaining(t, b, "fun"))
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BedtimeHold {
+		t.Fatal("daytime approve must not set stay-up")
 	}
 	_, _, err = b.Decide(parent, ask.ID, "approve")
 	if err != ErrConflict {
@@ -753,6 +767,9 @@ func TestParentPinGrantApproveHoldAndRateLimit(t *testing.T) {
 	if g.Source != "parent-pin" || g.Seconds != 300 {
 		t.Fatalf("pin grant: %+v", g)
 	}
+	if remaining(t, b, "fun") != 4500 {
+		t.Fatalf("afternoon pin grant adds: %d", remaining(t, b, "fun"))
+	}
 	st, err = b.Status(parent)
 	if err != nil {
 		t.Fatal(err)
@@ -760,8 +777,8 @@ func TestParentPinGrantApproveHoldAndRateLimit(t *testing.T) {
 	if st.ParentLocked {
 		t.Fatal("grant must clear parent lock")
 	}
-	if !st.BedtimeHold {
-		t.Fatal("stay-up hold")
+	if st.BedtimeHold {
+		t.Fatal("afternoon pin grant must not set stay-up")
 	}
 	for i := 0; i < pinFailLimit; i++ {
 		if _, err := b.PinGrant(askTok, "9999", 60); !errors.Is(err, ErrForbidden) {
@@ -797,6 +814,9 @@ func TestOverlayNeedsPinAndHoldSkipsBedtime(t *testing.T) {
 	if _, err := b.PinGrant(askTok, "4242", 600); err != nil {
 		t.Fatal(err)
 	}
+	if remaining(t, b, "fun") != 600 {
+		t.Fatalf("bedtime pin grant sets remaining: %d", remaining(t, b, "fun"))
+	}
 	if b.OverlayActive() {
 		t.Fatal("hold skips bedtime overlay")
 	}
@@ -806,6 +826,162 @@ func TestOverlayNeedsPinAndHoldSkipsBedtime(t *testing.T) {
 	}
 	if !st.BedtimeHold || st.Overlay {
 		t.Fatalf("hold status: %+v", st)
+	}
+}
+
+func TestBedtimeAskApproveSetsRemainingAndLiftsOverlay(t *testing.T) {
+	b, parent := openTest(t, bedtime)
+	b.Config().BedtimeLock = true
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if remaining(t, b, "fun") != 3600 {
+		t.Fatalf("leftover: %d", remaining(t, b, "fun"))
+	}
+	ask, err := b.CreateAsk(askTok, "fun", 1800, "stay up")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, decided, err := b.Decide(parent, ask.ID, "approve")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Seconds != 1800 || g.Remaining != 1800 || decided.Status != AskApproved {
+		t.Fatalf("approve: %+v %+v", g, decided)
+	}
+	if remaining(t, b, "fun") != 1800 {
+		t.Fatalf("bedtime approve sets remaining: %d", remaining(t, b, "fun"))
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.BedtimeHold || st.Overlay || st.ParentLocked {
+		t.Fatalf("stay-up status: %+v", st)
+	}
+	spendN(t, b, "fun", 1800)
+	if remaining(t, b, "fun") != 0 {
+		t.Fatalf("after spend: %d", remaining(t, b, "fun"))
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BedtimeHold || !st.Overlay {
+		t.Fatalf("bedtime overlay returns: %+v", st)
+	}
+}
+
+func TestMidnightStayUpDoesNotRefillUntilHoldEnds(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := &clock{t: bedtime()}
+	b, parent := openTestClock(t, clk.now)
+	b.Config().BedtimeLock = true
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.PinGrant(askTok, "1234", 1800); err != nil {
+		t.Fatal(err)
+	}
+	if remaining(t, b, "fun") != 1800 {
+		t.Fatalf("set remaining: %d", remaining(t, b, "fun"))
+	}
+	clk.t = time.Date(2026, 8, 27, 0, 30, 0, 0, loc)
+	if remaining(t, b, "fun") != 1800 {
+		t.Fatalf("midnight must not refill stay-up: %d", remaining(t, b, "fun"))
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.BedtimeHold || st.Overlay || !st.BedtimeActive {
+		t.Fatalf("stay-up after midnight: %+v", st)
+	}
+	spendN(t, b, "fun", 1800)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BedtimeHold || !st.Overlay || !st.BedtimeActive {
+		t.Fatalf("bedtime overlay after stay-up: %+v", st)
+	}
+	if remaining(t, b, "fun") != 3600 {
+		t.Fatalf("deferred refill: %d", remaining(t, b, "fun"))
+	}
+}
+
+func TestStayUpWakeAppliesDeferredRefill(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := &clock{t: bedtime()}
+	b, parent := openTestClock(t, clk.now)
+	b.Config().BedtimeLock = true
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.PinGrant(askTok, "1234", 1800); err != nil {
+		t.Fatal(err)
+	}
+	spendN(t, b, "fun", 100)
+	clk.t = time.Date(2026, 8, 27, 0, 30, 0, 0, loc)
+	if remaining(t, b, "fun") != 1700 {
+		t.Fatalf("midnight keep stay-up remaining: %d", remaining(t, b, "fun"))
+	}
+	clk.t = time.Date(2026, 8, 27, 7, 0, 0, 0, loc)
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BedtimeHold || st.Overlay || st.BedtimeActive {
+		t.Fatalf("wake: %+v", st)
+	}
+	if remaining(t, b, "fun") != 3600 {
+		t.Fatalf("wake refill must not stack stay-up leftover: %d", remaining(t, b, "fun"))
+	}
+}
+
+func TestBedtimeWindowWithoutLockAdds(t *testing.T) {
+	b, parent := openTest(t, bedtime)
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Config().BedtimeLock {
+		t.Fatal("parent-lab bedtime_lock must be off")
+	}
+	ask, err := b.CreateAsk(askTok, "fun", 900, "lab evening")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Decide(parent, ask.ID, "approve"); err != nil {
+		t.Fatal(err)
+	}
+	if remaining(t, b, "fun") != 4500 {
+		t.Fatalf("lock off must add: %d", remaining(t, b, "fun"))
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BedtimeHold {
+		t.Fatal("lock off must not set stay-up")
 	}
 }
 

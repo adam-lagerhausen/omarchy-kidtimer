@@ -664,6 +664,32 @@ func (b *Bank) postLocked(actor *Token, group string, seconds int, reason, idemK
 	return &Grant{Group: group, Seconds: seconds, Source: source, Reason: reason, Remaining: remaining}, nil
 }
 
+func (b *Bank) postSetLocked(actor *Token, group string, seconds int, reason, idemKey, source, bodyHash string) (*Grant, error) {
+	tx, err := b.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(
+		`INSERT INTO grants (token_id, idempotency_key, body_hash, group_id, seconds, source, reason, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		actor.ID, idemKey, bodyHash, group, seconds, source, reason, b.nowLocal().Format(time.RFC3339),
+	); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO balances (group_id, remaining, day) VALUES (?, ?, ?)
+		 ON CONFLICT(group_id) DO UPDATE SET remaining = excluded.remaining, day = excluded.day`,
+		group, seconds, b.day(),
+	); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &Grant{Group: group, Seconds: seconds, Source: source, Reason: reason, Remaining: seconds}, nil
+}
+
 func actorCanCredit(actor *Token, group string) error {
 	if actor.Kind == KindParent {
 		return nil
@@ -790,7 +816,13 @@ func (b *Bank) decideLocked(actor *Token, askID, decision string) (*Grant, *Ask,
 		source := "ask:" + ask.ID
 		idemKey := "ask:" + ask.ID
 		bodyHash := grantBodyHash(ask.Group, ask.Seconds, ask.Reason)
-		g, err := b.postLocked(actor, ask.Group, ask.Seconds, ask.Reason, idemKey, source, bodyHash)
+		var g *Grant
+		var err error
+		if b.bedtimeStayUpLocked() {
+			g, err = b.grantStayUpLocked(actor, ask.Group, ask.Seconds, ask.Reason, idemKey, source, bodyHash)
+		} else {
+			g, err = b.postLocked(actor, ask.Group, ask.Seconds, ask.Reason, idemKey, source, bodyHash)
+		}
 		if err != nil {
 			return nil, nil, err
 		}
@@ -861,7 +893,16 @@ func (b *Bank) Spend(group string) (*SpendResult, error) {
 		if _, err := b.db.Exec(`UPDATE balances SET remaining = remaining - 1 WHERE group_id = ?`, group); err != nil {
 			return nil, err
 		}
-		return &SpendResult{Kind: SpendTick, Debited: group, PathLeft: own - 1, GroupLeft: own - 1}, nil
+		left := own - 1
+		if left == 0 && group == "fun" {
+			if err := b.clearHoldLocked(); err != nil {
+				return nil, err
+			}
+			if err := b.applyDeferredRefillLocked(); err != nil {
+				return nil, err
+			}
+		}
+		return &SpendResult{Kind: SpendTick, Debited: group, PathLeft: left, GroupLeft: left}, nil
 	}
 	return &SpendResult{Kind: SpendEmpty, PathLeft: 0, GroupLeft: 0}, nil
 }
@@ -933,7 +974,7 @@ func (b *Bank) Status(actor *Token) (*Status, error) {
 		RemoteLock:    b.cfg.RemoteLock,
 		ParentPinSet:  b.ov.parentPin != "",
 		Overlay:       b.overlayActiveLocked(),
-		BedtimeHold:   b.holdActiveLocked(),
+		BedtimeHold:   b.stayUpActiveLocked(),
 		BedtimeStart:  config.FormatClock(start),
 		BedtimeEnd:    config.FormatClock(end),
 		Modes:         b.effectiveModesLocked(),
@@ -1158,7 +1199,13 @@ func (b *Bank) resetDayLocked() error {
 		return err
 	}
 	if stored.Valid && stored.String == day {
-		return b.ensureBalancesLocked(day)
+		if err := b.ensureBalancesLocked(day); err != nil {
+			return err
+		}
+		if b.stayUpActiveLocked() {
+			return nil
+		}
+		return b.applyDeferredRefillLocked()
 	}
 	if _, err := b.db.Exec(`DELETE FROM daily_used WHERE day != ?`, day); err != nil {
 		return err
@@ -1166,15 +1213,44 @@ func (b *Bank) resetDayLocked() error {
 	if _, err := b.db.Exec(`DELETE FROM today_spans WHERE day != ?`, day); err != nil {
 		return err
 	}
+	if err := b.setDayLocked(day); err != nil {
+		return err
+	}
+	if b.stayUpActiveLocked() {
+		return b.metaSet(metaRefillDeferred, "true")
+	}
+	if err := b.refillClocksLocked(day); err != nil {
+		return err
+	}
+	return b.metaSet(metaRefillDeferred, "false")
+}
+
+func (b *Bank) setDayLocked(day string) error {
+	_, err := b.db.Exec(`INSERT INTO meta (key, value) VALUES ('day', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, day)
+	return err
+}
+
+func (b *Bank) refillClocksLocked(day string) error {
 	for _, id := range b.clockIDsLocked() {
 		if err := b.writeRemainingLocked(id, b.allotmentLocked(id), day); err != nil {
 			return err
 		}
 	}
-	if _, err := b.db.Exec(`INSERT INTO meta (key, value) VALUES ('day', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, day); err != nil {
+	return nil
+}
+
+func (b *Bank) applyDeferredRefillLocked() error {
+	v, ok, err := b.metaGet(metaRefillDeferred)
+	if err != nil {
 		return err
 	}
-	return nil
+	if !ok || v != "true" {
+		return nil
+	}
+	if err := b.refillClocksLocked(b.day()); err != nil {
+		return err
+	}
+	return b.metaSet(metaRefillDeferred, "false")
 }
 
 func (b *Bank) ensureBalancesLocked(day string) error {

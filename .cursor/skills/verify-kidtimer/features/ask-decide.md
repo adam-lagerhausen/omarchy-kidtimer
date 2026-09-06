@@ -12,7 +12,8 @@ A kid ask queues a request and does not credit time. The parent approves or deni
 
 ## How to get to it (user POV)
 
-- Kid panel: `Ask` (auto-opens at 0 remaining), choose minutes, choose `Ask`. Cancel discards the sheet.
+- Kid panel: `Ask`, choose minutes with −5 / +5, choose `Ask`. Cancel discards the sheet.
+- Kid overlay: `Ask` on every face (0m LEFT, bedtime, locked), choose minutes with −10 / +10, choose `Ask`. Waiting while a pending ask exists. Parent Pin on the overlay still grants, it does not approve the ask.
 - Parent tape: a pending card with Deny and Approve. New ids also fire an Omarchy notification.
 - Run `testdata/ask.sh`, then `testdata/decide.sh <id> approve`.
 - `kidtimer asks` and `kidtimer decide <id> approve` as HTTP clients.
@@ -48,4 +49,4 @@ Numbers below assume a weekday seed of 3600. If this run already applied the gra
 - Approve is a grant. It needs no `Idempotency-Key` on the decide route. The bank stores one.
 - Live kid panel posts to hardcoded `http://127.0.0.1:8742/v1/asks`. Isolated proof uses this run's URL.
 - Parent notification on a new ask id is Stage D/E visual. Isolated proof is the pending list JSON and the id appearing.
-- Empty remaining does not block asks. Bedtime and parent lock do.
+- Empty remaining, bedtime, and parent lock do not block asks. Isolated parent-lab has `bedtime_lock` false, so approve still adds seconds. On a kid box during bedtime, approve sets remaining to the asked minutes and stay-up until they run out. It does not clear parent lock.

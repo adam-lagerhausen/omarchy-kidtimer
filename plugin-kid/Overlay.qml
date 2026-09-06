@@ -19,8 +19,10 @@ Item {
   property bool stayAwakeOurs: false
   property bool submapOn: false
   property bool pinWrong: false
+  property bool askQueued: false
 
   readonly property bool shown: Model.overlayVisible(statusJson)
+  readonly property bool waiting: askQueued || Model.overlayAskWaiting(statusJson)
   readonly property color ink: Color.foreground
   readonly property color paper: Color.background
   readonly property color urgent: Color.urgent
@@ -55,7 +57,11 @@ Item {
         step = "cover"
         pinDigits = ""
         pinWrong = false
+        askQueued = false
         chosenMinutes = Model.ASK_DEFAULT_MIN
+      } else if (Model.overlayAskWaiting(statusJson)) {
+        askQueued = false
+        if (step === "ask") step = "cover"
       }
     }
     try {
@@ -82,6 +88,23 @@ Item {
       pinWrong = false
       step = "cover"
       poll()
+    }
+    req.send(JSON.stringify(body))
+  }
+
+  function submitAsk() {
+    if (root.waiting) return
+    askQueued = true
+    var body = Model.askPayload("fun", chosenMinutes * 60, "more time")
+    var req = new XMLHttpRequest()
+    req.open("POST", bankUrl() + "/v1/asks")
+    req.setRequestHeader("Authorization", "Bearer " + String(bank.askToken || ""))
+    req.setRequestHeader("Content-Type", "application/json")
+    req.onreadystatechange = function() {
+      if (req.readyState !== XMLHttpRequest.DONE) return
+      if (req.status !== 200) askQueued = false
+      step = "cover"
+      if (req.status === 200) poll()
     }
     req.send(JSON.stringify(body))
   }
@@ -252,28 +275,59 @@ Item {
           font.bold: true
         }
 
-        Rectangle {
+        Item {
           visible: root.step === "cover"
           width: parent.width
           height: 36
-          color: "transparent"
-          border.width: 1
-          border.color: root.ink
-          Text {
-            anchors.centerIn: parent
-            text: "Parent Pin"
-            color: root.ink
-            font.family: root.plex
-            font.pixelSize: 14
-            font.bold: true
+          Rectangle {
+            width: (parent.width - 8) / 2
+            height: parent.height
+            anchors.left: parent.left
+            color: "transparent"
+            border.width: 1
+            border.color: root.waiting ? root.dim : root.ink
+            opacity: root.waiting ? 0.55 : 1
+            Text {
+              anchors.centerIn: parent
+              text: root.waiting ? "Waiting" : "Ask"
+              color: root.waiting ? root.dim : root.ink
+              font.family: root.plex
+              font.pixelSize: 14
+              font.bold: true
+            }
+            MouseArea {
+              anchors.fill: parent
+              enabled: !root.waiting
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+              onClicked: {
+                root.chosenMinutes = Model.ASK_DEFAULT_MIN
+                root.step = "ask"
+              }
+            }
           }
-          MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              root.step = "pin"
-              root.pinWrong = false
-              pinField.forceActiveFocus()
+          Rectangle {
+            width: (parent.width - 8) / 2
+            height: parent.height
+            anchors.right: parent.right
+            color: "transparent"
+            border.width: 1
+            border.color: root.ink
+            Text {
+              anchors.centerIn: parent
+              text: "Parent Pin"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 14
+              font.bold: true
+            }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.step = "pin"
+                root.pinWrong = false
+                pinField.forceActiveFocus()
+              }
             }
           }
         }
@@ -379,6 +433,109 @@ Item {
           MouseArea {
             anchors.fill: parent
             onClicked: root.grant()
+          }
+        }
+
+        Item {
+          visible: root.step === "ask"
+          width: parent.width
+          height: 48
+          Rectangle {
+            width: 56
+            height: 40
+            anchors.left: parent.left
+            color: "transparent"
+            border.width: 1
+            border.color: root.ink
+            opacity: root.chosenMinutes <= Model.OVERLAY_ASK_MIN ? 0.55 : 1
+            Text { anchors.centerIn: parent; text: "−10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+            MouseArea {
+              anchors.fill: parent
+              onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, -10)
+            }
+          }
+          Column {
+            anchors.centerIn: parent
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: Model.overlayAskStepperLabel(root.chosenMinutes)
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 28
+              font.bold: true
+            }
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: "min"
+              color: root.dim
+              font.family: root.plex
+              font.pixelSize: 11
+            }
+          }
+          Rectangle {
+            width: 56
+            height: 40
+            anchors.right: parent.right
+            color: "transparent"
+            border.width: 1
+            border.color: root.ink
+            opacity: root.chosenMinutes >= Model.ASK_MAX ? 0.55 : 1
+            Text { anchors.centerIn: parent; text: "+10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+            MouseArea {
+              anchors.fill: parent
+              onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, 10)
+            }
+          }
+        }
+
+        Item {
+          visible: root.step === "ask"
+          width: parent.width
+          height: 36
+          Rectangle {
+            width: (parent.width - 8) / 2
+            height: parent.height
+            anchors.left: parent.left
+            color: "transparent"
+            border.width: 1
+            border.color: root.ink
+            Text {
+              anchors.centerIn: parent
+              text: "Cancel"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 14
+              font.bold: true
+            }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.step = "cover"
+                root.chosenMinutes = Model.ASK_DEFAULT_MIN
+              }
+            }
+          }
+          Rectangle {
+            width: (parent.width - 8) / 2
+            height: parent.height
+            anchors.right: parent.right
+            color: "transparent"
+            border.width: 1
+            border.color: root.ink
+            Text {
+              anchors.centerIn: parent
+              text: "Ask"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 14
+              font.bold: true
+            }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.submitAsk()
+            }
           }
         }
       }

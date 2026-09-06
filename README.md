@@ -72,15 +72,15 @@ Time at zero, bedtime, and Lock from your desk all raise that overlay. It says 0
 
 ![Bedtime](docs/screenshots/bedtime.png)
 
-It sits over a session that is still running. You are not looking at the Omarchy lock screen or the login screen. Once it is up, Ask is gone from that screen. Add time from your desk, or type the parent PIN on theirs.
+It sits over a session that is still running. You are not looking at the Omarchy lock screen or the login screen. They can Ask from that screen, or you can add time from your desk or type the parent PIN on theirs.
 
 ### Asking for more
 
-They tap Ask on their bar and pick minutes from 5 to 120. They cannot ask during bedtime or a parent lock.
+They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay and pick minutes with −10 / +10. They can ask during bedtime and a parent lock. Approve during the day adds the minutes they asked for. Approve during bedtime sets the timer to those minutes and lifts the bedtime overlay until they run out, then bedtime comes back. It does not lift a parent lock. A parent lock still needs Unlock or the parent PIN.
 
 ![Pending asks](docs/screenshots/ask.png)
 
-The parent PIN on the overlay adds minutes and clears a parent lock. During bedtime it also grants stay-up until morning, so the bedtime overlay lifts. If those minutes hit zero before then, the 0m LEFT overlay comes back. The PIN does not change the scheduled hours or bedtime.
+The parent PIN on the overlay adds minutes and clears a parent lock. During bedtime it works like an approved ask: it sets the timer to those minutes so the bedtime overlay lifts. When those minutes hit zero, bedtime comes back. The PIN does not change the scheduled hours or bedtime.
 
 Five wrong guesses start a 30-second cooldown.
 

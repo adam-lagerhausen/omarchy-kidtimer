@@ -13,17 +13,18 @@ import (
 )
 
 const (
-	metaParentLock    = "parent_lock"
-	metaActiveMode    = "active_mode"
-	metaOverrideUntil = "mode_override_until"
-	metaBedtimeStart  = "bedtime_start"
-	metaBedtimeEnd    = "bedtime_end"
-	metaBedtimeLock   = "bedtime_lock"
-	metaModeMinutes   = "mode_minutes"
-	metaLook          = "look"
-	metaPaired        = "paired"
-	metaParentPin     = "parent_pin"
-	metaBedtimeHold   = "bedtime_hold_until"
+	metaParentLock     = "parent_lock"
+	metaActiveMode     = "active_mode"
+	metaOverrideUntil  = "mode_override_until"
+	metaBedtimeStart   = "bedtime_start"
+	metaBedtimeEnd     = "bedtime_end"
+	metaBedtimeLock    = "bedtime_lock"
+	metaModeMinutes    = "mode_minutes"
+	metaLook           = "look"
+	metaPaired         = "paired"
+	metaParentPin      = "parent_pin"
+	metaBedtimeHold    = "bedtime_hold_until"
+	metaRefillDeferred = "refill_deferred"
 )
 
 type overlay struct {

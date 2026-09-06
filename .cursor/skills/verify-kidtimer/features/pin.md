@@ -8,7 +8,7 @@ A 4-digit household PIN unlocks the kid overlay and the parent lock square. It i
 - `pin-set-cli` hashes locally, writes a temp household file, and PUTs that hash.
 - `pin-status` shows `parent_pin_set` true after set, never the PIN or hash.
 - `pin-approve` approves a pending ask with ask token plus PIN.
-- `pin-grant` credits `fun` with ask or read token plus PIN, source `parent-pin`.
+- `pin-grant` credits `fun` with ask or read token plus PIN, source `parent-pin`. Isolated parent-lab adds seconds. On a kid box during bedtime it sets remaining to those seconds.
 - `pin-wrong` rejects a bad PIN with 403 and does not grant.
 - `pin-rate-limit` rejects further PIN tries after five failures.
 - `pin-forbidden` rejects ask-token `PUT /v1/parent-pin` with 403.
@@ -18,7 +18,7 @@ A 4-digit household PIN unlocks the kid overlay and the parent lock square. It i
 - Parent settings: Parent PIN row, four boxes, Set. That runs `kidtimer pin set` with the digits on stdin.
 - CLI: `kidtimer pin set` (TTY types twice; non-TTY one line on stdin). `kidtimer pin status`.
 - Kid panel while Waiting: Parent Pin next to Ask, then a text field that approves that ask.
-- Kid overlay Parent Pin, then minutes, then grant.
+- Kid overlay Ask (−10 / +10) queues `/v1/asks`. Parent Pin, then minutes, then grant.
 - HTTP: `PUT /v1/parent-pin`, `POST /v1/pin/approve`, `POST /v1/pin/grant`.
 
 ## Driving it with control-kidtimer
@@ -44,6 +44,6 @@ Preconditions:
 
 - Isolated CLI pin set without `-home` would overwrite the live household PIN file. Always pass a temp `-home` and `-desk ''`.
 - Parent bearer cannot call `/v1/pin/grant`. Kid overlay and Waiting Parent Pin use the ask (or read) token plus PIN.
-- Overlay, bedtime freeze, and empty freeze stay off on the parent desk. This recipe proves the PIN API, not a session lock.
+- Overlay, bedtime freeze, and empty freeze stay off on the parent desk. This recipe proves the PIN API, not a session lock. Pin grant here adds 60 seconds. Bedtime SET-remaining is a kid-box overlay path (`bedtime_lock` on).
 - Five failures start a short cooldown. Do not treat that 403 as a wrong-PIN proof for a later correct attempt until it lifts.
 - Live bar PIN talks to 8742. Isolated proof uses this run's URL.

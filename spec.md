@@ -103,7 +103,7 @@ v1 household clock after seed:
 | --- | --- | --- | --- |
 | `fun` | (minutes left) | 3600, or that day's `fun_hours` | overlay when `empty_lock` is on and a parent PIN is set |
 
-Bedtime is a hard window, default 21:00 to 07:00 local. Leftover minutes do not matter after bedtime unless a parent PIN grant set a stay-up hold until wake. Bedtime shows the Kidtimer overlay. It does not call `omarchy system lock`. It is not mixed into the clock.
+Bedtime is a hard window, default 21:00 to 07:00 local. Leftover minutes do not matter after bedtime unless a Parent Pin grant or an approved ask during bedtime set remaining to the granted minutes. That stay-up lasts until those minutes run out, then the bedtime overlay returns. Bedtime shows the Kidtimer overlay. It does not call `omarchy system lock`. It is not mixed into the clock.
 
 One household parent PIN, four digits. Not the login password and not sudo. `kidtimer pin set` (or parent settings, which invokes that CLI) hashes it with argon2id, writes `~/.local/share/kidtimer/parent-pin` mode `0600`, and `PUT`s the same hash to every kid daemon. Status only says `parent_pin_set`. No PIN set means fail open: time still counts, no overlay, parent lock square does nothing.
 
@@ -125,7 +125,7 @@ The enforcer polls about once a second when `enforcer = true`. Production focus 
 
 Each tick:
 
-1. If a parent PIN is set and `(bedtime_lock and bedtime is active and no stay-up hold) or (remote_lock and parent_lock)`, freeze: do not decrement, do not call `omarchy system lock`. The kid plugin shows the overlay. Bedtime window wraps midnight. 21:00 to 07:00 is inside. Overlay is a window, not a pulse. Parent lock on the parent desk does not freeze because `remote_lock` is false. Stop.
+1. If a parent PIN is set and `(bedtime_lock and bedtime is active and not (stay-up hold and remaining > 0)) or (remote_lock and parent_lock)`, freeze: do not decrement, do not call `omarchy system lock`. The kid plugin shows the overlay. Bedtime window wraps midnight. 21:00 to 07:00 is inside. Overlay is a window, not a pulse. Parent lock on the parent desk does not freeze because `remote_lock` is false. Stop.
 2. If a parent PIN is set and `empty_lock` is on, lab is off, and remaining is 0, freeze the same way. Do not set `parent_locked`. Asks stay allowed. Stop. The parent lab keeps `empty_lock = false`.
 3. If the session is locked, or idle for 60 seconds, do not decrement. Idle source is `loginctl IdleHint` or Hyprland idle. Stop.
 4. Read focused class, title, and pid. If Hyprland is down, skip the sample. Do not crash. Do not overlay. Stop.
@@ -139,7 +139,7 @@ Each tick:
 
 v1 does not refuse launch. Empty, bedtime, and parent lock show the Kidtimer overlay on a kid box when a parent PIN is set. Never `omarchy system lock`. Reboot, TTY, and `sudo systemctl stop kidtimer` stay the parent hatch. If the kid kills the shell, fail open: overlay is gone, Super binds return.
 
-Asks are blocked at bedtime and parent lock. Empty remaining does not block asks.
+Asks are allowed at empty remaining, bedtime, and parent lock. Approve outside bedtime adds the asked seconds. Approve during bedtime (lock on) sets remaining to the asked minutes and stay-up until those minutes run out. It does not clear parent lock.
 
 Do not count time in the parent plugin. The daemon samples focus on the kid box.
 
@@ -205,7 +205,7 @@ A token may only credit groups in its list. Parent tokens may credit any group.
 
 ### `GET /v1/status`
 
-Remaining seconds (`groups.fun`), spend-path remaining (`path_remaining.fun`), whether bedtime is active, focused clock `fun` or none (`focused_group`), caption or none (`focused_app`), `spent.fun` seconds today, `today` (spans of time on the computer: `kind`, `start` minutes from midnight, `dur` minutes, `label`), `look_version`, pending ask count, leftover `mode` (ignored for remaining), `parent_locked`, `remote_lock`, `parent_pin_set`, `overlay` (true when the kid plugin should cover the screen), `bedtime_hold` (stay-up until wake), effective `bedtime_start` and `bedtime_end` as `HH:MM`. When effective `bedtime_lock` is on, also `bedtime_in`: seconds until the bedtime window starts, or 0 if it is already active. Omit `bedtime_in` when lock is off. Kid plugin and parent plugin both use this. Read tokens allowed. Never send the PIN or its hash.
+Remaining seconds (`groups.fun`), spend-path remaining (`path_remaining.fun`), whether bedtime is active, focused clock `fun` or none (`focused_group`), caption or none (`focused_app`), `spent.fun` seconds today, `today` (spans of time on the computer: `kind`, `start` minutes from midnight, `dur` minutes, `label`), `look_version`, pending ask count, leftover `mode` (ignored for remaining), `parent_locked`, `remote_lock`, `parent_pin_set`, `overlay` (true when the kid plugin should cover the screen), `bedtime_hold` (stay-up while remaining is greater than zero), effective `bedtime_start` and `bedtime_end` as `HH:MM`. When effective `bedtime_lock` is on, also `bedtime_in`: seconds until the bedtime window starts, or 0 if it is already active. Omit `bedtime_in` when lock is off. Kid plugin and parent plugin both use this. Read tokens allowed. Never send the PIN or its hash.
 
 ### `POST /v1/asks`
 
@@ -229,7 +229,7 @@ Pending asks for the parent plugin.
 { "decision": "approve" }
 ```
 
-Approve performs one grant. Source is `ask:<id>`. Group and seconds come from the ask. Deny records the ask as denied. Either way the ask leaves pending.
+Approve performs one grant. Source is `ask:<id>`. Group and seconds come from the ask. Outside bedtime it adds those seconds. During bedtime with lock on it sets remaining to those seconds and stay-up until they run out. Deny records the ask as denied. Either way the ask leaves pending. Approve does not clear parent lock.
 
 A second decide on the same id returns 409. Body may say already decided. Do not grant twice.
 
@@ -295,7 +295,7 @@ Ask or read bearer plus `{ "pin": "1234", "ask_id": "..." }`. Verifies the PIN o
 
 ### `POST /v1/pin/grant`
 
-Ask or read bearer plus `{ "pin": "1234", "seconds": 600 }`. Credits `fun` with `source` `parent-pin`, clears `parent_locked`, and sets a stay-up hold until the next wake. Overlay hides. If remaining hits 0 before morning, empty overlay returns. Hold expires at wake and does not refill the clock.
+Ask or read bearer plus `{ "pin": "1234", "seconds": 600 }`. Credits `fun` with `source` `parent-pin` and clears `parent_locked`. Outside bedtime it adds those seconds. During bedtime with lock on it sets remaining to those seconds (leftover daily minutes are discarded) and stay-up until they run out, so the bedtime overlay lifts. When remaining hits 0, the bedtime overlay returns. Midnight during stay-up does not refill remaining; that refill waits until stay-up ends. Hold expires at wake and does not stack leftover stay-up onto the new day's hours.
 
 ### `POST /v1/mode`
 
@@ -512,8 +512,8 @@ This repo ships two plugins, because parent and kid are different machines.
 - `bar-widget`: remaining time for the focused group, or bedtime
 - `service` (`keepLoaded`): fullscreen overlay when status `overlay` is true. Exclusive keyboard. Super submap while shown. Stay-awake inhibit so Omarchy idle cannot real-lock on top. Fail open if the shell dies.
 - On crossing 15, 5, and 1 minute of spend-path remaining for the focused metered group, fire an Omarchy notification. Clicking the toast opens the kid plugin. Same ladder for `bedtime_in` when bedtime lock is on. Seed on first poll and on first sight of a group. Do not fire at zero. Bypass and idle skip group warnings. A grant that raises remaining can cross the same ladder again.
-- `panel`: request more time. While Waiting, Parent Pin approves that ask locally.
-- Overlay Parent Pin then asks how much more time (−5 / +5, 5–120, default 30) and `POST /v1/pin/grant`.
+- `panel`: request more time (−5 / +5, 5–120, default 30). While Waiting, Parent Pin approves that ask locally.
+- Overlay Ask (−10 / +10, 10–120, default 30) then `POST /v1/asks`. Waiting while a pending ask exists. Overlay Parent Pin then asks how much more time (−5 / +5, 5–120, default 30) and `POST /v1/pin/grant`.
 - Talks to `http://127.0.0.1:8742` with a read token plus an ask token
 - Never writes the ledger itself
 

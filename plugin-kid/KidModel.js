@@ -22,6 +22,8 @@ var ASK_MIN = 5
 var ASK_MAX = 120
 var ASK_STEP = 5
 var ASK_DEFAULT_MIN = 30
+var OVERLAY_ASK_MIN = 10
+var OVERLAY_ASK_STEP = 10
 
 function remainingFor(groups, id) {
   if (!groups || !id) return 0
@@ -154,8 +156,11 @@ function clockEmpty(status) {
 }
 
 function askBlocked(status) {
-  if (!status) return false
-  return !!(status.bedtime_active || status.parent_locked)
+  return false
+}
+
+function overlayAskWaiting(status) {
+  return (Number(status && status.pending_ask_count) || 0) > 0
 }
 
 function askPayload(group, seconds, reason) {
@@ -175,6 +180,18 @@ function clampAskMinutes(n) {
 
 function nudgeAskMinutes(current, delta) {
   return clampAskMinutes((Number(current) || ASK_DEFAULT_MIN) + Number(delta))
+}
+
+function clampOverlayAskMinutes(n) {
+  var m = Math.round(Number(n) / OVERLAY_ASK_STEP) * OVERLAY_ASK_STEP
+  if (isNaN(m)) m = ASK_DEFAULT_MIN
+  if (m < OVERLAY_ASK_MIN) m = OVERLAY_ASK_MIN
+  if (m > ASK_MAX) m = ASK_MAX
+  return m
+}
+
+function nudgeOverlayAskMinutes(current, delta) {
+  return clampOverlayAskMinutes((Number(current) || ASK_DEFAULT_MIN) + Number(delta))
 }
 
 function askGroups(status) {
@@ -316,6 +333,10 @@ function pinGrantPayload(pin, seconds) {
 
 function overlayStepperLabel(minutes) {
   return String(clampAskMinutes(minutes))
+}
+
+function overlayAskStepperLabel(minutes) {
+  return String(clampOverlayAskMinutes(minutes))
 }
 
 function kidSettingsFromShell(doc) {
