@@ -74,7 +74,9 @@ Time at zero, bedtime, and Lock from your desk all raise that overlay. It says 0
 
 ![Bedtime](docs/screenshots/bedtime.png)
 
-It sits over a session that is still running. You are not looking at the Omarchy lock screen or the login screen. They can Ask from that screen, or you can add time from your desk or type the parent PIN on theirs.
+![Locked](docs/screenshots/locked.png)
+
+It sits over a session that is still running. You are not looking at the Omarchy lock screen or the login screen. They tap Ask on that screen, or you add time from your desk or type the parent PIN on theirs.
 
 ### Asking for more
 
