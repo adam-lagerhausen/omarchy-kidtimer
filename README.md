@@ -26,7 +26,7 @@ This is unofficial and not affiliated with Omarchy.
 
 You need two Omarchy 4 computers on the same home network. A coffee-shop or open guest network is not enough. See [Limits](#limits).
 
-Do the kid computer first, then yours. Your desk can claim it as soon as it comes on the network. No pairing codes to copy.
+Do yours first, then the kid computers. Your desk is already on the network when they come up, so it can claim them. No pairing codes to copy.
 
 1. Open a terminal with Super + Return, the Windows key plus Enter.
 2. Paste this and press Enter:
@@ -39,10 +39,10 @@ The installer checks a checksum against the latest release. You can open that UR
 
 Do not run `omarchy plugin add` on this repo URL. That path does not work.
 
-3. When it asks, pick Mine or The kid's.
+3. When it asks, pick Mine on yours. On a kid computer, pick The kid's.
 4. On the kid's computer it may ask for your password.
 
-The kid computer shows up on your bar as its hostname. Rename the machine first if you want a name like Ada. If the bar does not change, run `omarchy restart shell`.
+If the bar does not change after install, run `omarchy restart shell`.
 
 Left-click the Kidtimer chip to open the panel. You should see their computer and the minutes left. Right-click the chip to grant +10.
 
