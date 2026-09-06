@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import qs.Commons
 import "ParentModel.js" as Model
 
@@ -176,7 +175,7 @@ Rectangle {
         onClicked: root.act({ kind: "bell" })
         TintIcon {
           anchors.centerIn: parent
-          source: Qt.resolvedUrl("icons/bell.svg")
+          kind: "bell"
           tint: bellBtn.contentColor
         }
         Rectangle {
@@ -208,7 +207,7 @@ Rectangle {
         onClicked: root.act({ kind: "settings" })
         TintIcon {
           anchors.centerIn: parent
-          source: Qt.resolvedUrl("icons/gear.svg")
+          kind: "gear"
           tint: gearBtn.contentColor
         }
       }
@@ -353,7 +352,7 @@ Rectangle {
         onClicked: root.act({ kind: "lock" })
         TintIcon {
           anchors.centerIn: parent
-          source: Qt.resolvedUrl(t.kid.locked ? "icons/lock-closed.svg" : "icons/lock-open.svg")
+          kind: t.kid.locked ? "lock-closed" : "lock-open"
           tint: lockBtn.contentColor
         }
       }
@@ -951,30 +950,98 @@ Rectangle {
     }
   }
 
-  component TintIcon: Item {
-    property url source
+  component TintIcon: Canvas {
+    id: glyph
+    property string kind
     property color tint
     implicitWidth: 16
     implicitHeight: 16
     width: implicitWidth
     height: implicitHeight
-
-    Image {
-      id: glyph
-      anchors.fill: parent
-      fillMode: Image.PreserveAspectFit
-      source: parent.source
-      sourceSize.width: width
-      sourceSize.height: height
-      visible: false
-      layer.enabled: true
-    }
-
-    MultiEffect {
-      anchors.fill: glyph
-      source: glyph
-      colorization: 1
-      colorizationColor: parent.tint
+    antialiasing: true
+    onKindChanged: requestPaint()
+    onTintChanged: requestPaint()
+    onWidthChanged: requestPaint()
+    onHeightChanged: requestPaint()
+    onPaint: {
+      var ctx = getContext("2d")
+      ctx.reset()
+      ctx.fillStyle = tint
+      ctx.strokeStyle = tint
+      ctx.scale(width / 16, height / 16)
+      if (kind === "bell") {
+        ctx.beginPath()
+        ctx.arc(8, 2.55, 1.15, Math.PI, 0)
+        ctx.fill()
+        ctx.beginPath()
+        ctx.moveTo(2.4, 12.1)
+        ctx.lineTo(2.4, 7.3)
+        ctx.bezierCurveTo(2.4, 4.15, 4.85, 2.55, 8, 2.55)
+        ctx.bezierCurveTo(11.15, 2.55, 13.6, 4.15, 13.6, 7.3)
+        ctx.lineTo(13.6, 12.1)
+        ctx.lineTo(15.1, 13.55)
+        ctx.lineTo(0.9, 13.55)
+        ctx.closePath()
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(8, 14.55, 1.55, 0, Math.PI * 2)
+        ctx.fill()
+      } else if (kind === "gear") {
+        ctx.translate(8, 8)
+        var teeth = 8
+        var step = Math.PI * 2 / teeth
+        var outer = 7.35
+        var inner = 5.05
+        var hole = 2.55
+        var i, a, a0, a1, a2, a3
+        ctx.beginPath()
+        for (i = 0; i < teeth; i++) {
+          a = i * step - Math.PI / 2
+          a0 = a - step * 0.22
+          a1 = a - step * 0.12
+          a2 = a + step * 0.12
+          a3 = a + step * 0.22
+          if (i === 0) ctx.moveTo(inner * Math.cos(a0), inner * Math.sin(a0))
+          else ctx.lineTo(inner * Math.cos(a0), inner * Math.sin(a0))
+          ctx.lineTo(outer * Math.cos(a1), outer * Math.sin(a1))
+          ctx.lineTo(outer * Math.cos(a2), outer * Math.sin(a2))
+          ctx.lineTo(inner * Math.cos(a3), inner * Math.sin(a3))
+        }
+        ctx.closePath()
+        ctx.fill()
+        ctx.globalCompositeOperation = "destination-out"
+        ctx.beginPath()
+        ctx.arc(0, 0, hole, 0, Math.PI * 2)
+        ctx.fill()
+      } else if (kind === "lock-open" || kind === "lock-closed") {
+        ctx.lineWidth = 1.7
+        ctx.lineCap = "round"
+        ctx.lineJoin = "round"
+        ctx.beginPath()
+        if (kind === "lock-closed") {
+          ctx.moveTo(4.4, 7)
+          ctx.lineTo(4.4, 4.2)
+          ctx.arc(7.2, 4.2, 2.8, Math.PI, 0, false)
+          ctx.lineTo(10, 7)
+        } else {
+          ctx.moveTo(5, 7)
+          ctx.lineTo(5, 4.2)
+          ctx.arc(8.6, 4.2, 2.8, Math.PI, 0.35, false)
+        }
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(3.2, 7)
+        ctx.lineTo(12.8, 7)
+        ctx.arcTo(14, 7, 14, 8.2, 1.2)
+        ctx.lineTo(14, 13.8)
+        ctx.arcTo(14, 15, 12.8, 15, 1.2)
+        ctx.lineTo(3.2, 15)
+        ctx.arcTo(2, 15, 2, 13.8, 1.2)
+        ctx.lineTo(2, 8.2)
+        ctx.arcTo(2, 7, 3.2, 7, 1.2)
+        ctx.closePath()
+        ctx.fill()
+      }
     }
   }
 
