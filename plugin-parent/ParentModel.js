@@ -339,18 +339,56 @@ function hhmmFromMin(min) {
   return pad2(Math.floor(t / 60)) + ":" + pad2(t % 60)
 }
 
+function hour12On(v) {
+  return v !== false
+}
+
 function clockPretty(min) {
+  return clockLabel(min, true)
+}
+
+function clock24(min) {
+  return clockLabel(min, false)
+}
+
+function clockLabel(min, hour12) {
   min = ((Math.round(min) % DAY_MIN) + DAY_MIN) % DAY_MIN
   var h = Math.floor(min / 60)
   var m = min % 60
+  if (!hour12On(hour12)) return pad2(h) + ":" + pad2(m)
   var ap = h >= 12 ? "PM" : "AM"
   var hr = ((h + 11) % 12) + 1
   return hr + ":" + pad2(m) + " " + ap
 }
 
-function clock24(min) {
-  min = ((Math.round(min) % DAY_MIN) + DAY_MIN) % DAY_MIN
-  return pad2(Math.floor(min / 60)) + ":" + pad2(min % 60)
+function trackHours(hour12) {
+  if (hour12On(hour12)) return ["12a", "6a", "12p", "6p", "12a"]
+  return ["0", "6", "12", "18", "24"]
+}
+
+function emptyTrack(hour12) {
+  return { beds: [], blocks: [], needle: null, log: [], hours: trackHours(hour12) }
+}
+
+function parsePrefs(raw) {
+  var doc = raw
+  if (typeof raw === "string") {
+    try {
+      doc = JSON.parse(raw)
+    } catch (e) {
+      return { hour12: true }
+    }
+  }
+  if (!doc || typeof doc !== "object") return { hour12: true }
+  return { hour12: doc.hour12 !== false }
+}
+
+function prefsWire(hour12) {
+  return JSON.stringify({ hour12: hour12On(hour12) })
+}
+
+function hour12Payload(on) {
+  return { hour12: hour12On(on) }
 }
 
 function clockFromHour(hour) {
@@ -772,7 +810,7 @@ function sittingName(apps) {
   return named.join(" + ").toUpperCase()
 }
 
-function sittingsFrom(sessions) {
+function sittingsFrom(sessions, hour12) {
   var src = sortedSpans(sessions)
   var sits = []
   for (var i = 0; i < src.length; i++) {
@@ -794,7 +832,7 @@ function sittingsFrom(sessions) {
     out.push({
       start: sit.start,
       dur: sit.end - sit.start,
-      clock: clock24(sit.start),
+      clock: clockLabel(sit.start, hour12),
       name: sittingName(sit.apps),
       durLabel: minutesLabel(sit.end - sit.start)
     })
@@ -802,8 +840,8 @@ function sittingsFrom(sessions) {
   return out
 }
 
-function sittingLog(sessions) {
-  var sits = sittingsFrom(sessions)
+function sittingLog(sessions, hour12) {
+  var sits = sittingsFrom(sessions, hour12)
   if (sits.length <= LOG_MAX) {
     var all = []
     for (var i = 0; i < sits.length; i++) {
@@ -826,7 +864,7 @@ function sittingLog(sessions) {
   return log
 }
 
-function layoutTrack(sessions, policy, nowHour, withToday) {
+function layoutTrack(sessions, policy, nowHour, withToday, hour12) {
   var beds = bedSpans(policy.bed, policy.up)
   var bedPct = []
   for (var i = 0; i < beds.length; i++) bedPct.push(spanPct(beds[i]))
@@ -835,7 +873,7 @@ function layoutTrack(sessions, policy, nowHour, withToday) {
   var nowMin = nowHour == null ? null : Math.round(Number(nowHour) * 60)
   if (withToday) {
     blocks = occupancyBlocks(sessions, nowMin)
-    log = sittingLog(sessions)
+    log = sittingLog(sessions, hour12)
   }
   var needle = null
   if (withToday && nowHour != null) needle = (Number(nowHour) / 24) * 100
@@ -844,7 +882,7 @@ function layoutTrack(sessions, policy, nowHour, withToday) {
     blocks: blocks,
     needle: needle,
     log: log,
-    hours: ["0", "6", "12", "18", "24"]
+    hours: trackHours(hour12)
   }
 }
 
@@ -869,7 +907,7 @@ function snapshotAsks(snap) {
   return parseAsks(a)
 }
 
-function projectKid(snap, index, now, allotOverride) {
+function projectKid(snap, index, now, allotOverride, hour12) {
   var status = snapshotStatus(snap)
   var look = snapshotLook(snap)
   var policy = look.policy || defaultPolicy()
@@ -900,8 +938,8 @@ function projectKid(snap, index, now, allotOverride) {
     policy: {
       bed: policy.bed,
       up: policy.up,
-      bedLabel: clockPretty(policy.bed),
-      upLabel: clockPretty(policy.up),
+      bedLabel: clockLabel(policy.bed, hour12),
+      upLabel: clockLabel(policy.up, hour12),
       funDay: policy.funDay.slice(),
       funDayRows: (function () {
         var rows = []
@@ -1010,12 +1048,13 @@ function setupPinTape() {
     ours: false,
     asks: [],
     bellCount: 0,
-    track: { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
+    track: emptyTrack(true),
     showLock: false,
     showStamp: false,
     lockLabel: "Lock",
     pinSet: false,
-    lockArmed: false
+    lockArmed: false,
+    hour12: true
   }
 }
 
@@ -1031,12 +1070,13 @@ function emptyWaitingTape(chrome) {
     adopt: null,
     asks: [],
     bellCount: 0,
-    track: { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
+    track: emptyTrack(true),
     showLock: false,
     showStamp: false,
     lockLabel: "Lock",
     pinSet: true,
-    lockArmed: true
+    lockArmed: true,
+    hour12: true
   }
 }
 
@@ -1044,19 +1084,20 @@ function projectTape(snapshots, selectedIndex, chrome, now, household) {
   var list = snapshots || []
   var ch = chrome || chromeHome()
   var pinSet = householdPinArmed(list, !!(household && household.pinSet))
+  var hour12 = hour12On(household && household.hour12)
   if (!pinSet) return setupPinTape()
   if (!list.length) return emptyWaitingTape(ch)
   var i = Number(selectedIndex) || 0
   if (i < 0 || i >= list.length) i = 0
   var snap = list[i]
-  var kid = projectKid(snap, i, now)
+  var kid = projectKid(snap, i, now, null, hour12)
   var kids = []
-  for (var k = 0; k < list.length; k++) kids.push(projectKid(list[k], k, now))
+  for (var k = 0; k < list.length; k++) kids.push(projectKid(list[k], k, now, null, hour12))
   var asks = householdAsks(list)
   var status = snapshotStatus(snap)
   var nowHour = hourFromNow(now)
   var withToday = ch.face !== "settings"
-  var track = layoutTrack(activitySessions(status, nowHour), kid.policy, nowHour, withToday)
+  var track = layoutTrack(activitySessions(status, nowHour), kid.policy, nowHour, withToday, hour12)
   var ours = !kid.claimed
   var adopt = ch.adopt ? adoptPrompt(kids[ch.adopt.index] || kid) : null
   return {
@@ -1077,12 +1118,13 @@ function projectTape(snapshots, selectedIndex, chrome, now, household) {
     adopt: adopt,
     asks: ours ? asks : [],
     bellCount: ours ? asks.length : 0,
-    track: ours ? track : { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
+    track: ours ? track : emptyTrack(hour12),
     showLock: ch.face === "home" && ours,
     showStamp: ch.face === "home" && ours && kid.locked,
     lockLabel: lockLabel(kid.name, kid.locked),
     pinSet: pinSet,
-    lockArmed: pinSet && ours
+    lockArmed: pinSet && ours,
+    hour12: hour12
   }
 }
 
@@ -1259,7 +1301,8 @@ function fixtureKid(id) {
       today: [
         { kind: "on", start: Math.round((7 + 40 / 60) * 60), dur: 30, label: "Chrome" },
         { kind: "on", start: Math.round((12 + 10 / 60) * 60), dur: 15, label: "Chrome" },
-        { kind: "on", start: Math.round((15 + 58 / 60) * 60), dur: 44, label: "Minecraft" }
+        { kind: "on", start: Math.round((15 + 58 / 60) * 60), dur: 44, label: "Minecraft" },
+        { kind: "on", start: Math.round((16 + 5 / 60) * 60), dur: 12, label: "Chrome" }
       ]
     },
     look: {
@@ -1287,10 +1330,15 @@ function fixtureTape(kidId, chrome, extra) {
     snaps[0].status.parentLocked = true
     snaps[0].status.focusedApp = ""
   }
-  var idx = kidId === "bea" ? 1 : 0
+  if (extra && extra.claimed) {
+    snaps.push({ name: "Max", claimed: true, reachable: true, status: {} })
+  }
+  var idx = 0
+  if (kidId === "bea") idx = 1
+  if (kidId === "max") idx = snaps.length - 1
   var ch = chrome || chromeHome()
   var now = extra && extra.now != null ? extra.now : FIXTURE_NOW
-  var household = { pinSet: !(extra && extra.pinSet === false) }
+  var household = { pinSet: !(extra && extra.pinSet === false), hour12: extra && extra.hour12 }
   if (extra && extra.kidPin) snaps[idx].status.parentPinSet = true
   return projectTape(snaps, idx, ch, now, household)
 }

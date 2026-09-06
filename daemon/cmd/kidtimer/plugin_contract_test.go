@@ -160,6 +160,11 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentModel, `"fun"`, "model default fun")
 	mustContain(t, parentModel, "http://127.0.0.1:8742", "localhost default")
 	mustContain(t, parentModel, "fixtureTape", "fixture tape")
+	mustContain(t, parentModel, "function clockLabel", "clockLabel helper")
+	mustContain(t, parentModel, "function parsePrefs", "prefs helper")
+	mustContain(t, parentPanel, `kind: "clock"`, "clock format row")
+	mustContain(t, parentBar, "prefs.json", "clock prefs file")
+	mustContain(t, kidModel, "hour12", "kid hour12")
 	if strings.Contains(parentPanel, "edit groups") || strings.Contains(parentPanel, "edit schedule") {
 		t.Fatal("till tape must not contain edit groups or edit schedule")
 	}

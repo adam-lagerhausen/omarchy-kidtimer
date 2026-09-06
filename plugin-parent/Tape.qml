@@ -26,7 +26,8 @@ Rectangle {
     },
     kids: [], asks: [], bellCount: 0,
     track: { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
-    showLock: true, showStamp: false, lockLabel: "Lock", pinSet: false, lockArmed: false, ours: true
+    showLock: true, showStamp: false, lockLabel: "Lock", pinSet: false, lockArmed: false, ours: true,
+    hour12: true
   })
   readonly property bool settingsOn: t.chrome.face === "settings"
   readonly property bool waitingHome: !!t.waiting
@@ -749,6 +750,49 @@ Rectangle {
         visible: settingsOn && !needsPin
         spacing: 0
         DashedRule { width: parent.width; topPad: 10; bottomPad: 8 }
+        Item {
+          width: inner.width
+          height: 40
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 52
+            text: "CLOCK"
+            color: quiet
+            font.family: root.plex
+            font.pixelSize: 11
+          }
+          Row {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 6
+            SquareBtn {
+              width: 36
+              height: 28
+              filled: t.hour12 !== false
+              onClicked: root.act({ kind: "clock", hour12: true })
+              Text {
+                anchors.centerIn: parent
+                text: "12"
+                color: parent.contentColor
+                font.family: root.plex
+                font.pixelSize: 13
+              }
+            }
+            SquareBtn {
+              width: 36
+              height: 28
+              filled: t.hour12 === false
+              onClicked: root.act({ kind: "clock", hour12: false })
+              Text {
+                anchors.centerIn: parent
+                text: "24"
+                color: parent.contentColor
+                font.family: root.plex
+                font.pixelSize: 13
+              }
+            }
+          }
+        }
         Repeater {
           model: [
             { kind: "bed", k: "BED", v: t.kid.policy.bedLabel },

@@ -17,9 +17,10 @@ Panel {
   property var chrome: Model.chromeHome()
   property var nowPtr: new Date()
   property bool householdPinSet: false
+  property bool hour12: true
 
   readonly property var barIdentity: hostWidget || root
-  readonly property var tape: Model.projectTape(snapshots, selectedIndex, chrome, nowPtr, { pinSet: householdPinSet })
+  readonly property var tape: Model.projectTape(snapshots, selectedIndex, chrome, nowPtr, { pinSet: householdPinSet, hour12: root.hour12 })
   readonly property real panelWidth: 340
 
   function open() {
@@ -62,7 +63,9 @@ Panel {
       root.selectedIndex = r.selectIndex
       if (root.hostWidget) root.hostWidget.selectedIndex = r.selectIndex
     }
+    if (ev.kind === "clock") root.hour12 = ev.hour12 !== false
     if (!root.hostWidget) return
+    if (ev.kind === "clock") root.hostWidget.setHour12(root.hour12)
     if (ev.kind === "lock") {
       if (!root.tape.lockArmed) {
         root.chrome = Model.chromeSettings()

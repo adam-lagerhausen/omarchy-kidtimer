@@ -690,6 +690,58 @@ func TestBedtimeFromTOMLUntilOverlay(t *testing.T) {
 	}
 }
 
+func TestHour12DefaultAndPersist(t *testing.T) {
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "ledger.sqlite")
+	b, err := Open(path, cfg, afternoon)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Hour12 {
+		t.Fatal("hour12 defaults on")
+	}
+	if err := b.SetHour12(parent, false); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Hour12 {
+		t.Fatal("hour12 off after set")
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(path, cfg, afternoon)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = again.Close() })
+	_, parent, err = again.SeedParent("adam2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err = again.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Hour12 {
+		t.Fatal("hour12 after reopen")
+	}
+}
+
 type clock struct{ t time.Time }
 
 func (c *clock) now() time.Time { return c.t }

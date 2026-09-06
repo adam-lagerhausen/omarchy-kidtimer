@@ -205,7 +205,7 @@ A token may only credit groups in its list. Parent tokens may credit any group.
 
 ### `GET /v1/status`
 
-Remaining seconds (`groups.fun`), spend-path remaining (`path_remaining.fun`), whether bedtime is active, focused clock `fun` or none (`focused_group`), caption or none (`focused_app`), `spent.fun` seconds today, `today` (spans of time on the computer: `kind`, `start` minutes from midnight on the kid box, `start_unix` UTC seconds, `dur` minutes, `label`). The parent plugin converts `start_unix` with the parent desk clock., `look_version`, pending ask count, leftover `mode` (ignored for remaining), `parent_locked`, `remote_lock`, `parent_pin_set`, `overlay` (true when the kid plugin should cover the screen), `bedtime_hold` (stay-up while remaining is greater than zero), effective `bedtime_start` and `bedtime_end` as `HH:MM`. When effective `bedtime_lock` is on, also `bedtime_in`: seconds until the bedtime window starts, or 0 if it is already active. Omit `bedtime_in` when lock is off. Kid plugin and parent plugin both use this. Read tokens allowed. Never send the PIN or its hash.
+Remaining seconds (`groups.fun`), spend-path remaining (`path_remaining.fun`), whether bedtime is active, focused clock `fun` or none (`focused_group`), caption or none (`focused_app`), `spent.fun` seconds today, `today` (spans of time on the computer: `kind`, `start` minutes from midnight on the kid box, `start_unix` UTC seconds, `dur` minutes, `label`). The parent plugin converts `start_unix` with the parent desk clock., `look_version`, pending ask count, leftover `mode` (ignored for remaining), `parent_locked`, `remote_lock`, `parent_pin_set`, `overlay` (true when the kid plugin should cover the screen), `bedtime_hold` (stay-up while remaining is greater than zero), effective `bedtime_start` and `bedtime_end` as `HH:MM`, `hour12` (household clock format; default true). When effective `bedtime_lock` is on, also `bedtime_in`: seconds until the bedtime window starts, or 0 if it is already active. Omit `bedtime_in` when lock is off. Kid plugin and parent plugin both use this. Read tokens allowed. Never send the PIN or its hash.
 
 ### `POST /v1/asks`
 
@@ -322,11 +322,12 @@ Parent token only. Partial JSON. Omitted fields stay. Empty string on a clock me
   "bedtime_start": "20:00",
   "bedtime_end": "07:00",
   "bedtime_lock": false,
+  "hour12": true,
   "modes": { "evening": { "fun": 1800 } }
 }
 ```
 
-Shim: writes bedtime and/or mode hours onto Look. Does not refill remaining, even if that mode is active. Do not set `bedtime_lock` true on the parent lab.
+Shim: writes bedtime and/or mode hours onto Look. `hour12` is overlay meta for how clocks display; omitted stays. Does not refill remaining, even if that mode is active. Do not set `bedtime_lock` true on the parent lab.
 
 ### `GET /v1/look`
 
@@ -530,7 +531,7 @@ This repo ships two plugins, because parent and kid are different machines.
 - `bar-widget` or `panel`: one row per kid
 - +10 / −10 apply a 600-second remaining delta to a chosen group, default `fun` when that id exists
 - Pending asks, approve / deny
-- Settings: Parent PIN row first, then Bed / Up, then weekday hours. Set invokes `kidtimer pin set`.
+- Settings: Parent PIN row first, then CLOCK 12/24, then Bed / Up, then weekday hours. Set invokes `kidtimer pin set`. CLOCK PATCHes `hour12` to every owned kid.
 - Lock square does nothing until the household PIN exists
 - Paired kids go through the parent desk on loopback. Optional `settings.kids` pins stay as a localhost lab path.
 - Starts `~/.local/bin/kidtimer parent`, which browses `_kidtimer._tcp` and `_allowance._tcp` and pairs. The widget restarts that process if it exits. It does not depend on `PATH`.

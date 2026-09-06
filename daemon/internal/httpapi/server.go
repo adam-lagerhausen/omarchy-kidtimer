@@ -86,6 +86,7 @@ type policyBody struct {
 	BedtimeStart *string                   `json:"bedtime_start"`
 	BedtimeEnd   *string                   `json:"bedtime_end"`
 	BedtimeLock  *bool                     `json:"bedtime_lock"`
+	Hour12       *bool                     `json:"hour12"`
 	Modes        map[string]map[string]int `json:"modes"`
 }
 
@@ -467,6 +468,12 @@ func (s *Server) handlePolicy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.Hour12 != nil {
+		if err := s.Bank.SetHour12(tok, *body.Hour12); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
 	for modeID, groups := range body.Modes {
 		for group, seconds := range groups {
 			if err := s.Bank.SetModeMinutes(tok, modeID, group, seconds); err != nil {
@@ -640,6 +647,7 @@ func (s *Server) writeStatus(w http.ResponseWriter, tok *bank.Token) {
 		"bedtime_hold":      st.BedtimeHold,
 		"bedtime_start":     st.BedtimeStart,
 		"bedtime_end":       st.BedtimeEnd,
+		"hour12":            st.Hour12,
 		"modes":             st.Modes,
 		"piles":             piles,
 		"spent":             st.Spent,

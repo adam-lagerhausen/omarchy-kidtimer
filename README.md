@@ -48,11 +48,13 @@ Left-click the Kidtimer chip to open the panel. You should see their computer an
 
 Set a 4-digit PIN next. Until one exists, time still counts but nothing covers their screen. The Lock square does nothing.
 
-To update later, run the same install command again. It pulls the latest release.
+To update later, run the same install command again. It pulls the latest release. Kid computers you already claimed stay claimed, including if you came from Allowance.
 
 ## How it works
 
-The panel shows time left, +10 and −10, Lock, and pending asks. Hours and bedtime live behind the gear. When they ask for more time, you get an Omarchy notification with their name. Approve or deny from the panel.
+The panel shows time left, +10 and −10, Lock, and pending asks. Hours, bedtime, and CLOCK 12 or 24 live behind the gear. When they ask for more time, you get an Omarchy notification with their name. Approve or deny from the panel.
+
+The log under the day is sittings: one stretch at the computer. Two apps in the same stretch share a row. `kidtimer parent export` prints every window.
 
 ![Settings](docs/screenshots/settings.png)
 
@@ -83,6 +85,18 @@ They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay 
 The parent PIN on the overlay adds minutes and clears a parent lock. During bedtime it works like an approved ask: it sets the timer to those minutes so the bedtime overlay lifts. When those minutes hit zero, bedtime comes back. The PIN does not change the scheduled hours or bedtime.
 
 Five wrong guesses start a 30-second cooldown.
+
+### Another desk, or a reinstall
+
+If another parent already claimed a computer, it stays in the dropdown as Already claimed.
+
+![Computers](docs/screenshots/picker.png)
+
+Click it if you mean to take over. Yes makes it yours. No leaves it in the list.
+
+![Take over](docs/screenshots/adopt.png)
+
+If you reinstall on yours, the kid computers you already claimed come back. You should not see an empty how-to.
 
 ### If you are not home
 
@@ -148,7 +162,7 @@ sudo systemctl stop kidtimer
 
 If they kill the shell, the overlay is gone and Super works again. A TTY, a reboot, or Windows on a dual-boot disk all get them out. Time only counts while Omarchy is running.
 
-Only one parent computer. The first desk that sees a new kid computer claims it. Later desks cannot. Do that on a quiet home network with your desk awake. Keep guest laptops off Kidtimer until yours has claimed the box and the PIN is set.
+The first desk that finds an unclaimed kid computer claims it. A second desk sees Already claimed. Yes takes it over. Do that on a quiet home network with your desk awake. Keep guest laptops off Kidtimer until yours has claimed the box and the PIN is set.
 
 The kid computer talks on your private network with no encryption, on port 8742. Tailscale at home counts. Do not do this on cafe Wi-Fi or an open guest network.
 

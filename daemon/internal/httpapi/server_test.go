@@ -507,6 +507,32 @@ func TestPolicyDoesNotRefill(t *testing.T) {
 	}
 }
 
+func TestPolicyHour12(t *testing.T) {
+	h, parent, _ := start(t)
+	st := get(t, h, parent, "/v1/status")
+	if asMap(t, st.Body)["hour12"] != true {
+		t.Fatalf("default hour12: %s", st.Body)
+	}
+	patched := patch(t, h, parent, "/v1/policy", map[string]any{"hour12": false})
+	if patched.StatusCode != 200 {
+		t.Fatalf("policy hour12: %d %s", patched.StatusCode, patched.Body)
+	}
+	if asMap(t, patched.Body)["hour12"] != false {
+		t.Fatalf("hour12 off: %s", patched.Body)
+	}
+	keep := patch(t, h, parent, "/v1/policy", map[string]any{"bedtime_start": "20:00"})
+	if keep.StatusCode != 200 {
+		t.Fatalf("omit hour12: %d %s", keep.StatusCode, keep.Body)
+	}
+	got := asMap(t, keep.Body)
+	if got["hour12"] != false {
+		t.Fatalf("omit keeps hour12: %s", keep.Body)
+	}
+	if got["bedtime_start"] != "20:00" {
+		t.Fatalf("bed still patches: %s", keep.Body)
+	}
+}
+
 func TestGrantIgnoresClientSource(t *testing.T) {
 	h, parent, _ := start(t)
 	raw := []byte(`{"group":"fun","seconds":60,"reason":"+10","source":"app:spoof"}`)

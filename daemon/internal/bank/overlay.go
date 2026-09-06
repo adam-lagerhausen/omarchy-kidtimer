@@ -25,6 +25,7 @@ const (
 	metaParentPin      = "parent_pin"
 	metaBedtimeHold    = "bedtime_hold_until"
 	metaRefillDeferred = "refill_deferred"
+	metaHour12         = "hour12"
 )
 
 type overlay struct {
@@ -37,6 +38,7 @@ type overlay struct {
 	modeMinutes   map[string]map[string]int
 	parentPin     string
 	holdUntil     time.Time
+	hour12        *bool
 }
 
 func (b *Bank) loadOverlayLocked() error {
@@ -107,6 +109,14 @@ func (b *Bank) loadOverlayLocked() error {
 			return fmt.Errorf("overlay bedtime_hold_until: %w", err)
 		}
 		b.ov.holdUntil = t
+	}
+	v, ok, err = b.metaGet(metaHour12)
+	if err != nil {
+		return err
+	}
+	if ok {
+		on := v == "true"
+		b.ov.hour12 = &on
 	}
 	return nil
 }
@@ -306,6 +316,24 @@ func (b *Bank) SetBedtime(actor *Token, start, end string, lock *bool) error {
 		}
 	}
 	return nil
+}
+
+func (b *Bank) hour12Locked() bool {
+	if b.ov.hour12 == nil {
+		return true
+	}
+	return *b.ov.hour12
+}
+
+func (b *Bank) SetHour12(actor *Token, on bool) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := requireParent(actor); err != nil {
+		return err
+	}
+	v := on
+	b.ov.hour12 = &v
+	return b.metaSet(metaHour12, boolMeta(on))
 }
 
 func (b *Bank) SetModeMinutes(actor *Token, modeID, group string, seconds int) error {

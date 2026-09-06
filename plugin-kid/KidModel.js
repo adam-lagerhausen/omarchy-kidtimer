@@ -92,6 +92,7 @@ function parseStatus(raw) {
   out.parent_pin_set = !!src.parent_pin_set
   out.overlay = !!src.overlay
   out.bedtime_hold = !!src.bedtime_hold
+  out.hour12 = src.hour12 !== false
   return out
 }
 
@@ -138,9 +139,30 @@ function panelCaption(status) {
   return ""
 }
 
+function clockLabel(min, hour12) {
+  min = ((Math.round(Number(min)) % 1440) + 1440) % 1440
+  var h = Math.floor(min / 60)
+  var m = min % 60
+  if (hour12 === false) {
+    var hs = String(h)
+    var ms = String(m)
+    if (hs.length < 2) hs = "0" + hs
+    if (ms.length < 2) ms = "0" + ms
+    return hs + ":" + ms
+  }
+  var ap = h >= 12 ? "PM" : "AM"
+  var hr = ((h + 11) % 12) + 1
+  var mm = String(m)
+  if (mm.length < 2) mm = "0" + mm
+  return hr + ":" + mm + " " + ap
+}
+
 function bedtimeEnd(status) {
   if (!status || status.bedtime_end === undefined || status.bedtime_end === null) return ""
-  return String(status.bedtime_end)
+  var p = String(status.bedtime_end).split(":")
+  var h = Number(p[0]) || 0
+  var m = Number(p[1]) || 0
+  return clockLabel(h * 60 + m, status.hour12)
 }
 
 function bedtimeBanner(status) {

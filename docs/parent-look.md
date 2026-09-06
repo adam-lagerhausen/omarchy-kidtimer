@@ -48,8 +48,9 @@ Order on the settings tape:
 2. Kid dropdown
 3. Asks, only if the bell is open
 4. Parent PIN. Four boxes and Set. This is the household 4-digit PIN, not the computer password. Lock does nothing until it is set.
-5. Bed and Up as two clocks. −  9:00 PM  + on one row, −  7:00 AM  + on the next. The hatched night under them.
-6. Time for each day of the week, each with −15 / +15
+5. CLOCK 12 or 24. Filled square is the active choice. Bed, the day log, the track marks, and the kid overlay follow it.
+6. Bed and Up as two clocks. −  9:00 PM  + on one row, −  7:00 AM  + on the next. The hatched night under them.
+7. Time for each day of the week, each with −15 / +15
 
 Bedtime is two clocks, not two more day rows. `9:00 PM` is bed, `7:00 AM` is up. − and + move 15 minutes. The hatch under them is the night: same marks as home, no sessions, no needle. Home's hatch uses those times.
 
@@ -89,8 +90,8 @@ The 24 hour track is what they already did, not a schedule to edit. Hatched nigh
 
 The log under the track is sittings, not every window. A sitting is one stretch at the computer. Split when they leave for more than ten minutes. One row: when it started, what they were on, how long they sat. `foot` is Terminal. Two apps that both lasted two minutes or more share a row: `MINECRAFT + CHROME`. At most six rows. If they sat down more than that, the oldest fold into `EARLIER` and the five newest stay. `kidtimer parent export` prints every window.
 
-`07:40  CHROME      30m`
-`15:58  MINECRAFT   44m`
+`7:40 AM  CHROME      30m`
+`3:58 PM  MINECRAFT   44m`
 
 Bedtime locks the computer. It is not a mode. Settings is where the two clocks live. No chips for 8:30, 9:00, 9:30, 10:00.
 
@@ -103,6 +104,7 @@ Sound like a parent.
 - `Offline` / `Error` / `Locked` / `Bedtime`
 - `16m LEFT`
 - `BED` / `UP`
+- `CLOCK` / `12` / `24`
 - `9:00 PM` / `7:00 AM`
 - `MON` … `SUN`
 - `Ada asked for 10 more minutes`

@@ -126,6 +126,7 @@ type Status struct {
 	BedtimeHold     bool
 	BedtimeStart    string
 	BedtimeEnd      string
+	Hour12          bool
 	Modes           map[string]map[string]int
 	LookVersion     int
 	Piles           []look.Pile
@@ -999,6 +1000,7 @@ func (b *Bank) Status(actor *Token) (*Status, error) {
 		BedtimeHold:   b.stayUpActiveLocked(),
 		BedtimeStart:  config.FormatClock(start),
 		BedtimeEnd:    config.FormatClock(end),
+		Hour12:        b.hour12Locked(),
 		Modes:         b.effectiveModesLocked(),
 		Piles:         append([]look.Pile{}, b.look.Piles...),
 		OverrideUntil: b.ov.overrideUntil,

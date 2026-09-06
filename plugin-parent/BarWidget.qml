@@ -16,6 +16,9 @@ BarWidget {
   property string searchListId: "fun"
   property string searchQ: ""
   property bool householdPinSet: false
+  property bool hour12: true
+  property bool prefsReady: false
+  property var clockPushed: ({})
 
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
@@ -46,6 +49,7 @@ BarWidget {
     if ("anchorItem" in target) target.anchorItem = button
     if ("hostWidget" in target) target.hostWidget = root
     if ("householdPinSet" in target) target.householdPinSet = root.householdPinSet
+    if ("hour12" in target) target.hour12 = root.hour12
     syncPanel()
   }
 
@@ -55,6 +59,7 @@ BarWidget {
     if ("snapshots" in target) target.snapshots = snapshots
     if ("selectedIndex" in target) target.selectedIndex = selectedIndex
     if ("householdPinSet" in target) target.householdPinSet = root.householdPinSet
+    if ("hour12" in target) target.hour12 = root.hour12
   }
 
   property var discoveredKids: []
@@ -90,6 +95,7 @@ BarWidget {
     snapshots = next
     statusText = Model.householdBarLabel(next)
     syncPanel()
+    root.pushHour12()
   }
 
   function aimedKid() {
@@ -208,6 +214,7 @@ BarWidget {
         pollAsks(j, rows[j])
       }
     }
+    root.pushHour12()
   }
 
   function poll() {
@@ -463,6 +470,42 @@ BarWidget {
     pinSetProc.running = true
   }
 
+  function setHour12(on) {
+    var next = on !== false
+    if (root.hour12 !== next) root.clockPushed = ({})
+    root.hour12 = next
+    prefsFile.setText(Model.prefsWire(root.hour12))
+    if (panelLoader.item && "hour12" in panelLoader.item) panelLoader.item.hour12 = root.hour12
+    root.pushHour12()
+  }
+
+  function loadPrefs(raw) {
+    var p = Model.parsePrefs(raw)
+    if (root.hour12 !== p.hour12) root.clockPushed = ({})
+    root.hour12 = p.hour12
+    root.prefsReady = true
+    if (panelLoader.item && "hour12" in panelLoader.item) panelLoader.item.hour12 = root.hour12
+    root.pushHour12()
+  }
+
+  function pushHour12() {
+    if (!root.prefsReady) return
+    var body = Model.hour12Payload(root.hour12)
+    var rows = kidRows()
+    var pushed = {}
+    for (var k in root.clockPushed) pushed[k] = root.clockPushed[k]
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i]
+      if (!row || row.claimed) continue
+      var id = row.id || row.url || ""
+      if (!id) continue
+      if (pushed[id]) continue
+      sendKid(row, "PATCH", "/v1/policy", body)
+      pushed[id] = true
+    }
+    root.clockPushed = pushed
+  }
+
   function setBedtime(start, end) {
     sendKid(aimedKid(), "PATCH", "/v1/policy", Model.bedtimePayload(start, end))
   }
@@ -549,6 +592,20 @@ BarWidget {
     onLoaded: root.loadHousehold(text())
     onFileChanged: kidsFile.reload()
     onLoadFailed: root.loadHousehold("")
+  }
+
+  FileView {
+    id: prefsFile
+    path: {
+      var p = String(setting("prefsFile", ""))
+      if (p) return p
+      return Quickshell.env("HOME") + "/.local/share/kidtimer/prefs.json"
+    }
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.loadPrefs(text())
+    onFileChanged: prefsFile.reload()
+    onLoadFailed: root.loadPrefs("")
   }
 
   Process {

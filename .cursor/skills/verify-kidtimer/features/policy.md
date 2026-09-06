@@ -14,7 +14,7 @@ Policy is a partial PATCH. The parent can change bedtime clocks, bedtime lock, a
 
 - Parent plugin bedtime fields and per-group minute fields.
 - Run `testdata/policy.sh` against a Stage B daemon.
-- `PATCH /v1/policy` with a parent bearer and any of `bedtime_start`, `bedtime_end`, `bedtime_lock`, `modes`.
+- `PATCH /v1/policy` with a parent bearer and any of `bedtime_start`, `bedtime_end`, `bedtime_lock`, `hour12`, `modes`.
 
 ## Driving it with control-kidtimer
 

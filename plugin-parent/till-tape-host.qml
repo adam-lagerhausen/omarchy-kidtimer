@@ -15,17 +15,20 @@ Window {
   property string outPath: ""
 
   function chromeFor(name) {
-    if (name === "a-settings" || name === "a-settings-alex") return Model.chromeSettings()
+    if (name === "a-settings" || name === "a-settings-bea") return Model.chromeSettings()
     if (name === "a-picker") return { face: "home", picker: true, bell: false }
     if (name === "a-ask") return { face: "home", picker: false, bell: true }
+    if (name === "a-adopt") return { face: "home", picker: false, bell: false, adopt: { index: 2 } }
     return Model.chromeHome()
   }
 
   function tapeFor(name) {
-    var kid = (name === "a-ask" || name === "a-settings-alex") ? "alex" : "sam"
-    var extra = {}
+    var kid = "ada"
+    if (name === "a-ask" || name === "a-settings-bea") kid = "bea"
+    if (name === "a-adopt") kid = "max"
+    var extra = { now: Model.FIXTURE_NOW }
     if (name === "a-locked") extra.locked = true
-    extra.now = Model.FIXTURE_NOW
+    if (name === "a-picker" || name === "a-adopt") extra.claimed = true
     return Model.fixtureTape(kid, chromeFor(name), extra)
   }
 

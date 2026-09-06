@@ -171,6 +171,7 @@ func Apply(b *bank.Bank, tok *bank.Token, op reverse.Op) reverse.OpResult {
 			BedtimeStart *string `json:"bedtime_start"`
 			BedtimeEnd   *string `json:"bedtime_end"`
 			BedtimeLock  *bool   `json:"bedtime_lock"`
+			Hour12       *bool   `json:"hour12"`
 		}
 		if err := json.Unmarshal(nonzero(op.Body), &body); err != nil {
 			return fail(op, http.StatusBadRequest, "invalid json")
@@ -184,6 +185,11 @@ func Apply(b *bank.Bank, tok *bank.Token, op reverse.Op) reverse.OpResult {
 		}
 		if err := b.SetBedtime(tok, start, end, body.BedtimeLock); err != nil {
 			return failErr(op, err)
+		}
+		if body.Hour12 != nil {
+			if err := b.SetHour12(tok, *body.Hour12); err != nil {
+				return failErr(op, err)
+			}
 		}
 		st, err := b.Status(tok)
 		if err != nil {
@@ -235,6 +241,7 @@ func statusJSON(st *bank.Status) map[string]any {
 		"bedtime_hold":      st.BedtimeHold,
 		"bedtime_start":     st.BedtimeStart,
 		"bedtime_end":       st.BedtimeEnd,
+		"hour12":            st.Hour12,
 		"piles":             piles,
 		"spent":             st.Spent,
 		"today":             todaySpans(st),
