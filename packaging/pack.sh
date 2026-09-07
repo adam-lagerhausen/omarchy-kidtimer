@@ -11,7 +11,7 @@ pack_one() {
 	local out=$dist/$name
 	rm -rf "$out"
 	mkdir -p "$out"
-	CGO_ENABLED=0 GOOS=linux GOARCH=$goarch GOTOOLCHAIN=go1.25.0 go build -trimpath -ldflags='-s -w -buildid=' -o "$out/$name" ./daemon/cmd/kidtimer
+	CGO_ENABLED=0 GOOS=linux GOARCH=$goarch GOTOOLCHAIN=go1.25.0 go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "$out/$name" ./daemon/cmd/kidtimer
 	/usr/bin/mkdir -p "$out/packaging"
 	/usr/bin/find packaging -mindepth 1 -maxdepth 1 ! -name SHA256SUMS -exec /usr/bin/cp -a {} "$out/packaging/" \;
 	for f in manifest.json BarWidget.qml Panel.qml Overlay.qml Setup.qml ParentPanel.qml KidPanel.qml ParentModel.js KidModel.js Tape.qml LookBtn.qml fonts icons; do
@@ -35,7 +35,9 @@ pack_one arm64
 	/usr/bin/sha256sum kidtimer-linux-amd64.tar.gz kidtimer-linux-arm64.tar.gz >SHA256SUMS
 )
 echo "wrote $dist/SHA256SUMS"
-if [ -f "$root/packaging/SHA256SUMS" ]; then
+# Local tar/gzip is not Ubuntu Actions. Commit packaging/SHA256SUMS from a
+# pack workflow artifact, then this check on GITHUB_ACTIONS must match.
+if [ -n "${GITHUB_ACTIONS:-}" ] && [ -f "$root/packaging/SHA256SUMS" ]; then
 	if ! /usr/bin/cmp -s "$dist/SHA256SUMS" "$root/packaging/SHA256SUMS"; then
 		echo "packaging/SHA256SUMS does not match this build" >&2
 		/usr/bin/diff -u "$root/packaging/SHA256SUMS" "$dist/SHA256SUMS" >&2 || true
