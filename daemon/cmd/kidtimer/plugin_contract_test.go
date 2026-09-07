@@ -147,6 +147,15 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentModel, "Parent Pin", "settings pin row")
 	mustContain(t, parentModel, "Required for the controls. Use it to make changes on the kids computer.", "pin why")
 	mustContain(t, parentPanel, "Change", "pin change")
+	if strings.Contains(readPlugin(t, root, "ParentPanel.qml"), "onOpenedChanged") {
+		t.Fatal("ParentPanel is an Item; opened lives on the host widget")
+	}
+	applyRole := readPlugin(t, root, "helpers/apply-role.sh")
+	hereIdx := strings.Index(applyRole, "$here/kidtimer")
+	destIdx := strings.Index(applyRole, "[[ -x $dest ]]")
+	if hereIdx < 0 || destIdx < 0 || hereIdx > destIdx {
+		t.Fatal("apply-role must prefer the plugin binary over a leftover ~/.local/bin/kidtimer")
+	}
 	mustContain(t, parentPanel, "model: track.blocks", "activity on the track")
 	mustContain(t, parentPanel, "color: root.accent", "activity uses theme accent")
 	mustContain(t, parentPanel, "function blockLeft", "track grows min width left of now")

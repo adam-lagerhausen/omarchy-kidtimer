@@ -77,10 +77,6 @@ Item {
     }
   }
 
-  onOpenedChanged: {
-    if (root.opened) root.nowPtr = new Date()
-  }
-
   Timer {
     interval: 60000
     running: hostWidget && hostWidget.opened

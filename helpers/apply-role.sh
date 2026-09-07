@@ -13,15 +13,15 @@ fi
 
 need_bin() {
   local dest=$1
-  if [[ -x $dest ]]; then
-    return 0
-  fi
+  /usr/bin/mkdir -p -- "$(dirname -- "$dest")"
   if [[ -x $here/kidtimer ]]; then
     /usr/bin/install -m 0755 "$here/kidtimer" "$dest"
     return 0
   fi
+  if [[ -x $dest ]]; then
+    return 0
+  fi
   if command -v go >/dev/null 2>&1 && [[ -f $here/go.mod ]]; then
-    /usr/bin/mkdir -p -- "$(dirname -- "$dest")"
     (cd "$here" && go build -o "$dest" ./daemon/cmd/kidtimer)
     return 0
   fi
