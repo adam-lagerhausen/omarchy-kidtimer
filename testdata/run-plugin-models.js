@@ -441,6 +441,17 @@ assertEqual(kid.barLabel({ focused_app: "minecraft", groups: { fun: 3600 } }), "
 assertEqual(kid.askBlocked({ bedtime_active: true }), false, "ask open bedtime")
 assertEqual(kid.askBlocked({ parent_locked: true }), false, "ask open lock")
 assertEqual(kid.askBlocked({ groups: { fun: 0 } }), false, "ask open at empty")
+assertEqual(kid.panelShowsAsk("home"), true, "ask on home")
+assertEqual(kid.panelShowsAsk(kid.panelKind({ bedtime_active: true })), true, "ask on bedtime panel")
+assertEqual(kid.panelShowsAsk(kid.panelKind({ parent_locked: true })), true, "ask on lock panel")
+assertEqual(kid.panelShowsAsk(kid.panelKind({ bedtime_active: true, parent_locked: true })), true, "ask when bedtime wins")
+assertEqual(kid.panelShowsAsk("sheet"), false, "ask sheet is not the cover")
+assertEqual(kid.overlayCancel(), {
+  step: "cover",
+  pinDigits: "",
+  pinWrong: false,
+  chosenMinutes: 30
+}, "overlay pin cancel")
 assertEqual(kid.askBlocked({ mode: "freetime" }), false, "ask open in leftover mode")
 assertEqual(kid.clockEmpty({ groups: { fun: 0 } }), true, "empty clock")
 assertEqual(kid.clockEmpty({ groups: { fun: 1 } }), false, "has remaining")
