@@ -8,16 +8,18 @@ needles=(
 paths=(
 	spec.md
 	packaging
-	plugin-parent
-	plugin-kid
 	README.md
 	CONTRIBUTING.md
 	SECURITY.md
-	.cursor
 	testdata
 	docs/parent-look.md
 	daemon
 	.github
+	BarWidget.qml
+	Panel.qml
+	Overlay.qml
+	helpers
+	manifest.json
 )
 hit=0
 for needle in "${needles[@]}"; do

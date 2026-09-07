@@ -1,4 +1,0 @@
-{
-  "name": "Kidtimer",
-  "install": "cd daemon && go mod download && go build ./..."
-}

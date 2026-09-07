@@ -20,8 +20,8 @@ function assertEqual(got, want, msg) {
   }
 }
 
-const kid = load("plugin-kid/KidModel.js")
-const parent = load("plugin-parent/ParentModel.js")
+const kid = load("KidModel.js")
+const parent = load("ParentModel.js")
 
 const classicPiles = [
   { id: "minecraft", name: "Games" },
@@ -591,7 +591,7 @@ assertEqual(kid.nudgeOverlayAskMinutes(30, 10), 40, "overlay ask nudge up")
 assertEqual(kid.pinApprovePayload("1234", "ask-1"), { pin: "1234", ask_id: "ask-1" }, "pin approve payload")
 assertEqual(kid.pinGrantPayload("1234", 600), { pin: "1234", seconds: 600 }, "pin grant payload")
 assertEqual(kid.kidSettingsFromShell({
-  bar: { layout: { right: [{ id: "kidtimer.kid", url: "http://x:8742/", askToken: "a", readToken: "r" }] } }
+  bar: { layout: { right: [{ id: "kidtimer", url: "http://x:8742/", askToken: "a", readToken: "r" }] } }
 }).url, "http://x:8742", "shell kid url")
 assertEqual(kid.parseStatus({ parent_pin_set: true, overlay: true }).parent_pin_set, true, "parse pin set")
 assertEqual(home.lockArmed, true, "fixture has household pin")

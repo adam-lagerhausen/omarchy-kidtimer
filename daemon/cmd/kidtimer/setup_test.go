@@ -2,9 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,12 +29,19 @@ func TestSetupParentLeavesBankAlone(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(env.Home, ".local", "bin", "kidtimer")); err != nil {
 		t.Fatal("parent binary")
 	}
-	dest, err := os.Readlink(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.parent"))
-	if err != nil || !strings.Contains(dest, "plugin-parent") {
-		t.Fatalf("plugin %s %v", dest, err)
+	plug := filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer", "manifest.json")
+	if _, err := os.Stat(plug); err != nil {
+		if dest, lerr := os.Readlink(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer")); lerr != nil {
+			t.Fatalf("plugin %v %v", err, lerr)
+		} else if dest == "" {
+			t.Fatalf("plugin dest %s", dest)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.kid")); err == nil {
 		t.Fatal("parent setup must not install kid plugin")
+	}
+	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.parent")); err == nil {
+		t.Fatal("parent setup must not leave old parent plugin")
 	}
 	if _, err := os.Stat(filepath.Join(env.Home, ".local", "share", "kidtimer")); err != nil {
 		t.Fatal("household dir")
@@ -47,7 +51,7 @@ func TestSetupParentLeavesBankAlone(t *testing.T) {
 		t.Fatalf("parent role %v %v", role, err)
 	}
 	ids := widgetIDs(t, filepath.Join(env.Home, ".config", "omarchy", "shell.json"))
-	if strings.Contains(ids, "kidtimer.kid") || !strings.Contains(ids, "kidtimer.parent") {
+	if strings.Contains(ids, "kidtimer.kid") || strings.Contains(ids, "kidtimer.parent") || !strings.Contains(ids, `"kidtimer"`) && !strings.Contains(ids, "kidtimer") {
 		t.Fatalf("widgets %s", ids)
 	}
 	if !strings.Contains(ids, filepath.Join(env.Home, ".local", "bin", "kidtimer")) {
@@ -97,7 +101,7 @@ func TestSetupParentRemovesAllowanceChip(t *testing.T) {
 	if strings.Contains(ids, "allowance.parent") {
 		t.Fatalf("widget leftover %s", ids)
 	}
-	if !strings.Contains(ids, "kidtimer.parent") {
+	if !strings.Contains(ids, "kidtimer") {
 		t.Fatalf("kidtimer widget %s", ids)
 	}
 }
@@ -126,6 +130,13 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.parent")); err == nil {
 		t.Fatal("kid setup must not install parent plugin")
 	}
+	if _, err := os.Stat(filepath.Join(env.Home, ".local", "share", "kidtimer", "kid-bar.json")); err != nil {
+		t.Fatal("kid-bar tokens")
+	}
+	role, err := household.LoadRole(filepath.Join(env.Home, ".local", "share", "kidtimer"))
+	if err != nil || role != reverse.RoleKid {
+		t.Fatalf("kid role %v %v", role, err)
+	}
 	raw, err := os.ReadFile(filepath.Join(env.Home, ".config", "omarchy", "shell.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -136,18 +147,25 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	}
 	var kid map[string]any
 	for _, w := range widgets(doc) {
-		if str(w["id"]) == "kidtimer.kid" {
+		if str(w["id"]) == "kidtimer" {
 			kid = w
 		}
 	}
-	if kid == nil || str(kid["readToken"]) == "" || str(kid["askToken"]) == "" {
+	if kid == nil {
 		t.Fatalf("kid widget: %s", raw)
+	}
+	if str(kid["readToken"]) != "" || str(kid["askToken"]) != "" {
+		t.Fatal("tokens must not live in shell.json")
+	}
+	bar, err := readJSON(filepath.Join(env.Home, ".local", "share", "kidtimer", "kid-bar.json"))
+	if err != nil || str(bar["readToken"]) == "" || str(bar["askToken"]) == "" {
+		t.Fatalf("kid-bar: %v %v", bar, err)
 	}
 	if str(kid["kidBin"]) != filepath.Join(root, "usr", "local", "bin", "kidtimer") {
 		t.Fatalf("kidBin %v", kid["kidBin"])
 	}
-	if str(kid["url"]) != "http://127.0.0.1:8742" {
-		t.Fatalf("url %v", kid["url"])
+	if str(bar["url"]) != "http://127.0.0.1:8742" {
+		t.Fatalf("url %v", bar["url"])
 	}
 	cfg, err := os.ReadFile(filepath.Join(root, "etc", "kidtimer", "config.toml"))
 	if err != nil {
@@ -235,9 +253,8 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	if err := os.WriteFile(shell, []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.kid")); err != nil {
-		t.Fatal(err)
-	}
+	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer"))
+	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.kid"))
 	if err := os.Remove(filepath.Join(root, "etc", "systemd", "system", "kidtimer.service")); err != nil {
 		t.Fatal(err)
 	}
@@ -253,15 +270,20 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	}
 	var kid map[string]any
 	for _, w := range widgets(doc) {
-		if str(w["id"]) == "kidtimer.kid" {
+		if str(w["id"]) == "kidtimer" {
 			kid = w
 		}
 	}
-	if kid == nil || str(kid["readToken"]) == "" {
+	if kid == nil {
 		t.Fatalf("repaired widget: %v", doc)
 	}
-	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.kid")); err != nil {
-		t.Fatal("repaired plugin")
+	if _, err := os.Stat(filepath.Join(env.Home, ".local", "share", "kidtimer", "kid-bar.json")); err != nil {
+		t.Fatal("repaired kid-bar")
+	}
+	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer", "manifest.json")); err != nil {
+		if _, lerr := os.Lstat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer")); lerr != nil {
+			t.Fatal("repaired plugin")
+		}
 	}
 	if _, err := os.Stat(filepath.Join(root, "etc", "systemd", "system", "kidtimer.service")); err != nil {
 		t.Fatal("repaired unit")
@@ -274,32 +296,22 @@ func TestSetupKidRepairsStaleTokens(t *testing.T) {
 	if err := setupKid(env); err != nil {
 		t.Fatal(err)
 	}
-	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
-	if err := ensureWidget(shell, "kidtimer.kid", map[string]any{
-		"url": "http://127.0.0.1:8742", "readToken": "dead", "askToken": "dead",
-	}); err != nil {
+	if err := writeKidBar(filepath.Join(env.Home, ".local", "share", "kidtimer"), "dead", "dead"); err != nil {
 		t.Fatal(err)
 	}
 	if err := setupKid(env); err != nil {
 		t.Fatal(err)
 	}
-	doc, err := readJSON(shell)
+	doc, err := readJSON(filepath.Join(env.Home, ".local", "share", "kidtimer", "kid-bar.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, w := range widgets(doc) {
-		if str(w["id"]) != "kidtimer.kid" {
-			continue
-		}
-		if str(w["readToken"]) == "dead" || str(w["askToken"]) == "dead" {
-			t.Fatal("stale tokens must be reminted")
-		}
-		if str(w["readToken"]) == "" || str(w["askToken"]) == "" {
-			t.Fatal("missing remint")
-		}
-		return
+	if str(doc["readToken"]) == "dead" || str(doc["askToken"]) == "dead" {
+		t.Fatal("stale tokens must be reminted")
 	}
-	t.Fatal("kid widget")
+	if str(doc["readToken"]) == "" || str(doc["askToken"]) == "" {
+		t.Fatal("missing remint")
+	}
 }
 
 func TestMintKidBarAfterPartialSetup(t *testing.T) {
@@ -442,6 +454,9 @@ func TestInstallScriptParentHasNoSudo(t *testing.T) {
 	if !strings.Contains(body, "/usr/local/share/kidtimer") {
 		t.Fatal("kid share dir")
 	}
+	if !strings.Contains(body, "manifest.json") {
+		t.Fatal("root plugin manifest")
+	}
 }
 
 func TestBootstrapScriptDoesNotGuessRole(t *testing.T) {
@@ -450,31 +465,14 @@ func TestBootstrapScriptDoesNotGuessRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(raw)
-	if !strings.Contains(body, "/dev/tty") {
-		t.Fatal("must ask on /dev/tty")
+	if !strings.Contains(body, "omarchy plugin add") {
+		t.Fatal("must point at plugin add")
 	}
-	if !strings.Contains(body, "releases/download/latest") {
-		t.Fatal("must fetch the latest pack")
+	if strings.Contains(body, "curl") || strings.Contains(body, "| bash") {
+		t.Fatal("must not pipe curl to a shell")
 	}
-	if !strings.Contains(body, "SHA256SUMS") {
-		t.Fatal("must check SHA256SUMS")
-	}
-	if strings.Contains(body, `exec sudo "$0"`) {
-		t.Fatal("curl pipe cannot re-exec $0")
-	}
-	if !strings.Contains(body, `sudo bash "$dir/install.sh" kid`) {
-		t.Fatal("kid must sudo the unpacked install.sh")
-	}
-	if strings.Count(body, "sudo") != 1 {
-		t.Fatalf("sudo only for kid, got %d", strings.Count(body, "sudo"))
-	}
-	script := filepath.Join(repoRoot(t), "install.sh")
-	out, err := exec.Command("bash", script, "nope").CombinedOutput()
-	if err == nil {
-		t.Fatal("expected usage error")
-	}
-	if !strings.Contains(string(out), "parent or kid") {
-		t.Fatalf("usage: %s", out)
+	if strings.Contains(body, "releases/download/latest") {
+		t.Fatal("must not fetch latest")
 	}
 }
 
@@ -493,65 +491,13 @@ func TestPackScriptWritesSums(t *testing.T) {
 }
 
 func TestBootstrapFetchesPack(t *testing.T) {
-	arch := bootstrapArch(t)
-	dist := t.TempDir()
-	packName := "kidtimer-linux-" + arch
-	packDir := filepath.Join(dist, packName)
-	if err := os.Mkdir(packDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	marker := filepath.Join(t.TempDir(), "ran")
-	stub := fmt.Sprintf("#!/bin/bash\nprintf '%%s\\n' \"$1\" > %s\n", strconv.Quote(marker))
-	if err := os.WriteFile(filepath.Join(packDir, "install.sh"), []byte(stub), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	tarPath := filepath.Join(dist, packName+".tar.gz")
-	tar := exec.Command("tar", "-C", dist, "-czf", tarPath, packName)
-	if out, err := tar.CombinedOutput(); err != nil {
-		t.Fatalf("tar: %v %s", err, out)
-	}
-	sum := exec.Command("sha256sum", packName+".tar.gz")
-	sum.Dir = dist
-	sumOut, err := sum.CombinedOutput()
-	if err != nil {
-		t.Fatalf("sha256sum: %v %s", err, sumOut)
-	}
-	if err := os.WriteFile(filepath.Join(dist, "SHA256SUMS"), sumOut, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	srv := httptest.NewServer(http.FileServer(http.Dir(dist)))
-	t.Cleanup(srv.Close)
-
 	script := filepath.Join(repoRoot(t), "install.sh")
-	cmd := exec.Command("bash", script, "parent")
-	cmd.Env = append(os.Environ(), "KIDTIMER_PACK_URL="+srv.URL+"/"+packName+".tar.gz")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("install: %v %s", err, out)
+	out, err := exec.Command("bash", script, "parent").CombinedOutput()
+	if err == nil {
+		t.Fatal("expected plugin-add pointer")
 	}
-	got, err := os.ReadFile(marker)
-	if err != nil {
-		t.Fatalf("inner install did not run: %v %s", err, out)
-	}
-	if strings.TrimSpace(string(got)) != "parent" {
-		t.Fatalf("role %q", got)
-	}
-}
-
-func bootstrapArch(t *testing.T) string {
-	t.Helper()
-	out, err := exec.Command("uname", "-m").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	switch strings.TrimSpace(string(out)) {
-	case "x86_64", "amd64":
-		return "amd64"
-	case "aarch64", "arm64":
-		return "arm64"
-	default:
-		t.Fatalf("arch %s", out)
-		return ""
+	if !strings.Contains(string(out), "omarchy plugin add") {
+		t.Fatalf("usage: %s", out)
 	}
 }
 

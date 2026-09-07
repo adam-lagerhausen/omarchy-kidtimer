@@ -122,14 +122,35 @@ func findRepo(start string) (string, error) {
 			dir = next
 		}
 	}
-	return "", fmt.Errorf("could not find omarchy-kidtimer repo (plugin-parent + packaging)")
+	return "", fmt.Errorf("could not find omarchy-kidtimer repo (manifest.json + packaging)")
 }
 
 func isRepo(dir string) bool {
-	_, err1 := os.Stat(filepath.Join(dir, "plugin-parent", "manifest.json"))
-	_, err2 := os.Stat(filepath.Join(dir, "plugin-kid", "manifest.json"))
-	_, err3 := os.Stat(filepath.Join(dir, "packaging", "config.kid.toml"))
+	_, err1 := os.Stat(filepath.Join(dir, "manifest.json"))
+	_, err2 := os.Stat(filepath.Join(dir, "packaging", "config.kid.toml"))
+	_, err3 := os.Stat(filepath.Join(dir, "BarWidget.qml"))
 	return err1 == nil && err2 == nil && err3 == nil
+}
+
+func pluginDest(home string) string {
+	return filepath.Join(home, ".config", "omarchy", "plugins", "kidtimer")
+}
+
+func retireOldPlugins(home, shell string) error {
+	for _, id := range []string{"kidtimer.parent", "kidtimer.kid", "allowance.parent"} {
+		_ = os.RemoveAll(filepath.Join(home, ".config", "omarchy", "plugins", id))
+		if err := removeWidget(shell, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func placePlugin(repo, dest string) error {
+	if st, err := os.Stat(filepath.Join(dest, "manifest.json")); err == nil && !st.IsDir() {
+		return nil
+	}
+	return linkPlugin(repo, dest)
 }
 
 func setupParent(env setupEnv) error {
@@ -140,10 +161,9 @@ func setupParent(env setupEnv) error {
 	if err := installBinary(bin); err != nil {
 		return err
 	}
-	if err := linkPlugin(filepath.Join(env.Repo, "plugin-parent"), filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.parent")); err != nil {
+	if err := placePlugin(env.Repo, pluginDest(env.Home)); err != nil {
 		return err
 	}
-	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "allowance.parent"))
 	share := filepath.Join(env.Home, ".local", "share", "kidtimer")
 	if err := os.MkdirAll(share, 0o700); err != nil {
 		return err
@@ -155,12 +175,12 @@ func setupParent(env setupEnv) error {
 		return err
 	}
 	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
-	if err := ensureWidget(shell, "kidtimer.parent", map[string]any{
-		"parentBin": bin,
-	}); err != nil {
+	if err := retireOldPlugins(env.Home, shell); err != nil {
 		return err
 	}
-	return removeWidget(shell, "allowance.parent")
+	return ensureWidget(shell, "kidtimer", map[string]any{
+		"parentBin": bin,
+	})
 }
 
 func (env setupEnv) etc() string {
@@ -216,14 +236,25 @@ func setupKid(env setupEnv) error {
 	if err != nil {
 		return err
 	}
-	if err := linkPlugin(filepath.Join(env.Repo, "plugin-kid"), filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.kid")); err != nil {
+	if err := placePlugin(env.Repo, pluginDest(env.Home)); err != nil {
 		return err
 	}
-	if err := ensureWidget(filepath.Join(env.Home, ".config", "omarchy", "shell.json"), "kidtimer.kid", map[string]any{
-		"url":       "http://127.0.0.1:8742",
-		"readToken": readTok,
-		"askToken":  askTok,
-		"kidBin":    env.kidBin(),
+	share := filepath.Join(env.Home, ".local", "share", "kidtimer")
+	if err := os.MkdirAll(share, 0o700); err != nil {
+		return err
+	}
+	if err := household.WriteRole(share, reverse.RoleKid); err != nil {
+		return err
+	}
+	if err := writeKidBar(share, readTok, askTok); err != nil {
+		return err
+	}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
+	if err := retireOldPlugins(env.Home, shell); err != nil {
+		return err
+	}
+	if err := ensureWidget(shell, "kidtimer", map[string]any{
+		"kidBin": env.kidBin(),
 	}); err != nil {
 		return err
 	}
@@ -412,7 +443,7 @@ func mintKidBar(dbPath, cfgPath, home string) (readTok, askTok string, err error
 			return "", "", err
 		}
 	}
-	if r, a, ok := existingKidTokens(filepath.Join(home, ".config", "omarchy", "shell.json")); ok {
+	if r, a, ok := existingKidTokens(home); ok {
 		if _, err := b.LookupSecret(r); err == nil {
 			if _, err := b.LookupSecret(a); err == nil {
 				return r, a, nil
@@ -431,13 +462,35 @@ func mintKidBar(dbPath, cfgPath, home string) (readTok, askTok string, err error
 	return readTok, askTok, nil
 }
 
-func existingKidTokens(shell string) (readTok, askTok string, ok bool) {
-	doc, err := readJSON(shell)
+func writeKidBar(share, readTok, askTok string) error {
+	doc := map[string]any{
+		"url":       "http://127.0.0.1:8742",
+		"readToken": readTok,
+		"askToken":  askTok,
+	}
+	raw, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(filepath.Join(share, "kid-bar.json"), append(raw, '\n'), 0o600)
+}
+
+func existingKidTokens(home string) (readTok, askTok string, ok bool) {
+	share := filepath.Join(home, ".local", "share", "kidtimer", "kid-bar.json")
+	if doc, err := readJSON(share); err == nil {
+		readTok = str(doc["readToken"])
+		askTok = str(doc["askToken"])
+		if readTok != "" && askTok != "" {
+			return readTok, askTok, true
+		}
+	}
+	doc, err := readJSON(filepath.Join(home, ".config", "omarchy", "shell.json"))
 	if err != nil {
 		return "", "", false
 	}
 	for _, w := range widgets(doc) {
-		if str(w["id"]) != "kidtimer.kid" {
+		id := str(w["id"])
+		if id != "kidtimer.kid" && id != "kidtimer" {
 			continue
 		}
 		readTok = str(w["readToken"])
@@ -604,7 +657,7 @@ func removeWidget(shell, id string) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return err
+		return nil
 	}
 	bar, _ := doc["bar"].(map[string]any)
 	if bar == nil {

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "kidtimer",
+  "name": "Kidtimer",
+  "version": "1.0.0",
+  "author": "Adam Lagerhausen",
+  "license": "MIT",
+  "description": "Daily time limit and bedtime for a kid's Omarchy computer, controlled from yours.",
+  "kinds": ["bar-widget", "service"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Overlay.qml"
+  },
+  "barWidget": {
+    "displayName": "Kidtimer",
+    "category": "Time",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

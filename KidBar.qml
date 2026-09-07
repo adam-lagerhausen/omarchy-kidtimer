@@ -50,8 +50,7 @@ BarWidget {
       "omarchy-notification-send",
       "--app-name", "Kidtimer",
       "Kidtimer",
-      body,
-      "--exec", "omarchy-shell", "shell", "summon", "kidtimer.kid"
+      body
     ])
   }
 

@@ -26,29 +26,25 @@ This is unofficial and not affiliated with Omarchy.
 
 You need two Omarchy 4 computers on the same home network. A coffee-shop or open guest network is not enough. See [Limits](#limits).
 
-Do yours first, then the kid computers. Your desk is already on the network when they come up, so it can claim them. No pairing codes to copy.
+Same plugin on both computers. Yours first, then theirs. No pairing codes.
 
-1. Open a terminal with Super + Return, the Windows key plus Enter.
-2. Paste this and press Enter:
+1. Open a terminal with Super + Return.
+2. Paste this:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/adam-lagerhausen/omarchy-kidtimer/master/install.sh | bash
+omarchy plugin add https://github.com/adam-lagerhausen/omarchy-kidtimer.git --enable
 ```
 
-The installer checks a checksum against the latest release. You can open that URL and read the script before running it.
+3. Click the Kidtimer chip. Pick **This is mine**.
+4. Sit at their computer. Same command. Click the chip. Pick **This is the kid's**. It will ask for your password so the timer can run in the background.
 
-Do not run `omarchy plugin add` on this repo URL. That path does not work.
-
-3. When it asks, pick Mine on yours. On a kid computer, pick The kid's.
-4. On the kid's computer it may ask for your password.
-
-If the bar does not change after install, run `omarchy restart shell`.
-
-Left-click the Kidtimer chip to open the panel. You should see their computer and the minutes left. Right-click the chip to grant +10.
+On yours, the tape waits until their computer shows up. Left-click the chip to open it. Right-click grants +10.
 
 Set a 4-digit PIN next. Until one exists, time still counts but nothing covers their screen. The Lock square does nothing.
 
-To update later, run the same install command again. It pulls the latest release. Kid computers you already claimed stay claimed, including if you came from Allowance.
+If you tapped the wrong choice, open the chip and switch. Picking the kid's computer asks for the password again.
+
+To update later: `omarchy plugin update kidtimer`. Kid computers you already claimed stay claimed, including if you came from Allowance.
 
 ## How it works
 
@@ -170,24 +166,19 @@ The kid computer talks on your private network with no encryption, on port 8742.
 
 ## Take it off
 
-On the kid computer:
+On each computer:
+
+```
+omarchy plugin remove kidtimer
+```
+
+On a kid computer, also:
 
 ```
 sudo systemctl disable --now kidtimer
-rm -rf ~/.config/omarchy/plugins/kidtimer.kid
 ```
 
-On yours:
-
-```
-rm -rf ~/.config/omarchy/plugins/kidtimer.parent
-```
-
-Then `omarchy restart shell` on both.
-
-If the chip stays, take the kidtimer line out of `~/.config/omarchy/shell.json` and restart the shell.
-
-Leftovers on the kid box: `/etc/kidtimer` and `/var/lib/kidtimer`. On yours: `~/.local/share/kidtimer`.
+Leftovers that stay until you delete them: `/etc/kidtimer` and `/var/lib/kidtimer` on the kid box, `~/.local/share/kidtimer` and `~/.local/bin/kidtimer` on yours.
 
 ## From source
 
@@ -208,6 +199,6 @@ Then from that checkout, run `./kidtimer setup parent` on the parent desk, or `s
 
 ## License
 
-The daemon is MIT. The text is in `LICENSE`. IBM Plex Mono is OFL, not MIT. That text is in `plugin-parent/fonts/OFL.txt`.
+The daemon is MIT. The text is in `LICENSE`. IBM Plex Mono is OFL, not MIT. That text is in `fonts/OFL.txt`.
 
 Report a lock bypass privately. See `SECURITY.md`.

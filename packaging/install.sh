@@ -23,12 +23,12 @@ fi
 here=$(cd "$(dirname "$0")" && pwd)
 
 repo=""
-if [ -f "$here/plugin-parent/manifest.json" ] && [ -f "$here/plugin-kid/manifest.json" ] && [ -f "$here/packaging/config.kid.toml" ]; then
+if [ -f "$here/manifest.json" ] && [ -f "$here/packaging/config.kid.toml" ]; then
 	repo=$here
-elif [ -f "$here/../plugin-parent/manifest.json" ] && [ -f "$here/../plugin-kid/manifest.json" ] && [ -f "$here/../packaging/config.kid.toml" ]; then
+elif [ -f "$here/../manifest.json" ] && [ -f "$here/../packaging/config.kid.toml" ]; then
 	repo=$(cd "$here/.." && pwd)
 else
-	echo "could not find plugin-parent, plugin-kid, and packaging" >&2
+	echo "could not find Kidtimer (manifest.json + packaging)" >&2
 	exit 1
 fi
 
@@ -65,7 +65,8 @@ fi
 mkdir -p "$dest"
 dest=$(cd "$dest" && pwd)
 if [ "$repo" != "$dest" ]; then
-	cp -a "$repo/plugin-parent" "$repo/plugin-kid" "$repo/packaging" "$dest/"
+	cp -a "$repo/packaging" "$dest/"
+	cp -a "$repo/manifest.json" "$repo/BarWidget.qml" "$repo/Overlay.qml" "$dest/"
 fi
 if [ "$bin" != "$dest/kidtimer" ]; then
 	cp -a "$bin" "$dest/kidtimer"

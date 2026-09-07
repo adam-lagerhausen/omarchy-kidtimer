@@ -3,12 +3,10 @@ import qs.Commons
 import qs.Ui
 import "ParentModel.js" as Model
 
-Panel {
+Item {
   id: root
-  moduleName: "kidtimer.parent"
-  ipcTarget: "kidtimer.parent"
-  manageIpc: false
 
+  property var bar: null
   property var anchorItem: null
   property var hostWidget: null
   property var snapshots: []
@@ -22,34 +20,8 @@ Panel {
   readonly property var barIdentity: hostWidget || root
   readonly property var tape: Model.projectTape(snapshots, selectedIndex, chrome, nowPtr, { pinSet: householdPinSet, hour12: root.hour12 })
   readonly property real panelWidth: 340
-
-  function open() {
-    root.controller.show()
-    Qt.callLater(function() {
-      if (root.opened) setCenterHoverRevealSuppressed(true)
-    })
-  }
-
-  function close() {
-    setCenterHoverRevealSuppressed(false)
-    root.controller.hide()
-  }
-
-  function toggle() {
-    if (root.opened) root.close()
-    else root.open()
-  }
-
-  function switchPanel(direction) {
-    if (root.bar && typeof root.bar.switchPanelFrom === "function")
-      return root.bar.switchPanelFrom(root.barIdentity, direction)
-    return false
-  }
-
-  function setCenterHoverRevealSuppressed(value) {
-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
-      root.bar.centerHoverRevealSuppressed = value
-  }
+  width: parent ? parent.width : panelWidth
+  implicitHeight: paper.implicitHeight
 
   function setPage(id) {
     if (id === "settings") root.chrome = Model.chromeSettings()
@@ -111,51 +83,28 @@ Panel {
 
   Timer {
     interval: 60000
-    running: root.opened
+    running: hostWidget && hostWidget.opened
     repeat: true
     triggeredOnStart: true
     onTriggered: root.nowPtr = new Date()
   }
 
-  KeyboardPanel {
-    id: panel
-    anchorItem: root.anchorItem
-    owner: root.barIdentity
-    bar: root.bar
-    open: root.opened
-    centerOnBar: false
-    padding: 0
-    focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(
-      root.panelWidth
-      + Border.left(panel.borderSpec)
-      + Border.right(panel.borderSpec)
-    )
-    contentHeight: panel.fittedContentHeight(Math.max(1, paper.implicitHeight))
-
-    PanelKeyCatcher {
-      id: keyCatcher
-      anchors.fill: parent
-      blocked: paper.searchFocused
-      onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
-
-      Flickable {
-        id: flick
-        anchors.fill: parent
-        contentWidth: width
-        contentHeight: paper.implicitHeight
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        interactive: paper.implicitHeight > height
-        Tape {
-          id: paper
-          width: parent.width
-          tape: root.tape
-          bar: root.bar
-          onAct: function (ev) { root.fire(ev) }
-        }
-      }
+  Column {
+    width: parent.width
+    Tape {
+      id: paper
+      width: parent.width
+      tape: root.tape
+      bar: root.bar
+      onAct: function (ev) { root.fire(ev) }
+    }
+    LookBtn {
+      width: parent.width - 32
+      x: 16
+      text: "This is the kid's computer"
+      ghost: true
+      fontFamily: paper.plex
+      onClicked: if (root.hostWidget) root.hostWidget.pickRole("kid")
     }
   }
 }

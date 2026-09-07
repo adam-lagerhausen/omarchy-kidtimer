@@ -11,6 +11,7 @@ Item {
   property var shell: null
   property var settings: ({})
   property var statusJson: ({})
+  property string role: ""
   property var bank: ({ url: "http://127.0.0.1:8742", readToken: "", askToken: "" })
   property string face: ""
   property string step: "cover"
@@ -21,7 +22,7 @@ Item {
   property bool pinWrong: false
   property bool askQueued: false
 
-  readonly property bool shown: Model.overlayVisible(statusJson)
+  readonly property bool shown: root.role === "kid" && Model.overlayVisible(statusJson)
   readonly property bool waiting: askQueued || Model.overlayAskWaiting(statusJson)
   readonly property color ink: Color.foreground
   readonly property color paper: Color.background
@@ -33,15 +34,24 @@ Item {
     return String(bank.url || "http://127.0.0.1:8742").replace(/\/$/, "")
   }
 
-  function loadShell(raw) {
+  function loadBank(raw) {
     try {
-      bank = Model.kidSettingsFromShell(JSON.parse(raw))
+      bank = Model.parseKidBank(JSON.parse(raw))
     } catch (e) {
-      bank = Model.kidSettingsFromShell({})
+      bank = Model.parseKidBank({})
     }
   }
 
+  function applyRole(raw) {
+    var next = String(raw || "").replace(/\s+/g, "")
+    if (next !== "kid") next = ""
+    if (root.role === next) return
+    if (root.role === "kid" && next !== "kid") leaveKidProof()
+    root.role = next
+  }
+
   function poll() {
+    if (root.role !== "kid") return
     var req = new XMLHttpRequest()
     req.open("GET", bankUrl() + "/v1/status")
     req.setRequestHeader("Authorization", "Bearer " + String(bank.readToken || ""))
@@ -154,17 +164,48 @@ Item {
   Component.onDestruction: leaveKidProof()
 
   FileView {
-    id: shellFile
-    path: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
+    id: roleFile
+    path: Quickshell.env("HOME") + "/.local/share/kidtimer/role"
     watchChanges: true
     printErrors: false
-    onLoaded: root.loadShell(text())
-    onFileChanged: shellFile.reload()
+    preload: false
+    blockAllReads: true
+    onFileChanged: roleRead.running = true
+    Component.onCompleted: roleRead.running = true
+  }
+
+  FileView {
+    id: bankFile
+    path: Quickshell.env("HOME") + "/.local/share/kidtimer/kid-bar.json"
+    watchChanges: true
+    printErrors: false
+    preload: false
+    blockAllReads: true
+    onFileChanged: bankRead.running = true
+    Component.onCompleted: bankRead.running = true
+  }
+
+  Process {
+    id: roleRead
+    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/role"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { root.applyRole(data) }
+    }
+  }
+
+  Process {
+    id: bankRead
+    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/kid-bar.json"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { root.loadBank(data) }
+    }
   }
 
   Timer {
     interval: 1000
-    running: true
+    running: root.role === "kid"
     repeat: true
     triggeredOnStart: true
     onTriggered: root.poll()
@@ -173,10 +214,10 @@ Item {
   Process { id: hyprProc }
   Process {
     id: stayProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        if (text.indexOf("created") >= 0) root.stayAwakeOurs = true
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) {
+        if (String(data).indexOf("created") >= 0) root.stayAwakeOurs = true
       }
     }
   }
@@ -205,6 +246,7 @@ Item {
         spacing: 18
 
         Text {
+          textFormat: Text.PlainText
           visible: root.step === "cover" && root.face === "locked"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
@@ -216,6 +258,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: root.step === "cover" && root.face === "bedtime"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
@@ -245,6 +288,7 @@ Item {
             }
           }
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "lights out"
             color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.7)
@@ -255,6 +299,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: root.step === "cover" && root.face === "bedtime"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
@@ -265,6 +310,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: root.step === "cover" && root.face === "empty"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
@@ -288,6 +334,7 @@ Item {
             border.color: root.waiting ? root.dim : root.ink
             opacity: root.waiting ? 0.55 : 1
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: root.waiting ? "Waiting" : "Ask"
               color: root.waiting ? root.dim : root.ink
@@ -313,6 +360,7 @@ Item {
             border.width: 1
             border.color: root.ink
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: "Parent Pin"
               color: root.ink
@@ -333,6 +381,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: root.step === "pin"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
@@ -376,7 +425,8 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
-            Text { anchors.centerIn: parent; text: "−5"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+            Text {
+    textFormat: Text.PlainText anchors.centerIn: parent; text: "−5"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, -5)
@@ -385,6 +435,7 @@ Item {
           Column {
             anchors.centerIn: parent
             Text {
+              textFormat: Text.PlainText
               anchors.horizontalCenter: parent.horizontalCenter
               text: Model.overlayStepperLabel(root.chosenMinutes)
               color: root.ink
@@ -393,6 +444,7 @@ Item {
               font.bold: true
             }
             Text {
+              textFormat: Text.PlainText
               anchors.horizontalCenter: parent.horizontalCenter
               text: "min"
               color: root.dim
@@ -407,7 +459,8 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
-            Text { anchors.centerIn: parent; text: "+5"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+            Text {
+    textFormat: Text.PlainText anchors.centerIn: parent; text: "+5"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, 5)
@@ -423,6 +476,7 @@ Item {
           border.width: 1
           border.color: root.ink
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "Give time"
             color: root.ink
@@ -448,7 +502,8 @@ Item {
             border.width: 1
             border.color: root.ink
             opacity: root.chosenMinutes <= Model.OVERLAY_ASK_MIN ? 0.55 : 1
-            Text { anchors.centerIn: parent; text: "−10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+            Text {
+    textFormat: Text.PlainText anchors.centerIn: parent; text: "−10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, -10)
@@ -457,6 +512,7 @@ Item {
           Column {
             anchors.centerIn: parent
             Text {
+              textFormat: Text.PlainText
               anchors.horizontalCenter: parent.horizontalCenter
               text: Model.overlayAskStepperLabel(root.chosenMinutes)
               color: root.ink
@@ -465,6 +521,7 @@ Item {
               font.bold: true
             }
             Text {
+              textFormat: Text.PlainText
               anchors.horizontalCenter: parent.horizontalCenter
               text: "min"
               color: root.dim
@@ -480,7 +537,8 @@ Item {
             border.width: 1
             border.color: root.ink
             opacity: root.chosenMinutes >= Model.ASK_MAX ? 0.55 : 1
-            Text { anchors.centerIn: parent; text: "+10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+            Text {
+    textFormat: Text.PlainText anchors.centerIn: parent; text: "+10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, 10)
@@ -500,6 +558,7 @@ Item {
             border.width: 1
             border.color: root.ink
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: "Cancel"
               color: root.ink
@@ -524,6 +583,7 @@ Item {
             border.width: 1
             border.color: root.ink
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: "Ask"
               color: root.ink

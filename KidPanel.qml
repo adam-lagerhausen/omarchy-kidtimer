@@ -3,12 +3,10 @@ import qs.Commons
 import qs.Ui
 import "KidModel.js" as Model
 
-Panel {
+Item {
   id: root
-  moduleName: "kidtimer.kid"
-  ipcTarget: "kidtimer.kid"
-  manageIpc: false
 
+  property var bar: null
   property var anchorItem: null
   property var hostWidget: null
   property var statusJson: ({})
@@ -43,6 +41,17 @@ Panel {
     if (root.view === "bedtime") return "#7a82c4"
     return root.accent
   }
+  width: parent ? parent.width : 320
+  implicitHeight: Math.max(1, bodyHeight)
+
+  function setting(key, fallback) {
+    if (hostWidget && typeof hostWidget.setting === "function")
+      return hostWidget.setting(key, fallback)
+    var bank = hostWidget && hostWidget.kidBank
+    if (bank && key in bank) return bank[key]
+    return fallback
+  }
+
   readonly property real bodyHeight: {
     if (root.view === "sheet") return sheetColumn.implicitHeight
     if (root.view === "pin") return pinColumn.implicitHeight
@@ -51,33 +60,7 @@ Panel {
     return homeColumn.implicitHeight
   }
 
-  function open() {
-    root.controller.show()
-    Qt.callLater(function() {
-      if (root.opened) setCenterHoverRevealSuppressed(true)
-    })
-  }
 
-  function close() {
-    setCenterHoverRevealSuppressed(false)
-    root.controller.hide()
-  }
-
-  function toggle() {
-    if (root.opened) root.close()
-    else root.open()
-  }
-
-  function switchPanel(direction) {
-    if (root.bar && typeof root.bar.switchPanelFrom === "function")
-      return root.bar.switchPanelFrom(root.barIdentity, direction)
-    return false
-  }
-
-  function setCenterHoverRevealSuppressed(value) {
-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
-      root.bar.centerHoverRevealSuppressed = value
-  }
 
   onStatusJsonChanged: {
     var pending = Number(statusJson && statusJson.pending_ask_count) || 0
@@ -150,23 +133,9 @@ Panel {
     req.send(JSON.stringify(body))
   }
 
-  KeyboardPanel {
+  Item {
     id: panel
-    anchorItem: root.anchorItem
-    owner: root.barIdentity
-    bar: root.bar
-    open: root.opened
-    centerOnBar: false
-    focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(320))
-    contentHeight: panel.fittedContentHeight(root.bodyHeight)
-    borderSpec: Border.flat(root.panelLine, 2)
-
-    PanelKeyCatcher {
-      id: keyCatcher
-      anchors.fill: parent
-      onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
+    anchors.fill: parent
 
       Column {
         id: homeColumn
@@ -182,6 +151,7 @@ Panel {
           border.width: 1
           border.color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.55)
           Text {
+            textFormat: Text.PlainText
             id: bannerText
             anchors.left: parent.left
             anchors.right: parent.right
@@ -196,6 +166,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           width: parent.width
           text: root.clock.leftLabel
           color: root.clock.empty ? root.urgent : root.contentForeground
@@ -230,6 +201,15 @@ Panel {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           onClicked: root.openAsk()
+        }
+
+        LookBtn {
+          width: parent.width
+          text: "This is my computer"
+          ghost: true
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          onClicked: if (root.hostWidget) root.hostWidget.pickRole("parent")
         }
 
         Item {
@@ -267,6 +247,7 @@ Panel {
         spacing: Style.space(12)
 
         Text {
+          textFormat: Text.PlainText
           text: "Ask for more"
           color: root.dim
           font.family: root.contentFontFamily
@@ -294,6 +275,7 @@ Panel {
           Column {
             anchors.centerIn: parent
             Text {
+              textFormat: Text.PlainText
               anchors.horizontalCenter: parent.horizontalCenter
               text: String(root.chosenMinutes)
               color: root.contentForeground
@@ -302,6 +284,7 @@ Panel {
               font.bold: true
             }
             Text {
+              textFormat: Text.PlainText
               anchors.horizontalCenter: parent.horizontalCenter
               text: "min"
               color: root.dim
@@ -355,6 +338,7 @@ Panel {
         spacing: Style.space(12)
 
         Text {
+          textFormat: Text.PlainText
           text: root.pinWrong ? "wrong pin" : "Parent Pin"
           color: root.pinWrong ? root.urgent : root.dim
           font.family: root.contentFontFamily
@@ -440,6 +424,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           anchors.horizontalCenter: parent.horizontalCenter
           text: "locked"
           color: root.urgent
@@ -456,6 +441,7 @@ Panel {
         spacing: Style.space(12)
 
         Text {
+          textFormat: Text.PlainText
           text: "bedtime"
           color: "#c5c9ef"
           font.family: root.contentFontFamily
@@ -491,6 +477,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "lights out"
             color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.7)
@@ -502,6 +489,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           text: "until " + Model.bedtimeEnd(root.statusJson)
           color: root.contentForeground
           font.family: root.contentFontFamily
@@ -510,4 +498,4 @@ Panel {
       }
     }
   }
-}
+

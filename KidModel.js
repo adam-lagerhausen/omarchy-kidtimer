@@ -361,6 +361,15 @@ function overlayAskStepperLabel(minutes) {
   return String(clampOverlayAskMinutes(minutes))
 }
 
+function parseKidBank(raw) {
+  var src = raw || {}
+  var out = { url: "http://127.0.0.1:8742", readToken: "", askToken: "" }
+  if (src.url) out.url = String(src.url).replace(/\/$/, "")
+  if (src.readToken) out.readToken = String(src.readToken)
+  if (src.askToken) out.askToken = String(src.askToken)
+  return out
+}
+
 function kidSettingsFromShell(doc) {
   var out = { url: "http://127.0.0.1:8742", readToken: "", askToken: "" }
   if (!doc || !doc.bar || !doc.bar.layout) return out
@@ -370,7 +379,7 @@ function kidSettingsFromShell(doc) {
     var list = layout[names[n]] || []
     for (var i = 0; i < list.length; i++) {
       var row = list[i] || {}
-      if (row.id !== "kidtimer.kid") continue
+      if (row.id !== "kidtimer" && row.id !== "kidtimer.kid") continue
       if (row.url) out.url = String(row.url).replace(/\/$/, "")
       if (row.readToken) out.readToken = String(row.readToken)
       if (row.askToken) out.askToken = String(row.askToken)

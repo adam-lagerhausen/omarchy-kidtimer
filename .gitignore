@@ -8,6 +8,7 @@ dist/
 *.swp
 .audit/
 .grok/
+.cursor/
 scratch/parent-v1/
 scratch/
 docs/open-source-plan.md

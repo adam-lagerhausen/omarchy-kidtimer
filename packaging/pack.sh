@@ -12,7 +12,12 @@ pack_one() {
 	rm -rf "$out"
 	mkdir -p "$out"
 	CGO_ENABLED=0 GOOS=linux GOARCH=$goarch go build -trimpath -o "$out/$name" ./daemon/cmd/kidtimer
-	cp -a plugin-parent plugin-kid packaging "$out/"
+	cp -a packaging "$out/"
+	for f in manifest.json BarWidget.qml Panel.qml Overlay.qml Setup.qml ParentPanel.qml KidPanel.qml ParentBar.qml KidBar.qml ParentModel.js KidModel.js Tape.qml LookBtn.qml till-tape-host.qml eagle.jpg helpers fonts icons; do
+		if [ -e "$root/$f" ]; then
+			cp -a "$root/$f" "$out/"
+		fi
+	done
 	cp packaging/install.sh "$out/install.sh"
 	chmod 755 "$out/install.sh" "$out/$name"
 	tar -C "$dist" -czf "$out.tar.gz" "$name"

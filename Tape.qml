@@ -197,6 +197,7 @@ Rectangle {
           height: 14
           color: urgent
           Text {
+            textFormat: Text.PlainText
             id: bellN
             anchors.centerIn: parent
             text: String(t.bellCount)
@@ -233,6 +234,7 @@ Rectangle {
             color: t.kid.face.live ? accent : urgent
           }
           Text {
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             text: t.kid.face.caption
             color: coralKid ? urgent : quiet
@@ -240,6 +242,7 @@ Rectangle {
             font.pixelSize: 11
           }
           Text {
+            textFormat: Text.PlainText
             id: pickName
             text: t.kid.nameUp
             color: ink
@@ -302,6 +305,7 @@ Rectangle {
       visible: waitingHome
       spacing: 8
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         wrapMode: Text.WordWrap
         text: howTo.title
@@ -317,6 +321,7 @@ Rectangle {
           width: inner.width
           spacing: 0
           Text {
+            textFormat: Text.PlainText
             visible: !modelData.cmd
             width: parent.width
             wrapMode: Text.WordWrap
@@ -334,6 +339,7 @@ Rectangle {
             border.width: 1
             border.color: foreground
             Text {
+              textFormat: Text.PlainText
               id: cmdText
               x: 10
               y: 8
@@ -373,6 +379,7 @@ Rectangle {
               line: 0
               onClicked: root.act({ kind: "select", kidIndex: modelData.index })
               Text {
+                textFormat: Text.PlainText
                 id: pickLabel
                 width: parent.width
                 leftPadding: 10
@@ -409,6 +416,7 @@ Rectangle {
           width: parent.width - 20
           spacing: 6
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             wrapMode: Text.WordWrap
             text: adopt ? adopt.title : ""
@@ -418,6 +426,7 @@ Rectangle {
             font.weight: Font.DemiBold
           }
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             wrapMode: Text.WordWrap
             text: adopt ? adopt.body : ""
@@ -439,6 +448,7 @@ Rectangle {
                 height: 24
                 onClicked: root.act({ kind: modelData.kind })
                 Text {
+                  textFormat: Text.PlainText
                   anchors.centerIn: parent
                   text: modelData.label
                   color: parent.contentColor
@@ -474,6 +484,7 @@ Rectangle {
             width: parent.width - 20
             spacing: 6
             Text {
+              textFormat: Text.PlainText
               width: parent.width
               wrapMode: Text.WordWrap
               text: modelData.text
@@ -495,6 +506,7 @@ Rectangle {
                   height: 24
                   onClicked: root.act({ kind: modelData.kind, ask: modelData.ask })
                   Text {
+                    textFormat: Text.PlainText
                     anchors.centerIn: parent
                     text: modelData.label
                     color: parent.contentColor
@@ -519,6 +531,7 @@ Rectangle {
         width: parent.width
         height: 22
         Text {
+          textFormat: Text.PlainText
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
           text: "USED"
@@ -527,6 +540,7 @@ Rectangle {
           font.pixelSize: 13
         }
         Text {
+          textFormat: Text.PlainText
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           text: t.kid.fun.usedLabel
@@ -546,6 +560,7 @@ Rectangle {
           enabled: !t.kid.locked && !t.kid.fun.empty
           onClicked: root.act({ kind: "minus10" })
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "−10"
             color: parent.contentColor
@@ -554,6 +569,7 @@ Rectangle {
           }
         }
         Text {
+          textFormat: Text.PlainText
           anchors.centerIn: parent
           text: t.kid.fun.leftLabel
           color: t.kid.fun.empty ? urgent : foreground
@@ -568,6 +584,7 @@ Rectangle {
           enabled: !t.kid.locked
           onClicked: root.act({ kind: "plus10" })
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "+10"
             color: parent.contentColor
@@ -600,6 +617,7 @@ Rectangle {
       visible: needsPin || (settingsOn && liveHome)
       spacing: 0
       Text {
+        textFormat: Text.PlainText
         text: Model.parentPinLabel()
         color: foreground
         font.family: root.plex
@@ -608,6 +626,7 @@ Rectangle {
         bottomPadding: 6
       }
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         wrapMode: Text.WordWrap
         text: Model.parentPinWhy()
@@ -642,6 +661,7 @@ Rectangle {
               border.width: 1
               border.color: foreground
               Text {
+                textFormat: Text.PlainText
                 visible: pinSlot.kind === "digit"
                 anchors.centerIn: parent
                 text: Model.pinBoxText(root.pinDraft, pinSlot.index)
@@ -694,6 +714,7 @@ Rectangle {
             else root.commitPin()
           }
           Text {
+            textFormat: Text.PlainText
             id: pinSetLabel
             anchors.centerIn: parent
             text: (needsPin || !root.pinCommitted) ? "Set" : "Change"
@@ -741,6 +762,7 @@ Rectangle {
           width: inner.width
           height: 40
           Text {
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             width: 52
             text: "CLOCK"
@@ -758,6 +780,7 @@ Rectangle {
               filled: t.hour12 !== false
               onClicked: root.act({ kind: "clock", hour12: true })
               Text {
+                textFormat: Text.PlainText
                 anchors.centerIn: parent
                 text: "12"
                 color: parent.contentColor
@@ -771,6 +794,7 @@ Rectangle {
               filled: t.hour12 === false
               onClicked: root.act({ kind: "clock", hour12: false })
               Text {
+                textFormat: Text.PlainText
                 anchors.centerIn: parent
                 text: "24"
                 color: parent.contentColor
@@ -792,6 +816,7 @@ Rectangle {
           width: inner.width
           height: 40
           Text {
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             width: 34
             text: modelData.k
@@ -806,6 +831,7 @@ Rectangle {
             height: 28
             onClicked: root.act({ kind: clockRow.index === 0 ? "bed" : "up", delta: -15 })
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: "−"
               color: parent.contentColor
@@ -814,6 +840,7 @@ Rectangle {
             }
           }
           Text {
+            textFormat: Text.PlainText
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
             text: modelData.v
@@ -830,6 +857,7 @@ Rectangle {
             height: 28
             onClicked: root.act({ kind: clockRow.index === 0 ? "bed" : "up", delta: 15 })
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: "+"
               color: parent.contentColor
@@ -860,6 +888,7 @@ Rectangle {
       Repeater {
         model: t.track.hours
         Text {
+          textFormat: Text.PlainText
           required property var modelData
           required property int index
           text: modelData
@@ -883,22 +912,26 @@ Rectangle {
           width: inner.width
           height: 18
           Text {
+            id: logClock
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             text: modelData.clock + "  "
             color: foreground
             font.family: root.plex
             font.pixelSize: 12
-            Text {
-              anchors.left: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              text: modelData.name
-              color: foreground
-              font.family: root.plex
-              font.pixelSize: 12
-              font.weight: Font.Medium
-            }
           }
           Text {
+            textFormat: Text.PlainText
+            anchors.left: logClock.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: modelData.name
+            color: foreground
+            font.family: root.plex
+            font.pixelSize: 12
+            font.weight: Font.Medium
+          }
+          Text {
+            textFormat: Text.PlainText
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             text: modelData.dur
@@ -916,6 +949,7 @@ Rectangle {
       spacing: 0
       DashedRule { width: parent.width }
       Text {
+        textFormat: Text.PlainText
         text: "TIME"
         color: quiet
         font.family: root.plex
@@ -929,6 +963,7 @@ Rectangle {
           width: inner.width
           height: 30
           Text {
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             width: 42
             text: modelData.dow
@@ -943,6 +978,7 @@ Rectangle {
             height: 24
             onClicked: root.act({ kind: "funDay", day: modelData.day, delta: -15 })
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: "−15"
               color: parent.contentColor
@@ -951,6 +987,7 @@ Rectangle {
             }
           }
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: modelData.label
             color: foreground
@@ -965,6 +1002,7 @@ Rectangle {
             height: 24
             onClicked: root.act({ kind: "funDay", day: modelData.day, delta: 15 })
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: "+15"
               color: parent.contentColor
@@ -1016,6 +1054,7 @@ Rectangle {
       color: "transparent"
     }
     Text {
+      textFormat: Text.PlainText
       id: lockStampText
       anchors.centerIn: parent
       text: "LOCKED"

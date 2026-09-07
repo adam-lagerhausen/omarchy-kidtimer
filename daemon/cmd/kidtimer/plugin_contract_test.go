@@ -11,15 +11,15 @@ import (
 func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	root := repoRoot(t)
 	files := []string{
-		"plugin-kid/manifest.json",
-		"plugin-kid/BarWidget.qml",
-		"plugin-kid/Panel.qml",
-		"plugin-kid/KidModel.js",
-		"plugin-parent/manifest.json",
-		"plugin-parent/BarWidget.qml",
-		"plugin-parent/Panel.qml",
-		"plugin-parent/Tape.qml",
-		"plugin-parent/ParentModel.js",
+		"manifest.json",
+		"BarWidget.qml",
+		"KidBar.qml",
+		"KidPanel.qml",
+		"KidModel.js",
+		"ParentBar.qml",
+		"ParentPanel.qml",
+		"Tape.qml",
+		"ParentModel.js",
 	}
 	joined := ""
 	for _, rel := range files {
@@ -43,20 +43,18 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		}
 	}
 
-	kidBar := readPlugin(t, root, "plugin-kid/BarWidget.qml")
-	kidPanel := readPlugin(t, root, "plugin-kid/Panel.qml")
-	kidModel := readPlugin(t, root, "plugin-kid/KidModel.js")
-	parentBar := readPlugin(t, root, "plugin-parent/BarWidget.qml")
-	parentPanel := readPlugin(t, root, "plugin-parent/Panel.qml") + readPlugin(t, root, "plugin-parent/Tape.qml")
-	parentModel := readPlugin(t, root, "plugin-parent/ParentModel.js")
-	kidManifest := readPlugin(t, root, "plugin-kid/manifest.json")
-	parentManifest := readPlugin(t, root, "plugin-parent/manifest.json")
+	kidBar := readPlugin(t, root, "KidBar.qml") + readPlugin(t, root, "BarWidget.qml")
+	kidPanel := readPlugin(t, root, "KidPanel.qml")
+	kidModel := readPlugin(t, root, "KidModel.js")
+	parentBar := readPlugin(t, root, "ParentBar.qml") + readPlugin(t, root, "BarWidget.qml")
+	parentPanel := readPlugin(t, root, "ParentPanel.qml") + readPlugin(t, root, "Tape.qml")
+	parentModel := readPlugin(t, root, "ParentModel.js")
+	kidManifest := readPlugin(t, root, "manifest.json")
+	parentManifest := readPlugin(t, root, "manifest.json")
 
 	mustContain(t, kidBar, "http://127.0.0.1:8742", "localhost default")
 	mustContain(t, kidBar, "/v1/status", "GET /v1/status")
 	mustContain(t, kidBar, "omarchy-notification-send", "kid remaining warning")
-	mustContain(t, kidBar, "--exec", "click warning opens plugin")
-	mustContain(t, kidBar, "summon", "summon kid plugin")
 	mustContain(t, kidBar, "takeWarnings", "warning crossings")
 	mustContain(t, kidModel, `"kidtimer"`, "fallback title")
 	mustContain(t, kidModel, `"bedtime"`, "bedtime label")
@@ -71,7 +69,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidPanel, "Parent Pin", "waiting parent pin")
 	mustContain(t, kidPanel, "/v1/pin/approve", "pin approve")
 	mustContain(t, kidPanel, "pendingAskId", "saved ask id")
-	kidOverlay := readPlugin(t, root, "plugin-kid/Overlay.qml")
+	kidOverlay := readPlugin(t, root, "Overlay.qml")
 	mustContain(t, kidOverlay, "Parent Pin", "overlay parent pin")
 	mustContain(t, kidOverlay, "/v1/pin/grant", "pin grant")
 	mustContain(t, kidOverlay, "Ask", "overlay ask")
@@ -86,10 +84,10 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	if strings.Contains(kidOverlay, `"overlay"`) && strings.Contains(kidManifest, `"overlay"`) {
 		t.Fatal("do not add overlay kind")
 	}
-	if strings.Contains(kidBar+kidPanel+kidModel, "/v1/lock") {
+	if strings.Contains(readPlugin(t, root, "KidBar.qml")+kidPanel+kidModel, "/v1/lock") {
 		t.Fatal("kid plugin must not post /v1/lock")
 	}
-	if strings.Contains(kidBar+kidPanel, "Unlock") {
+	if strings.Contains(readPlugin(t, root, "KidBar.qml")+kidPanel, "Unlock") {
 		t.Fatal("kid plugin must not offer unlock")
 	}
 
@@ -187,11 +185,9 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	if strings.Contains(kidManifest, `"overlay"`) {
 		t.Fatal("do not add overlay kind")
 	}
-	mustContain(t, kidPanel, "Panel {", "kid panel")
-	mustContain(t, parentManifest, `"bar-widget"`, "parent bar-widget")
-	if strings.Contains(parentManifest, `"service"`) {
-		t.Fatal("parent plugin must not be a Quickshell bank service")
-	}
+	mustContain(t, readPlugin(t, root, "Panel.qml"), "Panel {", "shared panel")
+	mustContain(t, parentManifest, `"bar-widget"`, "bar-widget")
+	mustContain(t, parentManifest, `"kidtimer"`, "one plugin id")
 }
 
 func TestPluginModels(t *testing.T) {

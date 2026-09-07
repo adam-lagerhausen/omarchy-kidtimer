@@ -146,6 +146,7 @@ Rectangle {
         }
       }
       Text {
+        textFormat: Text.PlainText
         visible: root.icon !== "" && root.kind !== "lock"
         anchors.centerIn: parent
         text: root.icon
@@ -156,6 +157,7 @@ Rectangle {
     }
 
     Text {
+      textFormat: Text.PlainText
       id: label
       visible: root.text !== ""
       text: root.text
