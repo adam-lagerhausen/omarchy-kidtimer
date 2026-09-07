@@ -177,6 +177,20 @@ Item {
     Component.onCompleted: roleRead.running = true
   }
 
+  Timer {
+    interval: 400
+    repeat: true
+    running: root.role === ""
+    onTriggered: roleRead.running = true
+  }
+
+  Timer {
+    interval: 400
+    repeat: true
+    running: root.role === "kid" && !String(bank.readToken || "")
+    onTriggered: bankRead.running = true
+  }
+
   FileView {
     id: bankFile
     path: Quickshell.env("HOME") + "/.local/share/kidtimer/kid-bar.json"

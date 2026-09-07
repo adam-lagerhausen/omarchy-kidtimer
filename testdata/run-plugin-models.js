@@ -170,9 +170,10 @@ assertEqual(waitingTape.needsPin, false, "pin already set")
 assertEqual(waitingTape.kid.name, "", "empty tape has no kid name")
 assertEqual(waitingTape.howTo.title, "No computers found", "empty how-to title")
 assertEqual(waitingTape.howTo.lines.map(l => l.text), [
-  "Install Kidtimer on the kid computer. It will show up here."
+  "Run this on the kid computer. It will show up here.",
+  "omarchy plugin add https://github.com/adam-lagerhausen/omarchy-kidtimer.git --enable"
 ], "empty how-to lines")
-assertEqual(waitingTape.howTo.lines.some(l => l.cmd), false, "empty how-to has no commands")
+assertEqual(waitingTape.howTo.lines.some(l => l.cmd), true, "empty how-to shows the kid install command")
 assertEqual(parent.projectTape(parent.fixtureSnapshots(), 0, parent.chromeHome(), null, { pinSet: false }).needsPin, true, "kids without pin still need pin")
 assertEqual(parent.projectTape(parent.fixtureSnapshots(), 0, parent.chromeHome(), null, { pinSet: true }).needsPin, false, "kids with pin skip pin screen")
 assertEqual(parent.projectTape(parent.fixtureSnapshots(), 0, parent.chromeHome(), null, { pinSet: true }).waiting, false, "kids with pin show home")

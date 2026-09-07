@@ -613,6 +613,7 @@ BarWidget {
     injectPanel()
     var helper = helperPath("apply-role.sh")
     if (which === "kid") {
+      setupErrRead.running = true
       Quickshell.execDetached([
         "/usr/bin/omarchy-launch-floating-terminal-with-presentation",
         helper + " kid"
@@ -694,6 +695,13 @@ BarWidget {
   }
 
   Timer {
+    interval: 400
+    running: root.role === "parent" && snapshots.length === 0
+    repeat: true
+    onTriggered: poll()
+  }
+
+  Timer {
     interval: 1000
     running: root.role === "kid"
     repeat: true
@@ -711,7 +719,10 @@ BarWidget {
     watchChanges: true
     printErrors: false
     onLoaded: root.loadHousehold(text())
-    onFileChanged: kidsFile.reload()
+    onFileChanged: {
+      kidsFile.reload()
+      poll()
+    }
     onLoadFailed: root.loadHousehold("")
   }
 
@@ -740,6 +751,20 @@ BarWidget {
     Component.onCompleted: roleRead.running = true
   }
 
+  Timer {
+    interval: 400
+    repeat: true
+    running: root.role === ""
+    onTriggered: roleRead.running = true
+  }
+
+  Timer {
+    interval: 400
+    repeat: true
+    running: root.role === "kid" && !(kidBank && kidBank.readToken)
+    onTriggered: kidBankRead.running = true
+  }
+
   FileView {
     id: kidBankFile
     path: Quickshell.env("HOME") + "/.local/share/kidtimer/kid-bar.json"
@@ -749,6 +774,17 @@ BarWidget {
     blockAllReads: true
     onFileChanged: kidBankRead.running = true
     Component.onCompleted: kidBankRead.running = true
+  }
+
+  FileView {
+    id: setupErrFile
+    path: Quickshell.env("HOME") + "/.local/share/kidtimer/setup-error"
+    watchChanges: true
+    printErrors: false
+    preload: false
+    blockAllReads: true
+    onFileChanged: setupErrRead.running = true
+    Component.onCompleted: setupErrRead.running = true
   }
 
   Process {
@@ -767,6 +803,18 @@ BarWidget {
     stdout: SplitParser {
       splitMarker: ""
       onRead: function(data) { root.loadKidBank(data) }
+    }
+  }
+
+  Process {
+    id: setupErrRead
+    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/setup-error"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) {
+        var msg = String(data || "").replace(/\s+/g, " ").trim()
+        if (msg) root.finishSetup(false, msg)
+      }
     }
   }
 
@@ -843,6 +891,13 @@ BarWidget {
   Timer {
     interval: 5000
     running: true
+    repeat: true
+    onTriggered: pinStat.running = true
+  }
+
+  Timer {
+    interval: 400
+    running: root.role === "parent" && !root.householdPinSet
     repeat: true
     onTriggered: pinStat.running = true
   }

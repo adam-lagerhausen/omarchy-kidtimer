@@ -261,10 +261,49 @@ func setupKid(env setupEnv) error {
 	if err := copyFile(filepath.Join(env.Repo, "packaging", "kidtimer.service"), env.unitPath(), 0o644); err != nil {
 		return err
 	}
+	if err := chownToHomeOwner(env.Home, share, pluginDest(env.Home), shell); err != nil {
+		return err
+	}
 	if env.SkipSystemd {
 		return nil
 	}
 	return startKidUnit(env.Home)
+}
+
+func chownToHomeOwner(home string, paths ...string) error {
+	if home == "" {
+		return nil
+	}
+	fi, err := os.Stat(home)
+	if err != nil {
+		return err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil
+	}
+	uid, gid := int(st.Uid), int(st.Gid)
+	if os.Getuid() == uid {
+		return nil
+	}
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		err := filepath.Walk(p, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				if os.IsNotExist(walkErr) {
+					return nil
+				}
+				return walkErr
+			}
+			return os.Chown(path, uid, gid)
+		})
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func startKidUnit(home string) error {

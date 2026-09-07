@@ -167,6 +167,13 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	if str(bar["url"]) != "http://127.0.0.1:8742" {
 		t.Fatalf("url %v", bar["url"])
 	}
+	src, err := os.ReadFile(filepath.Join(repoRoot(t), "daemon/cmd/kidtimer/setup.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "chownToHomeOwner") {
+		t.Fatal("kid setup must chown home files after sudo")
+	}
 	cfg, err := os.ReadFile(filepath.Join(root, "etc", "kidtimer", "config.toml"))
 	if err != nil {
 		t.Fatal(err)

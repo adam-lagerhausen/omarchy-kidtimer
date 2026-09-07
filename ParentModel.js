@@ -992,7 +992,8 @@ function emptyHowTo() {
   return {
     title: "No computers found",
     lines: [
-      { text: "Install Kidtimer on the kid computer. It will show up here." }
+      { text: "Run this on the kid computer. It will show up here." },
+      { cmd: true, text: "omarchy plugin add https://github.com/adam-lagerhausen/omarchy-kidtimer.git --enable" }
     ]
   }
 }

@@ -107,6 +107,10 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, `"PUT"`, "parent look put")
 	mustContain(t, parentBar, "kids.json", "household file")
 	mustContain(t, parentBar, "FileView", "watch kids.json")
+	mustContain(t, parentBar, `running: root.role === ""`, "poll role until the file appears")
+	mustContain(t, parentBar, `running: root.role === "parent" && snapshots.length === 0`, "poll household until the first kid appears")
+	mustContain(t, parentBar, `running: root.role === "parent" && !root.householdPinSet`, "poll parent-pin until it appears")
+	mustContain(t, readPlugin(t, root, "Overlay.qml"), `running: root.role === ""`, "overlay polls role until the file appears")
 	mustContain(t, parentBar, `"parent"`, "start kidtimer parent")
 	mustContain(t, parentBar, "kidtimerBin", "parent binary helper")
 	mustContain(t, parentBar, "/usr/bin/bash", "parent setup via bash")
@@ -151,11 +155,16 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("ParentPanel is an Item; opened lives on the host widget")
 	}
 	applyRole := readPlugin(t, root, "helpers/apply-role.sh")
-	hereIdx := strings.Index(applyRole, "$here/kidtimer")
-	destIdx := strings.Index(applyRole, "[[ -x $dest ]]")
-	if hereIdx < 0 || destIdx < 0 || hereIdx > destIdx {
-		t.Fatal("apply-role must prefer the plugin binary over a leftover ~/.local/bin/kidtimer")
+	archIdx := strings.Index(applyRole, "kidtimer-linux-$want")
+	hereIdx := strings.Index(applyRole, `"$here/kidtimer"`)
+	destIdx := strings.Index(applyRole, `elf_ok "$dest"`)
+	if archIdx < 0 || hereIdx < 0 || destIdx < 0 || archIdx > hereIdx || hereIdx > destIdx {
+		t.Fatal("apply-role must prefer the matching plugin binary over a leftover ~/.local/bin/kidtimer")
 	}
+	mustContain(t, applyRole, "kidtimer-linux-$want", "arch plugin binary name")
+	mustContain(t, applyRole, "setup-error", "kid setup error file")
+	mustContain(t, applyRole, "od -An -t x1 -j 18 -N 2", "ELF machine check")
+	mustContain(t, parentBar, "setup-error", "watch kid setup error")
 	mustContain(t, parentPanel, "model: track.blocks", "activity on the track")
 	mustContain(t, parentPanel, "color: root.accent", "activity uses theme accent")
 	mustContain(t, parentPanel, "function blockLeft", "track grows min width left of now")
