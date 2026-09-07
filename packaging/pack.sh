@@ -11,7 +11,7 @@ pack_one() {
 	local out=$dist/$name
 	rm -rf "$out"
 	mkdir -p "$out"
-	CGO_ENABLED=0 GOOS=linux GOARCH=$goarch go build -trimpath -ldflags='-s -w -buildid=' -o "$out/$name" ./daemon/cmd/kidtimer
+	CGO_ENABLED=0 GOOS=linux GOARCH=$goarch GOTOOLCHAIN=go1.25.0 go build -trimpath -ldflags='-s -w -buildid=' -o "$out/$name" ./daemon/cmd/kidtimer
 	/usr/bin/mkdir -p "$out/packaging"
 	/usr/bin/find packaging -mindepth 1 -maxdepth 1 ! -name SHA256SUMS -exec /usr/bin/cp -a {} "$out/packaging/" \;
 	for f in manifest.json BarWidget.qml Panel.qml Overlay.qml Setup.qml ParentPanel.qml KidPanel.qml ParentModel.js KidModel.js Tape.qml LookBtn.qml helpers fonts icons; do
