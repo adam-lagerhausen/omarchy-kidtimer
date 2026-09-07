@@ -28,7 +28,10 @@ Item {
   readonly property color paper: Color.background
   readonly property color urgent: Color.urgent
   readonly property color dim: Qt.darker(ink, 1.4)
-  readonly property string plex: "IBM Plex Mono"
+  FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
+  FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/JetBrainsMono-Medium.ttf") }
+  FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/JetBrainsMono-SemiBold.ttf") }
+  readonly property string plex: plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
 
   function bankUrl() {
     return String(bank.url || "http://127.0.0.1:8742").replace(/\/$/, "")

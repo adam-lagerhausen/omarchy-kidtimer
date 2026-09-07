@@ -14,7 +14,7 @@ A parent on the parent Omarchy 4 desk. They are looking at two kids' computers. 
 
 ## The box
 
-The panel sits on the Omarchy popup surface. Type is popup or bar foreground. Alarms are urgent. Secondary is muted. The live dot is accent. IBM Plex Mono only. About 340px wide. Square 1px controls. No pills, no glass, no perforated top and bottom, no extra title. The host popup border follows the theme.
+The panel sits on the Omarchy popup surface. Type is popup or bar foreground. Alarms are urgent. Secondary is muted. The live dot is accent. JetBrains Mono only. About 340px wide. Square 1px controls. No pills, no glass, no perforated top and bottom, no extra title. The host popup border follows the theme.
 
 It hangs off the Omarchy bar. Home is the front of the tape. Gear flips it.
 

@@ -69,11 +69,11 @@ Rectangle {
   color: "transparent"
   implicitHeight: inner.implicitHeight + 14 + 18
 
-  FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/IBMPlexMono-Regular.ttf") }
-  FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/IBMPlexMono-Medium.ttf") }
-  FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/IBMPlexMono-SemiBold.ttf") }
+  FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
+  FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/JetBrainsMono-Medium.ttf") }
+  FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/JetBrainsMono-SemiBold.ttf") }
 
-  readonly property string plex: plexReg.status === FontLoader.Ready ? plexReg.name : "IBM Plex Mono"
+  readonly property string plex: plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
 
   onTapePinSetChanged: syncPinCommitted()
   onSettingsOnChanged: {

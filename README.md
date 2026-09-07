@@ -199,6 +199,6 @@ Then from that checkout, run `./kidtimer setup parent` on the parent desk, or `s
 
 ## License
 
-The daemon is MIT. The text is in `LICENSE`. IBM Plex Mono is OFL, not MIT. That text is in `fonts/OFL.txt`.
+The daemon is MIT. The text is in `LICENSE`. JetBrains Mono is OFL, not MIT. That text is in `fonts/OFL.txt`.
 
 Report a lock bypass privately. See `SECURITY.md`.

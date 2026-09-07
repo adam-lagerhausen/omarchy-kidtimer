@@ -6,8 +6,8 @@ Item {
   id: root
   property var bar: null
   property var hostWidget: null
-  property string setupError: ""
-  property bool busy: false
+  property string setupError: hostWidget ? String(hostWidget.setupError || "") : ""
+  readonly property bool busy: hostWidget ? hostWidget.setupBusy === true : false
 
   readonly property color ink: bar ? bar.foreground : Color.popups.text
   readonly property color surface: Color.popups.background
@@ -16,9 +16,12 @@ Item {
       return Qt.darker(ink, 1.4)
     return Qt.rgba(ink.r * 0.45 + surface.r * 0.55, ink.g * 0.45 + surface.g * 0.55, ink.b * 0.45 + surface.b * 0.55, 1)
   }
+  FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
+  FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/JetBrainsMono-Medium.ttf") }
+  FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/JetBrainsMono-SemiBold.ttf") }
   readonly property string plex: {
     if (hostWidget && hostWidget.plex) return hostWidget.plex
-    return bar && bar.fontFamily ? bar.fontFamily : Style.font.family
+    return plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
   }
 
   function colorLuminance(c) {
@@ -64,11 +67,7 @@ Item {
       fontFamily: root.plex
       fontSize: 14
       enabled: !root.busy
-      onClicked: {
-        root.busy = true
-        root.setupError = ""
-        if (root.hostWidget) root.hostWidget.pickRole("parent")
-      }
+      onClicked: if (root.hostWidget) root.hostWidget.pickRole("parent")
     }
 
     LookBtn {
@@ -78,11 +77,7 @@ Item {
       fontFamily: root.plex
       fontSize: 14
       enabled: !root.busy
-      onClicked: {
-        root.busy = true
-        root.setupError = ""
-        if (root.hostWidget) root.hostWidget.pickRole("kid")
-      }
+      onClicked: if (root.hostWidget) root.hostWidget.pickRole("kid")
     }
 
     Text {

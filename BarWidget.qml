@@ -30,6 +30,10 @@ BarWidget {
   property bool prefsReady: false
   property var clockPushed: ({})
 
+  FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
+  FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/JetBrainsMono-Medium.ttf") }
+  FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/JetBrainsMono-SemiBold.ttf") }
+  readonly property string plex: plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
@@ -562,17 +566,32 @@ BarWidget {
   function searchList(list, q) {
   }
 
-  function pluginDir() {
-    var u = Qt.resolvedUrl("manifest.json").toString()
+  function localFile(url) {
+    var u = String(url || "")
     if (u.indexOf("file://") === 0) u = u.slice(7)
+    if (u.indexOf("localhost/") === 0) u = u.slice(9)
+    if (u !== "" && u.charAt(0) !== "/") u = "/" + u
+    try { return decodeURIComponent(u) } catch (e) { return u }
+  }
+
+  function pluginDir() {
+    var u = localFile(Qt.resolvedUrl("manifest.json"))
     var i = u.lastIndexOf("/")
     return i >= 0 ? u.slice(0, i) : u
+  }
+
+  function helperPath(name) {
+    return pluginDir() + "/helpers/" + name
   }
 
   function applyRole(raw) {
     var next = String(raw || "").replace(/\s+/g, "")
     if (next !== "parent" && next !== "kid") next = ""
-    if (root.role === next) return
+    if (root.role === next) {
+      root.setupBusy = false
+      injectPanel()
+      return
+    }
     root.role = next
     root.setupBusy = false
     if (next === "parent") statusText = Model.householdBarLabel(snapshots)
@@ -581,10 +600,18 @@ BarWidget {
     injectPanel()
   }
 
+  function finishSetup(ok, detail) {
+    root.setupBusy = false
+    if (!ok) root.setupError = detail || "Could not set up this computer."
+    roleRead.running = true
+    injectPanel()
+  }
+
   function pickRole(which) {
     root.setupBusy = true
     root.setupError = ""
-    var helper = Qt.resolvedUrl("helpers/apply-role.sh").toString().replace(/^file:\/\//, "")
+    injectPanel()
+    var helper = helperPath("apply-role.sh")
     if (which === "kid") {
       Quickshell.execDetached([
         "/usr/bin/omarchy-launch-floating-terminal-with-presentation",
@@ -592,8 +619,10 @@ BarWidget {
       ])
       return
     }
-    applyProc.roleArg = "parent"
-    applyProc.running = true
+    applyProc.errText = ""
+    applyProc.command = ["/usr/bin/bash", helper, "parent"]
+    applyProc.running = false
+    Qt.callLater(function() { applyProc.running = true })
   }
 
   function pollKid() {
@@ -743,12 +772,28 @@ BarWidget {
 
   Process {
     id: applyProc
-    property string roleArg: "parent"
-    command: [Qt.resolvedUrl("helpers/apply-role.sh").toString().replace(/^file:\/\//, ""), roleArg]
+    property string errText: ""
+    property bool sawStart: false
+    command: ["/usr/bin/bash", helperPath("apply-role.sh"), "parent"]
+    stderr: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { applyProc.errText = String(data || "") }
+    }
+    onStarted: applyProc.sawStart = true
     onExited: {
-      root.setupBusy = false
-      roleRead.running = true
-      if (exitCode !== 0) root.setupError = "Could not set up this computer."
+      var msg = applyProc.errText.replace(/\s+/g, " ").trim()
+      root.finishSetup(exitCode === 0, msg)
+    }
+    onRunningChanged: {
+      if (running) {
+        applyProc.sawStart = false
+        return
+      }
+      if (!root.setupBusy) return
+      Qt.callLater(function() {
+        if (!root.setupBusy || applyProc.running || applyProc.sawStart) return
+        root.finishSetup(false, applyProc.errText.replace(/\s+/g, " ").trim())
+      })
     }
   }
 
@@ -824,6 +869,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
+    fontFamily: root.plex
     text: root.statusText
     active: root.role === "kid" && root.urgentChip
     tooltipText: ""

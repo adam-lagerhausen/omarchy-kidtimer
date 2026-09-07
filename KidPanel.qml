@@ -22,7 +22,10 @@ Item {
 
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
-  readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
+  FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
+  FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/JetBrainsMono-Medium.ttf") }
+  FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/JetBrainsMono-SemiBold.ttf") }
+  readonly property string contentFontFamily: plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
   readonly property color accent: "#1daeeb"
   readonly property color urgent: Color.urgent
   readonly property color dim: Qt.darker(contentForeground, 1.4)
