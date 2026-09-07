@@ -196,14 +196,8 @@ Item {
           }
         }
 
-        LookBtn {
-          visible: !root.clock.waiting
+        AskRow {
           width: parent.width
-          text: "Ask"
-          enabled: !root.blocked
-          foreground: root.contentForeground
-          fontFamily: root.contentFontFamily
-          onClicked: root.openAsk()
         }
 
         LookBtn {
@@ -213,33 +207,6 @@ Item {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           onClicked: if (root.hostWidget) root.hostWidget.pickRole("parent")
-        }
-
-        Item {
-          visible: root.clock.waiting
-          width: parent.width
-          height: 28
-          LookBtn {
-            anchors.left: parent.left
-            width: (parent.width - 8) / 2
-            text: "Waiting"
-            enabled: false
-            foreground: root.contentForeground
-            fontFamily: root.contentFontFamily
-          }
-          LookBtn {
-            anchors.right: parent.right
-            width: (parent.width - 8) / 2
-            text: "Parent Pin"
-            enabled: root.pendingAskId !== ""
-            foreground: root.contentForeground
-            fontFamily: root.contentFontFamily
-            onClicked: {
-              root.pinOpen = true
-              root.pinWrong = false
-              root.pinDigits = ""
-            }
-          }
         }
       }
 
@@ -435,6 +402,10 @@ Item {
           font.pixelSize: 22
           font.bold: true
         }
+
+        AskRow {
+          width: parent.width
+        }
       }
 
       Column {
@@ -498,7 +469,54 @@ Item {
           font.family: root.contentFontFamily
           font.pixelSize: 16
         }
+
+        AskRow {
+          width: parent.width
+        }
+      }
+    }
+
+  component AskRow: Item {
+    implicitHeight: root.clock.waiting ? 28 : askBtn.implicitHeight
+    height: implicitHeight
+
+    LookBtn {
+      id: askBtn
+      visible: !root.clock.waiting
+      width: parent.width
+      text: "Ask"
+      enabled: !root.blocked && Model.panelShowsAsk(root.view)
+      foreground: root.contentForeground
+      fontFamily: root.contentFontFamily
+      onClicked: root.openAsk()
+    }
+
+    Item {
+      visible: root.clock.waiting
+      width: parent.width
+      height: 28
+      LookBtn {
+        anchors.left: parent.left
+        width: (parent.width - 8) / 2
+        text: "Waiting"
+        enabled: false
+        foreground: root.contentForeground
+        fontFamily: root.contentFontFamily
+      }
+      LookBtn {
+        anchors.right: parent.right
+        width: (parent.width - 8) / 2
+        text: "Parent Pin"
+        enabled: root.pendingAskId !== ""
+        foreground: root.contentForeground
+        fontFamily: root.contentFontFamily
+        onClicked: {
+          root.pinOpen = true
+          root.pinWrong = false
+          root.pinDigits = ""
+        }
       }
     }
   }
+}
 

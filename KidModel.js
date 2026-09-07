@@ -181,6 +181,19 @@ function askBlocked(status) {
   return false
 }
 
+function panelShowsAsk(kind) {
+  return kind === "home" || kind === "bedtime" || kind === "locked"
+}
+
+function overlayCancel() {
+  return {
+    step: "cover",
+    pinDigits: "",
+    pinWrong: false,
+    chosenMinutes: ASK_DEFAULT_MIN
+  }
+}
+
 function overlayAskWaiting(status) {
   return (Number(status && status.pending_ask_count) || 0) > 0
 }
