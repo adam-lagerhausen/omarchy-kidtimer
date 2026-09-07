@@ -44,8 +44,8 @@ Item {
     if (root.view === "bedtime") return "#7a82c4"
     return root.accent
   }
-  width: parent ? parent.width : 320
-  implicitHeight: Math.max(1, bodyHeight)
+  width: parent ? parent.width : 340
+  implicitHeight: Math.max(1, bodyHeight) + 14 + 18
 
   function setting(key, fallback) {
     if (hostWidget && typeof hostWidget.setting === "function")
@@ -129,6 +129,10 @@ Item {
   Item {
     id: panel
     anchors.fill: parent
+    anchors.leftMargin: 18
+    anchors.rightMargin: 18
+    anchors.topMargin: 14
+    anchors.bottomMargin: 18
 
       Column {
         id: homeColumn
@@ -194,15 +198,6 @@ Item {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           onClicked: root.openAsk()
-        }
-
-        LookBtn {
-          width: parent.width
-          text: "This is my computer"
-          ghost: true
-          foreground: root.contentForeground
-          fontFamily: root.contentFontFamily
-          onClicked: if (root.hostWidget) root.hostWidget.pickRole("parent")
         }
 
         Item {
@@ -388,8 +383,6 @@ Item {
         id: lockColumn
         visible: root.view === "locked"
         width: parent.width
-        topPadding: 18
-        bottomPadding: 12
         spacing: 14
 
         Canvas {

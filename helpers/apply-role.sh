@@ -157,6 +157,13 @@ need_bin() {
 }
 
 if [[ $role == parent ]]; then
+  current=
+  if [[ -f $share/role ]]; then
+    current=$(/usr/bin/tr -d '[:space:]' <"$share/role" 2>/dev/null || true)
+  fi
+  if [[ $current == kid ]] || [[ -f /etc/kidtimer/config.toml ]] || [[ -f /etc/systemd/system/kidtimer.service ]]; then
+    fail "This computer is already a kid. Uninstall Kidtimer to use it as the parent desk."
+  fi
   dest=${HOME}/.local/bin/kidtimer
   /usr/bin/mkdir -p -- "$(dirname -- "$dest")"
   need_bin "$dest"

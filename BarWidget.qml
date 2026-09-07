@@ -491,6 +491,7 @@ BarWidget {
   }
 
   function pickRole(which) {
+    if (root.role === "kid" && which !== "kid") return
     root.setupBusy = true
     root.setupError = ""
     injectPanel()

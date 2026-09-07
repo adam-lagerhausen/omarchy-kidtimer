@@ -159,9 +159,30 @@ func placePlugin(repo, dest string) error {
 	return linkPlugin(repo, dest)
 }
 
+func kidComputerLocked(env setupEnv) error {
+	share := filepath.Join(env.Home, ".local", "share", "kidtimer")
+	role, err := household.LoadRole(share)
+	if err != nil {
+		return err
+	}
+	if role == reverse.RoleKid {
+		return fmt.Errorf("this computer is already a kid; uninstall Kidtimer to use it as the parent desk")
+	}
+	if _, err := os.Stat(filepath.Join(env.etc(), "config.toml")); err == nil {
+		return fmt.Errorf("this computer is already a kid; uninstall Kidtimer to use it as the parent desk")
+	}
+	if _, err := os.Stat(env.unitPath()); err == nil {
+		return fmt.Errorf("this computer is already a kid; uninstall Kidtimer to use it as the parent desk")
+	}
+	return nil
+}
+
 func setupParent(env setupEnv) error {
 	if env.Home == "" {
 		return fmt.Errorf("home is required")
+	}
+	if err := kidComputerLocked(env); err != nil {
+		return err
 	}
 	bin := filepath.Join(env.Home, ".local", "bin", "kidtimer")
 	if err := installBinary(bin); err != nil {

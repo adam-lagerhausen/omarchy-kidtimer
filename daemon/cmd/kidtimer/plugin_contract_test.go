@@ -68,6 +68,11 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidPanel, "/v1/pin/approve", "pin approve")
 	mustContain(t, kidPanel, "pendingAskId", "saved ask id")
 	mustContain(t, kidPanel, "JetBrainsMono", "kid panel mono")
+	mustContain(t, kidPanel, "anchors.leftMargin: 18", "kid panel matches parent inset")
+	mustContain(t, kidPanel, "+ 14 + 18", "kid panel top and bottom inset")
+	if strings.Contains(kidPanel, "This is my computer") || strings.Contains(kidPanel, `pickRole("parent")`) {
+		t.Fatal("kid panel must not switch to parent")
+	}
 	kidOverlay := readPlugin(t, root, "Overlay.qml")
 	mustContain(t, kidOverlay, "Parent Pin", "overlay parent pin")
 	mustContain(t, kidOverlay, "/v1/pin/grant", "pin grant")
@@ -120,6 +125,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, "/usr/bin/bash", "parent setup via bash")
 	mustContain(t, parentBar, "helperPath", "resolve apply-role path")
 	mustContain(t, parentBar, "finishSetup", "clear setup busy")
+	mustContain(t, parentBar, `root.role === "kid" && which !== "kid"`, "refuse kid to parent")
 	mustContain(t, parentBar, "/v1/household", "desk household")
 	mustContain(t, parentBar, "/v1/adopt", "desk adopt")
 	mustContain(t, parentBar, "/v1/kids/", "desk kid routes")
@@ -179,6 +185,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("must not sudo a user-owned binary")
 	}
 	mustContain(t, applyRole, "setup-error", "kid setup error file")
+	mustContain(t, applyRole, "already a kid", "refuse parent after kid")
 	mustContain(t, applyRole, "od -An -t x1 -j 18 -N 2", "ELF machine check")
 	mustContain(t, parentBar, "setup-error", "watch kid setup error")
 	mustContain(t, parentPanel, "model: track.blocks", "activity on the track")

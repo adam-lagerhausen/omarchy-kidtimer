@@ -109,6 +109,25 @@ func TestSetupParentRemovesAllowanceChip(t *testing.T) {
 	}
 }
 
+func TestSetupParentRefusesKidComputer(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	if err := setupKid(env); err != nil {
+		t.Fatal(err)
+	}
+	err := setupParent(env)
+	if err == nil {
+		t.Fatal("parent setup must refuse a kid computer")
+	}
+	if !strings.Contains(err.Error(), "uninstall") {
+		t.Fatalf("want uninstall: %v", err)
+	}
+	role, rerr := household.LoadRole(filepath.Join(env.Home, ".local", "share", "kidtimer"))
+	if rerr != nil || role != reverse.RoleKid {
+		t.Fatalf("kid role kept %v %v", role, rerr)
+	}
+}
+
 func TestSetupKidMintsBarTokens(t *testing.T) {
 	root := t.TempDir()
 	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
