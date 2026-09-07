@@ -5,8 +5,8 @@ TOKEN="${KIDTIMER_TOKEN:?set KIDTIMER_TOKEN}"
 ID="${1:?ask id}"
 DECISION="${2:-approve}"
 
-curl -sS -X POST "$URL/v1/asks/$ID/decide" \
-  -H "Authorization: Bearer $TOKEN" \
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sS -X POST "$URL/v1/asks/$ID/decide" \
+  -H @- \
   -H "Content-Type: application/json" \
   -d "{\"decision\":\"$DECISION\"}"
 echo

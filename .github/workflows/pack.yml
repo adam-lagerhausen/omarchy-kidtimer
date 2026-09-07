@@ -14,31 +14,30 @@ jobs:
   pack:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
       - name: Pack
         run: bash packaging/pack.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kidtimer-linux
           path: |
             dist/*.tar.gz
             dist/SHA256SUMS
-      - name: Publish latest
+      - name: Drop rolling latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          assets=(dist/kidtimer-linux-amd64.tar.gz dist/kidtimer-linux-arm64.tar.gz dist/SHA256SUMS)
-          if gh release view latest >/dev/null 2>&1; then
-            gh release upload latest "${assets[@]}" --clobber
-          else
-            gh release create latest "${assets[@]}" --title latest --notes "Rolling pack for the install one-liner." --target "$GITHUB_SHA"
-          fi
+        run: gh release delete latest --yes --cleanup-tag || true
       - name: Publish tag
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          want=v$(python3 -c 'import json; print(json.load(open("manifest.json"))["version"])')
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "tag $GITHUB_REF_NAME must match manifest $want" >&2
+            exit 1
+          fi
           gh release create "$GITHUB_REF_NAME" dist/kidtimer-linux-amd64.tar.gz dist/kidtimer-linux-arm64.tar.gz dist/SHA256SUMS --title "$GITHUB_REF_NAME" --generate-notes

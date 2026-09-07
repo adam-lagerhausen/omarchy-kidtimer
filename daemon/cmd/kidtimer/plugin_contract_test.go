@@ -13,10 +13,8 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	files := []string{
 		"manifest.json",
 		"BarWidget.qml",
-		"KidBar.qml",
 		"KidPanel.qml",
 		"KidModel.js",
-		"ParentBar.qml",
 		"ParentPanel.qml",
 		"Tape.qml",
 		"ParentModel.js",
@@ -43,10 +41,10 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		}
 	}
 
-	kidBar := readPlugin(t, root, "KidBar.qml") + readPlugin(t, root, "BarWidget.qml")
+	kidBar := readPlugin(t, root, "BarWidget.qml")
 	kidPanel := readPlugin(t, root, "KidPanel.qml")
 	kidModel := readPlugin(t, root, "KidModel.js")
-	parentBar := readPlugin(t, root, "ParentBar.qml") + readPlugin(t, root, "BarWidget.qml")
+	parentBar := readPlugin(t, root, "BarWidget.qml")
 	parentPanel := readPlugin(t, root, "ParentPanel.qml") + readPlugin(t, root, "Tape.qml")
 	parentModel := readPlugin(t, root, "ParentModel.js")
 	kidManifest := readPlugin(t, root, "manifest.json")
@@ -60,7 +58,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidModel, `"bedtime"`, "bedtime label")
 	mustContain(t, kidModel, `"fun"`, "default fun")
 	mustContain(t, kidModel, "return [900, 300, 60]", "15/5/1 min warnings")
-	mustContain(t, kidPanel, "POST", "kid ask POST")
+	mustContain(t, kidPanel, "kidPost", "kid ask POST")
 	mustContain(t, kidPanel, "/v1/asks", "kid ask path")
 	mustContain(t, kidPanel, "askToken", "ask token")
 	mustContain(t, kidPanel, "Ask", "Ask")
@@ -78,17 +76,17 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidOverlay, "−10", "overlay ask nudge down")
 	mustContain(t, kidOverlay, "+10", "overlay ask nudge up")
 	mustContain(t, kidOverlay, "WlrLayer.Overlay", "overlay layer")
-	mustContain(t, kidOverlay, "stay-awake", "idle inhibit")
+	mustContain(t, kidOverlay, "/usr/bin/hyprctl", "pinned hyprctl")
 	mustContain(t, kidOverlay, "submap", "super submap")
 	mustContain(t, kidOverlay, "JetBrainsMono", "overlay mono")
 	mustContain(t, kidOverlay, "Key_Escape", "escape does nothing")
 	if strings.Contains(kidOverlay, `"overlay"`) && strings.Contains(kidManifest, `"overlay"`) {
 		t.Fatal("do not add overlay kind")
 	}
-	if strings.Contains(readPlugin(t, root, "KidBar.qml")+kidPanel+kidModel, "/v1/lock") {
+	if strings.Contains(kidPanel+kidModel, "/v1/lock") {
 		t.Fatal("kid plugin must not post /v1/lock")
 	}
-	if strings.Contains(readPlugin(t, root, "KidBar.qml")+kidPanel, "Unlock") {
+	if strings.Contains(kidPanel, "Unlock") {
 		t.Fatal("kid plugin must not offer unlock")
 	}
 
@@ -107,6 +105,12 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, `"PUT"`, "parent look put")
 	mustContain(t, parentBar, "kids.json", "household file")
 	mustContain(t, parentBar, "FileView", "watch kids.json")
+	mustContain(t, parentBar, "blockAllReads: true", "FileView watcher only")
+	mustContain(t, parentBar, "state.py", "descriptor-bound state")
+	mustContain(t, parentBar, "loopback-http.sh", "loopback http helper")
+	if strings.Contains(parentBar+kidPanel+kidOverlay, "XMLHttpRequest") {
+		t.Fatal("qml must not use unbounded XMLHttpRequest")
+	}
 	mustContain(t, parentBar, `running: root.role === ""`, "poll role until the file appears")
 	mustContain(t, parentBar, `running: root.role === "parent" && snapshots.length === 0`, "poll household until the first kid appears")
 	mustContain(t, parentBar, `running: root.role === "parent" && !root.householdPinSet`, "poll parent-pin until it appears")
@@ -162,6 +166,18 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("apply-role must prefer the matching plugin binary over a leftover ~/.local/bin/kidtimer")
 	}
 	mustContain(t, applyRole, "kidtimer-linux-$want", "arch plugin binary name")
+	mustContain(t, applyRole, "releases/download/v", "pinned versioned tarball")
+	mustContain(t, applyRole, "--proto '=https'", "https-only download")
+	mustContain(t, applyRole, "SHA256SUMS", "committed checksums")
+	mustContain(t, applyRole, "stop-user-bank", "stop user daemons before sudo")
+	mustContain(t, applyRole, "/usr/local/share/kidtimer", "root-owned plugin tree")
+	mustContain(t, applyRole, "install -o root -g root -m 0755", "root-owned binary")
+	if strings.Contains(applyRole, "releases/latest") {
+		t.Fatal("must not fetch latest")
+	}
+	if strings.Contains(applyRole, `sudo "$tmp"`) || strings.Contains(applyRole, `sudo "$userbin"`) {
+		t.Fatal("must not sudo a user-owned binary")
+	}
 	mustContain(t, applyRole, "setup-error", "kid setup error file")
 	mustContain(t, applyRole, "od -An -t x1 -j 18 -N 2", "ELF machine check")
 	mustContain(t, parentBar, "setup-error", "watch kid setup error")

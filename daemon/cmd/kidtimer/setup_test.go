@@ -54,8 +54,11 @@ func TestSetupParentLeavesBankAlone(t *testing.T) {
 	if strings.Contains(ids, "kidtimer.kid") || strings.Contains(ids, "kidtimer.parent") || !strings.Contains(ids, `"kidtimer"`) && !strings.Contains(ids, "kidtimer") {
 		t.Fatalf("widgets %s", ids)
 	}
-	if !strings.Contains(ids, filepath.Join(env.Home, ".local", "bin", "kidtimer")) {
-		t.Fatalf("parentBin %s", ids)
+	if !strings.Contains(ids, `"kidtimer"`) && !strings.Contains(ids, "kidtimer") {
+		t.Fatalf("widgets %s", ids)
+	}
+	if strings.Contains(ids, "parentBin") {
+		t.Fatalf("parentBin must not be written: %s", ids)
 	}
 }
 
@@ -161,8 +164,8 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	if err != nil || str(bar["readToken"]) == "" || str(bar["askToken"]) == "" {
 		t.Fatalf("kid-bar: %v %v", bar, err)
 	}
-	if str(kid["kidBin"]) != filepath.Join(root, "usr", "local", "bin", "kidtimer") {
-		t.Fatalf("kidBin %v", kid["kidBin"])
+	if str(kid["kidBin"]) != "" {
+		t.Fatalf("kidBin must not be written %v", kid["kidBin"])
 	}
 	if str(bar["url"]) != "http://127.0.0.1:8742" {
 		t.Fatalf("url %v", bar["url"])
@@ -178,7 +181,7 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(cfg), "advertise = true") {
+	if strings.Contains(string(cfg), "advertise = true") {
 		t.Fatal("advertise")
 	}
 	if strings.Contains(string(cfg), `kid_name = "kid-a"`) {
@@ -197,7 +200,7 @@ func TestSetupKidTwice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	custom := strings.Replace(string(raw), `listen = "0.0.0.0:8742"`, `listen = "127.0.0.1:8742"`, 1)
+	custom := strings.Replace(string(raw), `listen = "127.0.0.1:8742"`, `listen = "0.0.0.0:8742"`, 1)
 	if custom == string(raw) {
 		t.Fatal("need packaged listen to customize")
 	}
@@ -211,8 +214,8 @@ func TestSetupKidTwice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(got), `listen = "0.0.0.0:8742"`) || !strings.Contains(string(got), "advertise = true") {
-		t.Fatalf("localhost workaround must become LAN: %s", got)
+	if !strings.Contains(string(got), `listen = "127.0.0.1:8742"`) || strings.Contains(string(got), "0.0.0.0") {
+		t.Fatalf("LAN listen must become loopback: %s", got)
 	}
 }
 
@@ -241,8 +244,8 @@ func TestSetupKidKeepsOtherKidEdits(t *testing.T) {
 	if err != nil || !strings.Contains(string(got), `bedtime_start = "20:00"`) {
 		t.Fatalf("other edits must stay: %s %v", got, err)
 	}
-	if !strings.Contains(string(got), `listen = "0.0.0.0:8742"`) {
-		t.Fatalf("lan listen: %s", got)
+	if !strings.Contains(string(got), `listen = "127.0.0.1:8742"`) {
+		t.Fatalf("loopback listen: %s", got)
 	}
 }
 
@@ -256,10 +259,6 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	if err := os.WriteFile(cfgPath, []byte("not toml"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
-	if err := os.WriteFile(shell, []byte("{"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer"))
 	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.kid"))
 	if err := os.Remove(filepath.Join(root, "etc", "systemd", "system", "kidtimer.service")); err != nil {
@@ -271,6 +270,7 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	if _, err := config.ParseFile(cfgPath); err != nil {
 		t.Fatalf("repaired config: %v", err)
 	}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
 	doc, err := readJSON(shell)
 	if err != nil {
 		t.Fatal(err)
@@ -294,6 +294,25 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "etc", "systemd", "system", "kidtimer.service")); err != nil {
 		t.Fatal("repaired unit")
+	}
+}
+
+func TestSetupCorruptShellFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	if err := setupParent(env); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
+	if err := os.WriteFile(shell, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := setupParent(env); err == nil {
+		t.Fatal("corrupt shell.json must fail closed")
+	}
+	got, err := os.ReadFile(shell)
+	if err != nil || string(got) != "{" {
+		t.Fatalf("must not replace the bar: %s %v", got, err)
 	}
 }
 
@@ -449,11 +468,14 @@ func TestInstallScriptParentHasNoSudo(t *testing.T) {
 	if !strings.Contains(body, "setup parent") {
 		t.Fatal("missing setup parent")
 	}
-	if strings.Count(body, "sudo") != 1 {
-		t.Fatalf("sudo should only re-exec kid, got %d", strings.Count(body, "sudo"))
+	if strings.Contains(body, `exec sudo "$0"`) {
+		t.Fatal("must not sudo the installer script")
 	}
-	if !strings.Contains(body, `exec sudo "$0" kid`) {
-		t.Fatal("kid must re-exec sudo")
+	if !strings.Contains(body, "sudo install -o root -g root -m 0755") {
+		t.Fatal("kid must sudo install the hashed binary")
+	}
+	if !strings.Contains(body, "/usr/local/bin/kidtimer") {
+		t.Fatal("kid system binary")
 	}
 	if !strings.Contains(body, `HOME}/.local/share/kidtimer/src`) {
 		t.Fatal("parent share dir")

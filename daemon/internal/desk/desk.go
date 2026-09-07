@@ -1,7 +1,6 @@
 package desk
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -44,9 +43,6 @@ type Registry struct {
 	path    string
 	links   map[reverse.KidID]*link
 	corr    atomic.Uint64
-	browse  func(ctx context.Context, out chan<- advertise.Found) error
-	probe   func(ctx context.Context) []string
-	pair    func(ctx context.Context, url string) (pairResult, error)
 	reclaim func(ctx context.Context, url string) (pairResult, error)
 	seen    []reverse.Seen
 }
@@ -158,7 +154,7 @@ func (r *Registry) Call(id reverse.KidID, op reverse.Op) (reverse.OpResult, erro
 	if l != nil && l.live {
 		return r.callSession(l, op)
 	}
-	return r.callHTTP(id, op)
+	return reverse.OpResult{Corr: op.Corr, Status: http.StatusServiceUnavailable, Body: json.RawMessage(`{"error":"offline"}`)}, errOffline
 }
 
 func (r *Registry) callSession(l *link, op reverse.Op) (reverse.OpResult, error) {
@@ -184,51 +180,6 @@ func (r *Registry) callSession(l *link, op reverse.Op) (reverse.OpResult, error)
 	case <-time.After(5 * time.Second):
 		return reverse.OpResult{}, fmt.Errorf("op timeout")
 	}
-}
-
-func (r *Registry) record(id reverse.KidID) (reverse.Record, bool) {
-	kids, err := household.Load(r.path)
-	if err != nil {
-		return reverse.Record{}, false
-	}
-	return household.Lookup(kids, id)
-}
-
-func (r *Registry) callHTTP(id reverse.KidID, op reverse.Op) (reverse.OpResult, error) {
-	rec, ok := r.record(id)
-	if !ok || rec.URL == "" || rec.Token == "" {
-		return reverse.OpResult{Corr: op.Corr, Status: http.StatusServiceUnavailable, Body: json.RawMessage(`{"error":"offline"}`)}, errOffline
-	}
-	return httpOp(rec.URL, rec.Token, op)
-}
-
-func httpOp(base, token string, op reverse.Op) (reverse.OpResult, error) {
-	u := strings.TrimRight(base, "/") + op.Path
-	var body io.Reader
-	if len(op.Body) > 0 {
-		body = bytes.NewReader(op.Body)
-	}
-	req, err := http.NewRequest(op.Method, u, body)
-	if err != nil {
-		return reverse.OpResult{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	if op.IdemKey != "" {
-		req.Header.Set("Idempotency-Key", op.IdemKey)
-	}
-	if len(op.Body) > 0 {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
-	if err != nil {
-		return reverse.OpResult{Corr: op.Corr, Status: http.StatusServiceUnavailable, Body: json.RawMessage(`{"error":"offline"}`)}, errOffline
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if len(raw) == 0 {
-		raw = []byte("{}")
-	}
-	return reverse.OpResult{Corr: op.Corr, Status: resp.StatusCode, Body: raw}, nil
 }
 
 func (r *Registry) attach(id reverse.KidID, c net.Conn) {
@@ -394,10 +345,6 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.OnListen != nil {
 		cfg.OnListen(boundLoopback(httpLn), boundLoopback(sessLn))
-	}
-
-	if !cfg.SkipScan {
-		go r.scanLoop(ctx)
 	}
 
 	srv := &http.Server{Handler: loopbackOnly(http.HandlerFunc(r.serveHTTP))}

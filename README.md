@@ -160,9 +160,9 @@ sudo systemctl stop kidtimer
 
 If they kill the shell, the overlay is gone and Super works again. A TTY, a reboot, or Windows on a dual-boot disk all get them out. Time only counts while Omarchy is running.
 
-The first desk that finds an unclaimed kid computer claims it. A second desk sees Already claimed. Yes takes it over. Do that on a quiet home network with your desk awake. Keep guest laptops off Kidtimer until yours has claimed the box and the PIN is set.
+The first desk the kid computer reaches is the one it talks to. Sit at yours first, then theirs. Keep guest laptops off Kidtimer until yours has claimed the box and the PIN is set.
 
-The kid computer talks on your private network with no encryption, on port 8742. Tailscale at home counts. Do not do this on cafe Wi-Fi or an open guest network.
+Away from home the kid computer keeps counting, and the overlay still works. Your desk needs the home network to see them. SSH into that desk and use the [command line](#command-line) if you are away from the screen.
 
 ## Take it off
 
@@ -178,7 +178,14 @@ On a kid computer, also:
 sudo systemctl disable --now kidtimer
 ```
 
-Leftovers that stay until you delete them: `/etc/kidtimer` and `/var/lib/kidtimer` on the kid box, `~/.local/share/kidtimer` and `~/.local/bin/kidtimer` on yours.
+Leftovers that stay until you delete them:
+
+- `/usr/local/bin/kidtimer`
+- `/usr/local/share/kidtimer`
+- `/etc/systemd/system/kidtimer.service`
+- `/etc/kidtimer` and `/var/lib/kidtimer` on the kid box
+- `~/.local/share/kidtimer` and `~/.local/bin/kidtimer`
+- `~/.local/state/omarchy/indicators/stay-awake` if the overlay created it
 
 ## From source
 
@@ -193,9 +200,9 @@ go build -o kidtimer ./daemon/cmd/kidtimer
 
 `go test ./...` from the repo root must print PASS.
 
-Then from that checkout, run `./kidtimer setup parent` on the parent desk, or `sudo ./kidtimer setup kid` on the kid box.
+Then from that checkout, pick **This is mine** / **This is the kid's** on the chip, or run `helpers/apply-role.sh parent` on the parent desk. Kid setup asks for your password once and installs a root-owned binary under `/usr/local`.
 
-`packaging/pack.sh` writes the tarballs. `packaging/install.sh` is the unpack installer.
+`packaging/pack.sh` writes the tarballs and checks `packaging/SHA256SUMS`. `packaging/install.sh` is the unpack installer for those tarballs.
 
 ## License
 

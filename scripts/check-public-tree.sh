@@ -6,7 +6,6 @@ needles=(
 	/home/adam
 )
 paths=(
-	spec.md
 	packaging
 	README.md
 	CONTRIBUTING.md

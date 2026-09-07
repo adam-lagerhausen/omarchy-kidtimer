@@ -100,6 +100,8 @@ assertEqual(kid.kidtimerBin({ kidBin: "/opt/k" }, "/home/parent", "/bundled"), "
 assertEqual(kid.kidtimerBin({}, "/home/kid", "/bundled"), "/usr/local/bin/kidtimer", "kid system bin")
 assertEqual(parent.kidsFromSettings({})[0].url, "http://127.0.0.1:8742", "localhost")
 assertEqual(parent.notifyHeadline("Ada"), "Ada", "notify who")
+assertEqual(parent.notifyHeadline("<Ada & Bea>"), "Ada  Bea", "notify strips host markup")
+assertEqual(parent.householdBarLabel([{ name: "Ada<script>" }]), "Adascript", "bar strips host markup")
 assertEqual(parent.lockLabel("Ada", false), "Lock Ada", "lock Ada")
 assertEqual(parent.lockLabel("Ada", true), "Unlock Ada", "unlock Ada")
 assertEqual(parent.lockPayload(true), { locked: true }, "lock on")

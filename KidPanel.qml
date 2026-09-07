@@ -91,39 +91,30 @@ Item {
     if (root.askGroup === "") return
     if (Model.askBlocked(root.statusJson)) return
     var body = Model.askPayload(root.askGroup, root.chosenMinutes * 60, "more time")
-    var req = new XMLHttpRequest()
-    req.open("POST", bankUrl() + "/v1/asks")
-    req.setRequestHeader("Authorization", "Bearer " + String(setting("askToken", "")))
-    req.setRequestHeader("Content-Type", "application/json")
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) {
+    if (!hostWidget || typeof hostWidget.kidPost !== "function") return
+    hostWidget.kidPost("/v1/asks", body, String(setting("askToken", "")), function(status, text) {
+      if (status !== 200) {
         root.askGroup = ""
         return
       }
       var id = ""
       try {
-        id = JSON.parse(req.responseText).id || ""
+        id = JSON.parse(text).id || ""
       } catch (e) {
         id = ""
       }
       root.pendingAskId = id
       root.waitingGroup = root.askGroup
       root.askGroup = ""
-    }
-    req.send(JSON.stringify(body))
+    })
   }
 
   function submitPin() {
     if (!Model.validPin(root.pinDigits) || root.pendingAskId === "") return
     var body = Model.pinApprovePayload(root.pinDigits, root.pendingAskId)
-    var req = new XMLHttpRequest()
-    req.open("POST", bankUrl() + "/v1/pin/approve")
-    req.setRequestHeader("Authorization", "Bearer " + String(setting("askToken", "")))
-    req.setRequestHeader("Content-Type", "application/json")
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) {
+    if (!hostWidget || typeof hostWidget.kidPost !== "function") return
+    hostWidget.kidPost("/v1/pin/approve", body, String(setting("askToken", "")), function(status, text) {
+      if (status !== 200) {
         root.pinWrong = true
         return
       }
@@ -132,8 +123,7 @@ Item {
       root.pinWrong = false
       root.waitingGroup = ""
       root.pendingAskId = ""
-    }
-    req.send(JSON.stringify(body))
+    })
   }
 
   Item {

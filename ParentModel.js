@@ -270,18 +270,25 @@ function bedtimePayload(start, end) {
   return { bedtime_start: String(start || ""), bedtime_end: String(end || "") }
 }
 
+function hostSafe(s, max) {
+  var n = max || 80
+  var out = String(s || "").replace(/[<>&]/g, "")
+  if (out.length > n) out = out.slice(0, n)
+  return out
+}
+
 function householdBarLabel(snapshots) {
   var list = snapshots || []
   if (!list.length) return "no computers"
   var parts = []
   for (var i = 0; i < list.length; i++) {
-    parts.push((list[i] && list[i].name) || "kid")
+    parts.push(hostSafe((list[i] && list[i].name) || "kid", 40))
   }
-  return parts.join(" · ")
+  return hostSafe(parts.join(" · "), 80)
 }
 
 function notifyHeadline(kidName) {
-  return kidName || "kid"
+  return hostSafe(kidName || "kid", 40)
 }
 
 function notifySummary(ask, look, status) {

@@ -255,22 +255,29 @@ func TestPairPublicForbidden(t *testing.T) {
 	req.RemoteAddr = "8.8.8.8:9"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 403 {
+	if rec.Code != 404 {
 		t.Fatalf("public: %d %s", rec.Code, rec.Body.String())
 	}
 	req = httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("{}"))
 	req.RemoteAddr = ""
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 403 {
+	if rec.Code != 404 {
 		t.Fatalf("unspecified: %d %s", rec.Code, rec.Body.String())
 	}
 	req = httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("{}"))
 	req.RemoteAddr = "192.168.1.9:9"
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 200 {
+	if rec.Code != 404 {
 		t.Fatalf("lan: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("{}"))
+	req.RemoteAddr = "127.0.0.1:9"
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("loopback: %d %s", rec.Code, rec.Body.String())
 	}
 	if asMap(t, rec.Body.String())["id"] != "machine-1" {
 		t.Fatalf("id: %s", rec.Body.String())

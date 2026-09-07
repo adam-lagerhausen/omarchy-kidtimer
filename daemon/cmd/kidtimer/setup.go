@@ -19,7 +19,6 @@ import (
 	"kidtimer/daemon/internal/bank"
 	"kidtimer/daemon/internal/config"
 	"kidtimer/daemon/internal/household"
-	"kidtimer/daemon/internal/netaddr"
 	"kidtimer/daemon/internal/reverse"
 )
 
@@ -31,13 +30,20 @@ type setupEnv struct {
 }
 
 func runSetup(args []string) error {
-	if len(args) < 1 || (args[0] != "parent" && args[0] != "kid") {
-		return fmt.Errorf("usage: kidtimer setup parent|kid")
+	if len(args) < 1 || (args[0] != "parent" && args[0] != "kid" && args[0] != "stop-user-bank") {
+		return fmt.Errorf("usage: kidtimer setup parent|kid|stop-user-bank")
 	}
 	role := args[0]
 	env, err := parseSetupEnv(args[1:])
 	if err != nil {
 		return err
+	}
+	if role == "stop-user-bank" {
+		if env.Home == "" {
+			return fmt.Errorf("home is required")
+		}
+		stopUserPickupDaemons(env.Home)
+		return nil
 	}
 	if role == "parent" {
 		return setupParent(env)
@@ -178,9 +184,7 @@ func setupParent(env setupEnv) error {
 	if err := retireOldPlugins(env.Home, shell); err != nil {
 		return err
 	}
-	return ensureWidget(shell, "kidtimer", map[string]any{
-		"parentBin": bin,
-	})
+	return ensureWidget(shell, "kidtimer", nil)
 }
 
 func (env setupEnv) etc() string {
@@ -253,9 +257,7 @@ func setupKid(env setupEnv) error {
 	if err := retireOldPlugins(env.Home, shell); err != nil {
 		return err
 	}
-	if err := ensureWidget(shell, "kidtimer", map[string]any{
-		"kidBin": env.kidBin(),
-	}); err != nil {
+	if err := ensureWidget(shell, "kidtimer", nil); err != nil {
 		return err
 	}
 	if err := copyFile(filepath.Join(env.Repo, "packaging", "kidtimer.service"), env.unitPath(), 0o644); err != nil {
@@ -267,7 +269,7 @@ func setupKid(env setupEnv) error {
 	if env.SkipSystemd {
 		return nil
 	}
-	return startKidUnit(env.Home)
+	return startKidUnit()
 }
 
 func chownToHomeOwner(home string, paths ...string) error {
@@ -306,8 +308,7 @@ func chownToHomeOwner(home string, paths ...string) error {
 	return nil
 }
 
-func startKidUnit(home string) error {
-	stopUserPickupDaemons(home)
+func startKidUnit() error {
 	enable := exec.Command("systemctl", "enable", "kidtimer")
 	enable.Stdout = os.Stdout
 	enable.Stderr = os.Stderr
@@ -423,12 +424,12 @@ func ensureKidConfig(src, dst, host string) error {
 	if err != nil {
 		return writeKidConfig(src, dst, host)
 	}
-	return enableKidLAN(dst, cfg)
+	return pinKidLoopback(dst, cfg)
 }
 
-func enableKidLAN(dst string, cfg *config.Config) error {
-	needAdv := !cfg.Advertise
-	needListen := cfg.Listen == "" || cfg.Listen == netaddr.DefaultListen
+func pinKidLoopback(dst string, cfg *config.Config) error {
+	needAdv := cfg.Advertise
+	needListen := cfg.Listen == "" || strings.Contains(cfg.Listen, "0.0.0.0")
 	if !needAdv && !needListen {
 		return nil
 	}
@@ -439,16 +440,16 @@ func enableKidLAN(dst string, cfg *config.Config) error {
 	out := string(raw)
 	if needAdv {
 		if advertiseLine.MatchString(out) {
-			out = advertiseLine.ReplaceAllString(out, "advertise = true")
+			out = advertiseLine.ReplaceAllString(out, "advertise = false")
 		} else {
-			out = "advertise = true\n" + out
+			out = "advertise = false\n" + out
 		}
 	}
 	if needListen {
 		if listenLine.MatchString(out) {
-			out = listenLine.ReplaceAllString(out, `listen = "0.0.0.0:8742"`)
+			out = listenLine.ReplaceAllString(out, `listen = "127.0.0.1:8742"`)
 		} else {
-			out = "listen = \"0.0.0.0:8742\"\n" + out
+			out = "listen = \"127.0.0.1:8742\"\n" + out
 		}
 	}
 	return writeFileAtomic(dst, []byte(out), 0o644)
@@ -638,19 +639,22 @@ func emptyShell() map[string]any {
 	}
 }
 
-func loadShell(path string) map[string]any {
+func loadShell(path string) (map[string]any, error) {
 	doc, err := readJSON(path)
 	if err == nil {
-		return doc
+		return doc, nil
 	}
-	if !os.IsNotExist(err) {
-		_ = os.Rename(path, path+".bak")
+	if os.IsNotExist(err) {
+		return emptyShell(), nil
 	}
-	return emptyShell()
+	return nil, err
 }
 
 func ensureWidget(shell, id string, extra map[string]any) error {
-	doc := loadShell(shell)
+	doc, err := loadShell(shell)
+	if err != nil {
+		return err
+	}
 	bar, _ := doc["bar"].(map[string]any)
 	if bar == nil {
 		bar = map[string]any{}
@@ -696,7 +700,7 @@ func removeWidget(shell, id string) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return nil
+		return err
 	}
 	bar, _ := doc["bar"].(map[string]any)
 	if bar == nil {

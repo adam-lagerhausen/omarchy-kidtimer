@@ -29,6 +29,9 @@ BarWidget {
   property bool hour12: true
   property bool prefsReady: false
   property var clockPushed: ({})
+  property var httpQueue: []
+  property var httpJob: null
+  property string httpBuf: ""
 
   FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
   FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/JetBrainsMono-Medium.ttf") }
@@ -226,136 +229,76 @@ BarWidget {
     snapshots = next
     if (root.role === "parent") statusText = Model.householdBarLabel(next)
     syncPanel()
-    for (var j = 0; j < rows.length; j++) {
-      if (rows[j].claimed) continue
-      if (rows[j].url) {
-        pollStatus(j, rows[j])
-        pollAsks(j, rows[j])
-      }
-    }
+    for (var a = 0; a < next.length; a++) noteHouseholdAsks(next[a])
     root.pushHour12()
   }
 
+  function noteHouseholdAsks(row) {
+    if (!row || row.claimed) return
+    var key = row.id || row.name || ""
+    if (!key) return
+    var payload = row.asks
+    var seeded = asksSeeded[key]
+    if (!seeded) {
+      var first = Object.assign({}, seenAskIds)
+      first[key] = Model.pendingIds(payload)
+      seenAskIds = first
+      var flags = Object.assign({}, asksSeeded)
+      flags[key] = true
+      asksSeeded = flags
+      return
+    }
+    var prev = seenAskIds[key] || []
+    var fresh = Model.newAskIds(prev, payload)
+    var nextSeen = Object.assign({}, seenAskIds)
+    nextSeen[key] = Model.pendingIds(payload)
+    seenAskIds = nextSeen
+    for (var i = 0; i < fresh.length; i++) {
+      notifyAsk(Model.findAsk(payload, fresh[i]), row)
+    }
+  }
+
+  function splitHTTP(raw) {
+    var s = String(raw || "")
+    var i = s.lastIndexOf("\n")
+    if (i < 0) return { status: 0, body: s }
+    return { status: Number(s.slice(i + 1)) || 0, body: s.slice(0, i) }
+  }
+
+  function loopbackHTTP(method, url, token, body, cb, idem) {
+    var q = (httpQueue || []).slice()
+    q.push({ method: method, url: url, token: token || "", body: body || "", cb: cb, idem: idem || "" })
+    httpQueue = q
+    pumpHTTP()
+  }
+
+  function pumpHTTP() {
+    if (httpProc.running || !httpQueue || httpQueue.length === 0) return
+    var q = httpQueue.slice()
+    var job = q.shift()
+    httpQueue = q
+    httpJob = job
+    httpBuf = ""
+    var cmd = ["/usr/bin/bash", helperPath("loopback-http.sh"), job.method, job.url]
+    if (job.idem) cmd.push(job.idem)
+    httpProc.command = cmd
+    httpProc.running = true
+  }
+
   function poll() {
-    var req = new XMLHttpRequest()
-    req.open("GET", deskUrl() + "/v1/household")
-    req.onreadystatechange = function () {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) {
-        kidsFile.reload()
+    loopbackHTTP("GET", deskUrl() + "/v1/household", "", "", function(status, text) {
+      if (status !== 200) {
+        kidsRead.running = true
         seedFromSettings()
-        var rows = kidRows()
-        for (var i = 0; i < rows.length; i++) {
-          if (rows[i].claimed) continue
-          if (rows[i].url) {
-            pollStatus(i, rows[i])
-            pollAsks(i, rows[i])
-          }
-        }
         return
       }
       try {
-        applyDesk(JSON.parse(req.responseText))
+        applyDesk(JSON.parse(text))
       } catch (e) {
-        kidsFile.reload()
+        kidsRead.running = true
         seedFromSettings()
       }
-    }
-    try {
-      req.send()
-    } catch (e) {
-      kidsFile.reload()
-      seedFromSettings()
-    }
-  }
-
-  function pollStatus(index, row) {
-    var req = new XMLHttpRequest()
-    req.open("GET", row.url + "/v1/status")
-    req.setRequestHeader("Authorization", "Bearer " + row.token)
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status === 0) {
-        writeSnapshot(index, row, { reachable: false, error: false })
-        return
-      }
-      if (req.status !== 200) {
-        writeSnapshot(index, row, { reachable: false, error: true })
-        return
-      }
-      try {
-        writeSnapshot(index, row, { status: Model.parseStatus(JSON.parse(req.responseText)), reachable: true, error: false })
-        pollLook(index, row)
-      } catch (e) {
-        writeSnapshot(index, row, { reachable: false, error: true })
-      }
-    }
-    try {
-      req.send()
-    } catch (e) {
-      writeSnapshot(index, row, { reachable: false, error: false })
-    }
-  }
-
-  function pollLook(index, row) {
-    var req = new XMLHttpRequest()
-    req.open("GET", row.url + "/v1/look")
-    req.setRequestHeader("Authorization", "Bearer " + row.token)
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) return
-      try {
-        writeSnapshot(index, row, { look: Model.parseLook(JSON.parse(req.responseText)), fromPoll: true })
-      } catch (e) {
-        return
-      }
-    }
-    try {
-      req.send()
-    } catch (e) {
-      return
-    }
-  }
-
-  function pollAsks(index, row) {
-    var req = new XMLHttpRequest()
-    req.open("GET", row.url + "/v1/asks")
-    req.setRequestHeader("Authorization", "Bearer " + row.token)
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) return
-      var payload
-      try {
-        payload = JSON.parse(req.responseText)
-      } catch (e) {
-        return
-      }
-      writeSnapshot(index, row, { asks: Model.parseAsks(payload) })
-      var key = row.url
-      var seeded = asksSeeded[key]
-      if (!seeded) {
-        var first = Object.assign({}, seenAskIds)
-        first[key] = Model.pendingIds(payload)
-        seenAskIds = first
-        var flags = Object.assign({}, asksSeeded)
-        flags[key] = true
-        asksSeeded = flags
-        return
-      }
-      var prev = seenAskIds[key] || []
-      var fresh = Model.newAskIds(prev, payload)
-      var nextSeen = Object.assign({}, seenAskIds)
-      nextSeen[key] = Model.pendingIds(payload)
-      seenAskIds = nextSeen
-      for (var i = 0; i < fresh.length; i++) {
-        notifyAsk(Model.findAsk(payload, fresh[i]), snapshots[index] || row)
-      }
-    }
-    try {
-      req.send()
-    } catch (e) {
-      return
-    }
+    })
   }
 
   function notifyAsk(ask, kid) {
@@ -367,65 +310,14 @@ BarWidget {
     ])
   }
 
-  function postJsonTo(kid, method, path, body, thenFn) {
-    if (!kid || !kid.url) return
-    var req = new XMLHttpRequest()
-    req.open(method, kid.url + path)
-    req.setRequestHeader("Authorization", "Bearer " + kid.token)
-    req.setRequestHeader("Content-Type", "application/json")
-    if (path === "/v1/grants") {
-      req.setRequestHeader("Idempotency-Key", "parent-" + Date.now() + "-" + Math.floor(Math.random() * 1e9))
-    }
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status === 200) {
-        if (path === "/v1/look") {
-          try {
-            var parsed = Model.parseLook(JSON.parse(req.responseText))
-            var rows = kidRows()
-            var idx = root.selectedIndex
-            if (rows[idx]) writeSnapshot(idx, rows[idx], { look: parsed })
-          } catch (e) {
-          }
-        }
+  function deskSend(method, path, body, thenFn, idem) {
+    var raw = body === undefined || body === null ? "" : JSON.stringify(body)
+    loopbackHTTP(method, deskUrl() + path, "", raw, function(status, text) {
+      if (status === 200) {
         poll()
-        if (thenFn) thenFn()
+        if (thenFn) thenFn(text)
       }
-    }
-    try {
-      req.send(JSON.stringify(body))
-    } catch (e) {
-      return
-    }
-  }
-
-  function postJson(method, path, body, thenFn) {
-    postJsonTo(aimedKid(), method, path, body, thenFn)
-  }
-
-  function grant(group, seconds) {
-    grantFun(seconds)
-  }
-
-  function deskSend(method, path, body, thenFn) {
-    var req = new XMLHttpRequest()
-    req.open(method, deskUrl() + path)
-    req.setRequestHeader("Content-Type", "application/json")
-    if (path.indexOf("/grants") >= 0) {
-      req.setRequestHeader("Idempotency-Key", "parent-" + Date.now() + "-" + Math.floor(Math.random() * 1e9))
-    }
-    req.onreadystatechange = function () {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status === 200) {
-        poll()
-        if (thenFn) thenFn()
-      }
-    }
-    try {
-      req.send(JSON.stringify(body))
-    } catch (e) {
-      return
-    }
+    }, idem)
   }
 
   function deskPost(path, body, thenFn) {
@@ -433,34 +325,27 @@ BarWidget {
   }
 
   function sendKid(kid, method, path, body, thenFn) {
-    if (kid && kid.id && !kid.url) {
-      var rest = String(path || "")
-      if (rest.indexOf("/v1/") === 0) rest = rest.slice(3)
-      deskSend(method, "/v1/kids/" + kid.id + rest, body, thenFn)
-      return
-    }
-    postJsonTo(kid, method, path, body, thenFn)
+    if (!kid || !kid.id || kid.claimed) return
+    var rest = String(path || "")
+    if (rest.indexOf("/v1/") === 0) rest = rest.slice(3)
+    var idem = ""
+    if (rest.indexOf("/grants") >= 0) idem = "parent-" + Date.now() + "-" + Math.floor(Math.random() * 1e9)
+    deskSend(method, "/v1/kids/" + kid.id + rest, body, thenFn, idem)
   }
 
   function grantFun(seconds) {
     var kid = aimedKid()
     if (kid && kid.claimed) return
-    if (kid && kid.id && !kid.url) {
-      deskPost("/v1/kids/" + kid.id + "/grants", Model.grantPayload("fun", seconds))
-      return
-    }
-    postJson("POST", "/v1/grants", Model.grantPayload("fun", seconds))
+    if (!kid || !kid.id) return
+    sendKid(kid, "POST", "/v1/grants", Model.grantPayload("fun", seconds))
   }
 
   function decide(askId, decision, kidIndex) {
     var list = snapshots || []
     var kid = aimedKid()
     if (kidIndex !== undefined && kidIndex !== null && list[kidIndex]) kid = list[kidIndex]
-    if (kid && kid.id && !kid.url) {
-      deskPost("/v1/kids/" + kid.id + "/asks/" + askId + "/decide", { decision: decision })
-      return
-    }
-    postJsonTo(kid, "POST", "/v1/asks/" + askId + "/decide", { decision: decision })
+    if (!kid || !kid.id || kid.claimed) return
+    sendKid(kid, "POST", "/v1/asks/" + askId + "/decide", { decision: decision })
   }
 
   function denyAsk(ask) {
@@ -476,11 +361,8 @@ BarWidget {
   function setLock(locked) {
     var kid = aimedKid()
     if (kid && kid.claimed) return
-    if (kid && kid.id && !kid.url) {
-      deskPost("/v1/kids/" + kid.id + "/lock", Model.lockPayload(locked))
-      return
-    }
-    postJson("POST", "/v1/lock", Model.lockPayload(locked))
+    if (!kid || !kid.id) return
+    sendKid(kid, "POST", "/v1/lock", Model.lockPayload(locked))
   }
 
   function setParentPin(digits) {
@@ -493,7 +375,8 @@ BarWidget {
     var next = on !== false
     if (root.hour12 !== next) root.clockPushed = ({})
     root.hour12 = next
-    prefsFile.setText(Model.prefsWire(root.hour12))
+    prefsWrite.payload = Model.prefsWire(root.hour12)
+    prefsWrite.running = true
     if (panelLoader.item && "hour12" in panelLoader.item) panelLoader.item.hour12 = root.hour12
     root.pushHour12()
   }
@@ -626,16 +509,21 @@ BarWidget {
     Qt.callLater(function() { applyProc.running = true })
   }
 
+  function kidBankUrl() {
+    return String(kidBank.url || "http://127.0.0.1:8742").replace(/\/$/, "")
+  }
+
+  function kidPost(path, body, token, cb) {
+    loopbackHTTP("POST", kidBankUrl() + path, token, JSON.stringify(body || {}), cb)
+  }
+
   function pollKid() {
     if (root.role !== "kid") return
-    var req = new XMLHttpRequest()
-    req.open("GET", String(kidBank.url || "http://127.0.0.1:8742").replace(/\/$/, "") + "/v1/status")
-    req.setRequestHeader("Authorization", "Bearer " + String(kidBank.readToken || ""))
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE || req.status !== 200) return
+    loopbackHTTP("GET", kidBankUrl() + "/v1/status", String(kidBank.readToken || ""), "", function(status, text) {
+      if (status !== 200) return
       var next
       try {
-        next = Kid.parseStatus(JSON.parse(req.responseText))
+        next = Kid.parseStatus(JSON.parse(text))
       } catch (e) {
         return
       }
@@ -654,8 +542,7 @@ BarWidget {
           warned.notices[i]
         ])
       }
-    }
-    try { req.send() } catch (e) {}
+    })
   }
 
   function loadKidBank(raw) {
@@ -711,33 +598,27 @@ BarWidget {
 
   FileView {
     id: kidsFile
-    path: {
-      var p = String(setting("kidsFile", ""))
-      if (p) return p
-      return Quickshell.env("HOME") + "/.local/share/kidtimer/kids.json"
-    }
+    path: Quickshell.env("HOME") + "/.local/share/kidtimer/kids.json"
     watchChanges: true
     printErrors: false
-    onLoaded: root.loadHousehold(text())
+    preload: false
+    blockAllReads: true
     onFileChanged: {
-      kidsFile.reload()
+      kidsRead.running = true
       poll()
     }
-    onLoadFailed: root.loadHousehold("")
+    Component.onCompleted: kidsRead.running = true
   }
 
   FileView {
     id: prefsFile
-    path: {
-      var p = String(setting("prefsFile", ""))
-      if (p) return p
-      return Quickshell.env("HOME") + "/.local/share/kidtimer/prefs.json"
-    }
+    path: Quickshell.env("HOME") + "/.local/share/kidtimer/prefs.json"
     watchChanges: true
     printErrors: false
-    onLoaded: root.loadPrefs(text())
-    onFileChanged: prefsFile.reload()
-    onLoadFailed: root.loadPrefs("")
+    preload: false
+    blockAllReads: true
+    onFileChanged: prefsRead.running = true
+    Component.onCompleted: prefsRead.running = true
   }
 
   FileView {
@@ -788,8 +669,60 @@ BarWidget {
   }
 
   Process {
+    id: httpProc
+    stdinEnabled: true
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { root.httpBuf += String(data || "") }
+    }
+    onStarted: {
+      var job = root.httpJob || {}
+      write(String(job.token || "") + "\n" + String(job.body || ""))
+    }
+    onExited: {
+      var job = root.httpJob
+      root.httpJob = null
+      var parsed = root.splitHTTP(root.httpBuf)
+      root.httpBuf = ""
+      if (job && job.cb) job.cb(parsed.status, parsed.body)
+      Qt.callLater(root.pumpHTTP)
+    }
+  }
+
+  Process {
+    id: kidsRead
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "read", "kids.json"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { root.loadHousehold(data) }
+    }
+    onExited: if (exitCode !== 0) root.loadHousehold("")
+  }
+
+  Process {
+    id: prefsRead
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "read", "prefs.json"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { root.loadPrefs(data) }
+    }
+    onExited: if (exitCode !== 0) root.loadPrefs("")
+  }
+
+  Process {
+    id: prefsWrite
+    property string payload: ""
+    stdinEnabled: true
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "write", "prefs.json"]
+    onStarted: {
+      write(prefsWrite.payload || "{}")
+      prefsWrite.payload = ""
+    }
+  }
+
+  Process {
     id: roleRead
-    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/role"]
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "read", "role"]
     stdout: SplitParser {
       splitMarker: ""
       onRead: function(data) { root.applyRole(data) }
@@ -799,7 +732,7 @@ BarWidget {
 
   Process {
     id: kidBankRead
-    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/kid-bar.json"]
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "read", "kid-bar.json"]
     stdout: SplitParser {
       splitMarker: ""
       onRead: function(data) { root.loadKidBank(data) }
@@ -808,7 +741,7 @@ BarWidget {
 
   Process {
     id: setupErrRead
-    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/setup-error"]
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "read", "setup-error"]
     stdout: SplitParser {
       splitMarker: ""
       onRead: function(data) {

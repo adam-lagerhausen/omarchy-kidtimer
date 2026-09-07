@@ -70,10 +70,10 @@ func TestParseKidPackaging(t *testing.T) {
 	if !cfg.RemoteLock {
 		t.Fatal("kid remote_lock must be on")
 	}
-	if !cfg.Advertise {
-		t.Fatal("kid advertise must be on")
+	if cfg.Advertise {
+		t.Fatal("kid advertise must be off")
 	}
-	if cfg.Listen != "0.0.0.0:8742" {
+	if cfg.Listen != "127.0.0.1:8742" {
 		t.Fatalf("kid listen: %q", cfg.Listen)
 	}
 	if cfg.Lab.Enabled {

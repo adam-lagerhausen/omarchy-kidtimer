@@ -17,10 +17,12 @@ Item {
   property string step: "cover"
   property string pinDigits: ""
   property int chosenMinutes: 30
-  property bool stayAwakeOurs: false
   property bool submapOn: false
   property bool pinWrong: false
   property bool askQueued: false
+  property var httpQueue: []
+  property var httpJob: null
+  property string httpBuf: ""
 
   readonly property bool shown: root.role === "kid" && Model.overlayVisible(statusJson)
   readonly property bool waiting: askQueued || Model.overlayAskWaiting(statusJson)
@@ -47,7 +49,7 @@ Item {
 
   function applyRole(raw) {
     var next = String(raw || "").replace(/\s+/g, "")
-    if (next !== "kid") next = ""
+    if (next !== "kid" && next !== "parent") next = ""
     if (root.role === next) return
     if (root.role === "kid" && next !== "kid") leaveKidProof()
     root.role = next
@@ -55,13 +57,10 @@ Item {
 
   function poll() {
     if (root.role !== "kid") return
-    var req = new XMLHttpRequest()
-    req.open("GET", bankUrl() + "/v1/status")
-    req.setRequestHeader("Authorization", "Bearer " + String(bank.readToken || ""))
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE || req.status !== 200) return
+    overlayHTTP("GET", bankUrl() + "/v1/status", String(bank.readToken || ""), "", function(status, text) {
+      if (status !== 200) return
       try {
-        statusJson = Model.parseStatus(JSON.parse(req.responseText))
+        statusJson = Model.parseStatus(JSON.parse(text))
       } catch (e) {
         return
       }
@@ -76,23 +75,14 @@ Item {
         askQueued = false
         if (step === "ask") step = "cover"
       }
-    }
-    try {
-      req.send()
-    } catch (e) {
-    }
+    })
   }
 
   function grant() {
     if (!Model.validPin(pinDigits)) return
     var body = Model.pinGrantPayload(pinDigits, chosenMinutes * 60)
-    var req = new XMLHttpRequest()
-    req.open("POST", bankUrl() + "/v1/pin/grant")
-    req.setRequestHeader("Authorization", "Bearer " + String(bank.askToken || ""))
-    req.setRequestHeader("Content-Type", "application/json")
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) {
+    overlayHTTP("POST", bankUrl() + "/v1/pin/grant", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
+      if (status !== 200) {
         pinWrong = true
         step = "pin"
         return
@@ -101,29 +91,51 @@ Item {
       pinWrong = false
       step = "cover"
       poll()
-    }
-    req.send(JSON.stringify(body))
+    })
   }
 
   function submitAsk() {
     if (root.waiting) return
     askQueued = true
     var body = Model.askPayload("fun", chosenMinutes * 60, "more time")
-    var req = new XMLHttpRequest()
-    req.open("POST", bankUrl() + "/v1/asks")
-    req.setRequestHeader("Authorization", "Bearer " + String(bank.askToken || ""))
-    req.setRequestHeader("Content-Type", "application/json")
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) askQueued = false
+    overlayHTTP("POST", bankUrl() + "/v1/asks", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
+      if (status !== 200) askQueued = false
       step = "cover"
-      if (req.status === 200) poll()
-    }
-    req.send(JSON.stringify(body))
+      if (status === 200) poll()
+    })
+  }
+
+  function helperPath(name) {
+    return Qt.resolvedUrl("helpers/" + name).toString().replace(/^file:\/\//, "")
+  }
+
+  function splitHTTP(raw) {
+    var s = String(raw || "")
+    var i = s.lastIndexOf("\n")
+    if (i < 0) return { status: 0, body: s }
+    return { status: Number(s.slice(i + 1)) || 0, body: s.slice(0, i) }
+  }
+
+  function overlayHTTP(method, url, token, body, cb) {
+    var q = (httpQueue || []).slice()
+    q.push({ method: method, url: url, token: token || "", body: body || "", cb: cb })
+    httpQueue = q
+    pumpHTTP()
+  }
+
+  function pumpHTTP() {
+    if (httpProc.running || !httpQueue || httpQueue.length === 0) return
+    var q = httpQueue.slice()
+    var job = q.shift()
+    httpQueue = q
+    httpJob = job
+    httpBuf = ""
+    httpProc.command = ["/usr/bin/bash", helperPath("loopback-http.sh"), job.method, job.url]
+    httpProc.running = true
   }
 
   function hypr(batch) {
-    hyprProc.command = ["hyprctl", "--batch", batch]
+    hyprProc.command = ["/usr/bin/hyprctl", "--batch", batch]
     hyprProc.running = true
   }
 
@@ -143,19 +155,12 @@ Item {
       "dispatch submap kidtimeroverlay"
     ].join(" ; "))
     submapOn = true
-    stayProc.command = ["bash", "-c", 'f="$HOME/.local/state/omarchy/indicators/stay-awake"; if [[ -f "$f" ]]; then echo existed; else mkdir -p "$(dirname "$f")" && touch "$f" && echo created; fi']
-    stayProc.running = true
   }
 
   function leaveKidProof() {
     if (submapOn) {
       hypr("dispatch submap reset")
       submapOn = false
-    }
-    if (stayAwakeOurs) {
-      stayProc.command = ["bash", "-c", 'rm -f "$HOME/.local/state/omarchy/indicators/stay-awake"']
-      stayProc.running = true
-      stayAwakeOurs = false
     }
   }
 
@@ -203,8 +208,29 @@ Item {
   }
 
   Process {
+    id: httpProc
+    stdinEnabled: true
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { root.httpBuf += String(data || "") }
+    }
+    onStarted: {
+      var job = root.httpJob || {}
+      write(String(job.token || "") + "\n" + String(job.body || ""))
+    }
+    onExited: {
+      var job = root.httpJob
+      root.httpJob = null
+      var parsed = root.splitHTTP(root.httpBuf)
+      root.httpBuf = ""
+      if (job && job.cb) job.cb(parsed.status, parsed.body)
+      Qt.callLater(root.pumpHTTP)
+    }
+  }
+
+  Process {
     id: roleRead
-    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/role"]
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "read", "role"]
     stdout: SplitParser {
       splitMarker: ""
       onRead: function(data) { root.applyRole(data) }
@@ -213,7 +239,7 @@ Item {
 
   Process {
     id: bankRead
-    command: [Qt.resolvedUrl("helpers/read-file.sh").toString().replace(/^file:\/\//, ""), Quickshell.env("HOME") + "/.local/share/kidtimer/kid-bar.json"]
+    command: ["/usr/bin/python3", "-I", "-S", helperPath("state.py"), "read", "kid-bar.json"]
     stdout: SplitParser {
       splitMarker: ""
       onRead: function(data) { root.loadBank(data) }
@@ -229,15 +255,6 @@ Item {
   }
 
   Process { id: hyprProc }
-  Process {
-    id: stayProc
-    stdout: SplitParser {
-      splitMarker: ""
-      onRead: function(data) {
-        if (String(data).indexOf("created") >= 0) root.stayAwakeOurs = true
-      }
-    }
-  }
 
   PanelWindow {
     id: overlay
