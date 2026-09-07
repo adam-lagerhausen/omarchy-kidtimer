@@ -14,11 +14,13 @@ pack_one() {
 	CGO_ENABLED=0 GOOS=linux GOARCH=$goarch GOTOOLCHAIN=go1.25.0 go build -trimpath -ldflags='-s -w -buildid=' -o "$out/$name" ./daemon/cmd/kidtimer
 	/usr/bin/mkdir -p "$out/packaging"
 	/usr/bin/find packaging -mindepth 1 -maxdepth 1 ! -name SHA256SUMS -exec /usr/bin/cp -a {} "$out/packaging/" \;
-	for f in manifest.json BarWidget.qml Panel.qml Overlay.qml Setup.qml ParentPanel.qml KidPanel.qml ParentModel.js KidModel.js Tape.qml LookBtn.qml helpers fonts icons; do
+	for f in manifest.json BarWidget.qml Panel.qml Overlay.qml Setup.qml ParentPanel.qml KidPanel.qml ParentModel.js KidModel.js Tape.qml LookBtn.qml fonts icons; do
 		if [ -e "$root/$f" ]; then
 			/usr/bin/cp -a "$root/$f" "$out/"
 		fi
 	done
+	/usr/bin/mkdir -p "$out/helpers"
+	/usr/bin/tar -C "$root/helpers" --exclude='__pycache__' --exclude='*.pyc' -cf - . | /usr/bin/tar -C "$out/helpers" -xf -
 	/usr/bin/cp packaging/install.sh "$out/install.sh"
 	/usr/bin/chmod 755 "$out/install.sh" "$out/$name"
 	/usr/bin/find "$out" -exec /usr/bin/touch -d '2024-01-01 00:00:00 UTC' {} +
