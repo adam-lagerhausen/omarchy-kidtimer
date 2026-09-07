@@ -190,6 +190,14 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("do not add overlay kind")
 	}
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "Panel {", "shared panel")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), "Finishing setup", "setup loading copy")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), "RotationAnimation", "setup spinner")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), "setupBusy", "setup loading until done")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), "onHostWidgetChanged", "push host into setup after inject")
+	mustContain(t, readPlugin(t, root, "Setup.qml"), "roleHost", "setup click finds host if inject was late")
+	if strings.Contains(readPlugin(t, root, "Overlay.qml"), "textFormat: Text.PlainText anchors") {
+		t.Fatal("overlay Text properties must be one per line")
+	}
 	mustContain(t, parentManifest, `"bar-widget"`, "bar-widget")
 	mustContain(t, parentManifest, `"kidtimer"`, "one plugin id")
 }

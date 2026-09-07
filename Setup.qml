@@ -29,6 +29,16 @@ Item {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
+  function roleHost() {
+    if (root.hostWidget) return root.hostWidget
+    var p = parent
+    for (var n = 0; n < 12 && p; n++) {
+      if (p.hostWidget) return p.hostWidget
+      p = p.parent
+    }
+    return null
+  }
+
   width: parent ? parent.width : 340
   implicitHeight: col.implicitHeight + 28
 
@@ -67,7 +77,7 @@ Item {
       fontFamily: root.plex
       fontSize: 14
       enabled: !root.busy
-      onClicked: if (root.hostWidget) root.hostWidget.pickRole("parent")
+      onClicked: { var host = roleHost(); if (host) host.pickRole("parent") }
     }
 
     LookBtn {
@@ -77,7 +87,7 @@ Item {
       fontFamily: root.plex
       fontSize: 14
       enabled: !root.busy
-      onClicked: if (root.hostWidget) root.hostWidget.pickRole("kid")
+      onClicked: { var host = roleHost(); if (host) host.pickRole("kid") }
     }
 
     Text {

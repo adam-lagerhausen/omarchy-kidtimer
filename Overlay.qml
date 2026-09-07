@@ -429,7 +429,13 @@ Item {
             border.width: 1
             border.color: root.ink
             Text {
-    textFormat: Text.PlainText anchors.centerIn: parent; text: "−5"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "−5"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 16
+            }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, -5)
@@ -463,7 +469,13 @@ Item {
             border.width: 1
             border.color: root.ink
             Text {
-    textFormat: Text.PlainText anchors.centerIn: parent; text: "+5"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "+5"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 16
+            }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, 5)
@@ -506,7 +518,13 @@ Item {
             border.color: root.ink
             opacity: root.chosenMinutes <= Model.OVERLAY_ASK_MIN ? 0.55 : 1
             Text {
-    textFormat: Text.PlainText anchors.centerIn: parent; text: "−10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "−10"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 16
+            }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, -10)
@@ -541,7 +559,13 @@ Item {
             border.color: root.ink
             opacity: root.chosenMinutes >= Model.ASK_MAX ? 0.55 : 1
             Text {
-    textFormat: Text.PlainText anchors.centerIn: parent; text: "+10"; color: root.ink; font.family: root.plex; font.pixelSize: 16 }
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "+10"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 16
+            }
             MouseArea {
               anchors.fill: parent
               onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, 10)

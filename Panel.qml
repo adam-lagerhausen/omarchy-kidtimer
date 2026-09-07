@@ -20,6 +20,14 @@ Panel {
   property bool hour12: true
   property var statusJson: ({})
   property var lookPiles: []
+  property bool busy: false
+  readonly property bool setupBusy: busy || (hostWidget ? hostWidget.setupBusy === true : false)
+  readonly property color ink: bar ? bar.foreground : Color.popups.text
+  FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
+  readonly property string plex: {
+    if (hostWidget && hostWidget.plex) return hostWidget.plex
+    return plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
+  }
 
   readonly property var barIdentity: hostWidget || root
   readonly property real panelWidth: 340
@@ -102,6 +110,80 @@ Panel {
           if ("chrome" in t && root.chrome && root.chrome.face) t.chrome = root.chrome
         }
       }
+
+      Rectangle {
+        id: setupWait
+        anchors.fill: parent
+        visible: root.setupBusy
+        color: Color.popups.background
+        z: 10
+
+        MouseArea {
+          anchors.fill: parent
+          enabled: setupWait.visible
+          hoverEnabled: true
+        }
+
+        Column {
+          anchors.centerIn: parent
+          spacing: 16
+          width: parent.width - 32
+
+          Item {
+            width: parent.width
+            height: 22
+
+            Item {
+              id: spinner
+              width: 22
+              height: 22
+              anchors.horizontalCenter: parent.horizontalCenter
+
+              Canvas {
+                id: spinMark
+                anchors.fill: parent
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.reset()
+                  ctx.strokeStyle = root.ink
+                  ctx.lineWidth = 1.5
+                  ctx.lineCap = "square"
+                  var m = width / 2
+                  ctx.beginPath()
+                  ctx.arc(m, m, Math.max(1, m - 2), -Math.PI / 2, Math.PI)
+                  ctx.stroke()
+                }
+                onWidthChanged: requestPaint()
+                onHeightChanged: requestPaint()
+                Component.onCompleted: requestPaint()
+              }
+
+              Connections {
+                target: root
+                function onInkChanged() { spinMark.requestPaint() }
+              }
+
+              RotationAnimation on rotation {
+                running: setupWait.visible
+                from: 0
+                to: 360
+                duration: 900
+                loops: Animation.Infinite
+              }
+            }
+          }
+
+          Text {
+            width: parent.width
+            text: "Finishing setup"
+            color: root.ink
+            font.family: root.plex
+            font.pixelSize: 13
+            horizontalAlignment: Text.AlignHCenter
+            textFormat: Text.PlainText
+          }
+        }
+      }
     }
   }
 
@@ -111,4 +193,6 @@ Panel {
   onHour12Changed: if (faceLoader.item && "hour12" in faceLoader.item) faceLoader.item.hour12 = hour12
   onStatusJsonChanged: if (faceLoader.item && "statusJson" in faceLoader.item) faceLoader.item.statusJson = statusJson
   onLookPilesChanged: if (faceLoader.item && "lookPiles" in faceLoader.item) faceLoader.item.lookPiles = lookPiles
+  onHostWidgetChanged: if (faceLoader.item && "hostWidget" in faceLoader.item) faceLoader.item.hostWidget = hostWidget
+  onBarChanged: if (faceLoader.item && "bar" in faceLoader.item) faceLoader.item.bar = bar
 }
