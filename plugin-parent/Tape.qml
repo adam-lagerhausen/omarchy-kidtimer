@@ -168,13 +168,18 @@ Rectangle {
     spacing: 0
 
     Item {
+      id: soldRow
       visible: liveHome
       width: parent.width
-      height: 28
+      implicitHeight: pickBox.implicitHeight
+      height: implicitHeight
+
       SquareBtn {
         id: bellBtn
+        anchors.left: parent.left
+        anchors.top: parent.top
         width: 28
-        height: 28
+        height: pickBox.height
         danger: t.bellCount > 0
         onClicked: root.act({ kind: "bell" })
         TintIcon {
@@ -202,22 +207,95 @@ Rectangle {
           }
         }
       }
+
       SquareBtn {
-        id: gearBtn
+        id: pickBox
+        anchors.left: bellBtn.right
+        anchors.leftMargin: 8
         anchors.right: parent.right
-        width: 28
-        height: 28
-        filled: settingsOn
-        onClicked: root.act({ kind: "settings" })
+        anchors.rightMargin: t.showLock ? 36 + 8 : 0
+        implicitHeight: pickCol.implicitHeight + 12
+        height: implicitHeight
+        picked: t.chrome.picker
+        ink: root.ink
+        onClicked: root.act({ kind: "pick" })
+        Row {
+          id: pickCol
+          x: 10
+          y: 6
+          width: parent.width - 28
+          spacing: 6
+          height: pickName.implicitHeight
+          Rectangle {
+            width: 7
+            height: 7
+            anchors.verticalCenter: parent.verticalCenter
+            color: t.kid.face.live ? accent : urgent
+          }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: t.kid.face.caption
+            color: coralKid ? urgent : quiet
+            font.family: root.plex
+            font.pixelSize: 11
+          }
+          Text {
+            id: pickName
+            text: t.kid.nameUp
+            color: ink
+            font.family: root.plex
+            font.pixelSize: 16
+            font.weight: Font.DemiBold
+          }
+        }
+        Canvas {
+          anchors.right: parent.right
+          anchors.rightMargin: 10
+          anchors.verticalCenter: parent.verticalCenter
+          width: 8
+          height: 5
+          property color tip: ink
+          property bool open: t.chrome.picker
+          onPaint: {
+            var ctx = getContext("2d")
+            ctx.reset()
+            ctx.fillStyle = tip
+            ctx.beginPath()
+            if (open) {
+              ctx.moveTo(0, 5)
+              ctx.lineTo(8, 5)
+              ctx.lineTo(4, 0)
+            } else {
+              ctx.moveTo(0, 0)
+              ctx.lineTo(8, 0)
+              ctx.lineTo(4, 5)
+            }
+            ctx.closePath()
+            ctx.fill()
+          }
+          onTipChanged: requestPaint()
+          onOpenChanged: requestPaint()
+        }
+      }
+
+      SquareBtn {
+        id: lockBtn
+        visible: t.showLock
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 36
+        height: pickBox.height
+        opacity: t.lockArmed ? 1 : 0.35
+        filled: t.kid.locked
+        danger: t.kid.locked
+        onClicked: root.act({ kind: "lock" })
         TintIcon {
           anchors.centerIn: parent
-          kind: "gear"
-          tint: gearBtn.contentColor
+          kind: t.kid.locked ? "lock-closed" : "lock-open"
+          tint: lockBtn.contentColor
         }
       }
     }
-
-    DashedRule { visible: liveHome; width: parent.width; topPad: 10; bottomPad: 10 }
 
     Column {
       width: parent.width
@@ -271,97 +349,6 @@ Rectangle {
       }
     }
 
-    Row {
-      id: soldRow
-      visible: liveHome
-      width: parent.width
-      spacing: 8
-      height: Math.max(pickBox.implicitHeight, 36)
-
-      SquareBtn {
-        id: pickBox
-        width: parent.width - (t.showLock ? 36 + 8 : 0)
-        implicitHeight: pickCol.implicitHeight + 12
-        height: implicitHeight
-        picked: t.chrome.picker
-        ink: root.ink
-        onClicked: root.act({ kind: "pick" })
-        Column {
-          id: pickCol
-          x: 10
-          y: 6
-          width: parent.width - 28
-          spacing: 2
-          Row {
-            spacing: 6
-            Rectangle {
-              width: 7
-              height: 7
-              anchors.verticalCenter: parent.verticalCenter
-              color: t.kid.face.live ? accent : urgent
-            }
-            Text {
-              text: t.kid.nameUp
-              color: ink
-              font.family: root.plex
-              font.pixelSize: 16
-              font.weight: Font.DemiBold
-            }
-          }
-          Text {
-            text: t.kid.face.caption
-            color: coralKid ? urgent : quiet
-            font.family: root.plex
-            font.pixelSize: 11
-          }
-        }
-        Canvas {
-          anchors.right: parent.right
-          anchors.rightMargin: 10
-          anchors.verticalCenter: parent.verticalCenter
-          width: 8
-          height: 5
-          property color tip: ink
-          property bool open: t.chrome.picker
-          onPaint: {
-            var ctx = getContext("2d")
-            ctx.reset()
-            ctx.fillStyle = tip
-            ctx.beginPath()
-            if (open) {
-              ctx.moveTo(0, 5)
-              ctx.lineTo(8, 5)
-              ctx.lineTo(4, 0)
-            } else {
-              ctx.moveTo(0, 0)
-              ctx.lineTo(8, 0)
-              ctx.lineTo(4, 5)
-            }
-            ctx.closePath()
-            ctx.fill()
-          }
-          onTipChanged: requestPaint()
-          onOpenChanged: requestPaint()
-        }
-      }
-
-      SquareBtn {
-        id: lockBtn
-        visible: t.showLock
-        width: 36
-        height: pickBox.height
-        opacity: t.lockArmed ? 1 : 0.35
-        filled: t.kid.locked
-        danger: t.kid.locked
-        onClicked: root.act({ kind: "lock" })
-        TintIcon {
-          anchors.centerIn: parent
-          kind: t.kid.locked ? "lock-closed" : "lock-open"
-          tint: lockBtn.contentColor
-        }
-      }
-    }
-
     Column {
       width: parent.width
       visible: t.chrome.picker && liveHome
@@ -392,7 +379,7 @@ Rectangle {
                 rightPadding: 10
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
-                text: (modelData.face.live ? "● " : "○ ") + modelData.nameUp + "  " + modelData.face.caption
+                text: (modelData.face.live ? "● " : "○ ") + modelData.face.caption + "  " + modelData.nameUp
                 color: foreground
                 font.family: root.plex
                 font.pixelSize: 12
@@ -522,7 +509,7 @@ Rectangle {
       }
     }
 
-    DashedRule { visible: controlsOn; width: parent.width; topPad: 10; bottomPad: 10 }
+    DashedRule { visible: controlsOn; width: parent.width }
 
     Column {
       width: parent.width
@@ -551,11 +538,11 @@ Rectangle {
       Item { width: 1; height: 6 }
       Item {
         width: parent.width
-        height: 24
+        height: 36
         opacity: t.kid.locked ? 0.35 : 1
         SquareBtn {
           width: 36
-          height: 24
+          height: 36
           enabled: !t.kid.locked && !t.kid.fun.empty
           onClicked: root.act({ kind: "minus10" })
           Text {
@@ -577,7 +564,7 @@ Rectangle {
         SquareBtn {
           anchors.right: parent.right
           width: 36
-          height: 24
+          height: 36
           enabled: !t.kid.locked
           onClicked: root.act({ kind: "plus10" })
           Text {
@@ -749,7 +736,7 @@ Rectangle {
         width: parent.width
         visible: settingsOn && !needsPin
         spacing: 0
-        DashedRule { width: parent.width; topPad: 10; bottomPad: 8 }
+        DashedRule { width: parent.width }
         Item {
           width: inner.width
           height: 40
@@ -855,7 +842,8 @@ Rectangle {
       }
     }
 
-    Item { width: 1; height: liveHome && settingsOn ? 2 : (needsPin ? 0 : 8) }
+    Item { visible: liveHome && settingsOn; width: 1; height: 2 }
+    DashedRule { visible: !settingsOn && controlsOn; width: parent.width }
 
     DayTrack {
       visible: controlsOn
@@ -926,7 +914,7 @@ Rectangle {
       width: parent.width
       visible: settingsOn && controlsOn
       spacing: 0
-      DashedRule { width: parent.width; topPad: 10; bottomPad: 8 }
+      DashedRule { width: parent.width }
       Text {
         text: "TIME"
         color: quiet
@@ -984,6 +972,26 @@ Rectangle {
               font.pixelSize: 11
             }
           }
+        }
+      }
+    }
+
+    Item {
+      visible: liveHome
+      width: parent.width
+      height: 38
+      SquareBtn {
+        id: gearBtn
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: 28
+        height: 28
+        filled: settingsOn
+        onClicked: root.act({ kind: "settings" })
+        TintIcon {
+          anchors.centerIn: parent
+          kind: "gear"
+          tint: gearBtn.contentColor
         }
       }
     }
@@ -1156,8 +1164,8 @@ Rectangle {
 
   component DashedRule: Item {
     property color color: root.foreground
-    property int topPad: 10
-    property int bottomPad: 10
+    property int topPad: 16
+    property int bottomPad: 16
     height: topPad + bottomPad + 1
     Canvas {
       y: topPad

@@ -20,13 +20,13 @@ It hangs off the Omarchy bar. Home is the front of the tape. Gear flips it.
 
 Order on home:
 
-1. Bell left, settings gear right
-2. Kid dropdown, lock square
-3. Asks, only if the bell is open
-4. Used minutes
-5. Minutes left with −10 / +10, remaining bar
-6. 24 hour track of what they did
-7. Session log
+1. Bell, kid dropdown, lock square
+2. Asks, only if the bell is open
+3. Used minutes
+4. Minutes left with −10 / +10, remaining bar
+5. 24 hour track of what they did
+6. Session log
+7. Settings gear, bottom right
 
 No mode buttons. No Free time / School time / Fun time keys. No Fun or School lists. No `+ new mode`. No `edit groups`. No `edit schedule`.
 
@@ -38,19 +38,19 @@ Asks hide until someone hits the bell. Then every pending ask is a card: who ask
 
 ## Settings
 
-Square, gear, top right. It flips the tape. Gear again brings home back. The gear fills while you are on it.
+Square, gear, bottom right. It flips the tape. Gear again brings home back. The gear fills while you are on it.
 
 Still the selected kid. The dropdown still switches computers. Lock is not on this page. Bell still opens asks. An ask is the same card as home.
 
 Order on the settings tape:
 
-1. Bell left, filled gear right
-2. Kid dropdown
-3. Asks, only if the bell is open
-4. Parent PIN. Four boxes and Set. This is the household 4-digit PIN, not the computer password. Lock does nothing until it is set.
-5. CLOCK 12 or 24. Filled square is the active choice. Bed, the day log, the track marks, and the kid overlay follow it.
-6. Bed and Up as two clocks. −  9:00 PM  + on one row, −  7:00 AM  + on the next. The hatched night under them.
-7. Time for each day of the week, each with −15 / +15
+1. Bell, kid dropdown
+2. Asks, only if the bell is open
+3. Parent PIN. Four boxes and Set. This is the household 4-digit PIN, not the computer password. Lock does nothing until it is set.
+4. CLOCK 12 or 24. Filled square is the active choice. Bed, the day log, the track marks, and the kid overlay follow it.
+5. Bed and Up as two clocks. −  9:00 PM  + on one row, −  7:00 AM  + on the next. The hatched night under them.
+6. Time for each day of the week, each with −15 / +15
+7. Filled gear, bottom right
 
 Bedtime is two clocks, not two more day rows. `9:00 PM` is bed, `7:00 AM` is up. − and + move 15 minutes. The hatch under them is the night: same marks as home, no sessions, no needle. Home's hatch uses those times.
 
@@ -60,7 +60,7 @@ Each day has its own number. Sample: Monday through Friday one hour, Saturday an
 
 The dropdown is a real control: border, chevron, name, what they are on. Click it for every computer. Two kids or five, same control.
 
-A circle sits to the left of the name. Accent means they are on the computer. Urgent means they are off it. Quieter type under the name always has a status: `Active`, `Active · minecraft`, `Offline`, `Error`, `Locked`, `Bedtime`, or `Already claimed`. Error wins over everything. Offline wins over lock and bedtime. Locked wins over bedtime. If it is locked, the dropdown and the lock go urgent. Error is urgent too. Never `down`, never blank, never `on minecraft`.
+A circle sits to the left of the name. Accent means they are on the computer. Urgent means they are off it. Quieter type to the left of the name always has a status: `Active`, `Active · minecraft`, `Offline`, `Error`, `Locked`, `Bedtime`, or `Already claimed`. Error wins over everything. Offline wins over lock and bedtime. Locked wins over bedtime. If it is locked, the dropdown and the lock go urgent. Error is urgent too. Never `down`, never blank, never `on minecraft`.
 
 Picking a computer you already own aims remaining, lock, the day log, and settings at that kid. It does not close the bell and it does not hide other kids' asks.
 
@@ -72,7 +72,7 @@ Do not show `reachable: yes`.
 
 ## Lock
 
-Square next to the dropdown. Open padlock unlocked, closed padlock locked. It locks or unlocks the selected kid. Remaining looks faded. A LOCKED stamp sits on the panel. The kid cannot turn it off. No Seize, Release, ARM, session seized, hack the box.
+Square next to the dropdown, on the same row as the bell. Open padlock unlocked, closed padlock locked. It locks or unlocks the selected kid. Remaining looks faded. A LOCKED stamp sits on the panel. The kid cannot turn it off. No Seize, Release, ARM, session seized, hack the box.
 
 The square does nothing until a Parent PIN exists (household file or any kid `parent_pin_set`). Clicking it then opens settings so the parent can Set the PIN. After that, lock is a flag on the kid. The kid box shows an overlay, not a real session lock.
 
