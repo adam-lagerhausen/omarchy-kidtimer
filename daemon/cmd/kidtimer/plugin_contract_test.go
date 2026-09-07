@@ -153,6 +153,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, "Color.popups", "popup surface")
 	mustContain(t, parentPanel, "Color.urgent", "urgent token")
 	mustContain(t, parentPanel, `"deny"`, "deny decision")
+	mustContain(t, parentPanel, "body.implicitHeight", "kid switch stays inside the panel")
 	mustContain(t, parentModel, "Parent Pin", "settings pin row")
 	mustContain(t, parentModel, "Required for the controls. Use it to make changes on the kids computer.", "pin why")
 	mustContain(t, parentPanel, "Change", "pin change")
