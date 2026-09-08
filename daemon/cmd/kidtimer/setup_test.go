@@ -722,6 +722,57 @@ func TestUserHomeFromShare(t *testing.T) {
 	}
 }
 
+func TestMigrateLivePluginRemovesSecondPlugin(t *testing.T) {
+	home := t.TempDir()
+	share := filepath.Join(home, ".local", "share", "kidtimer")
+	if err := os.MkdirAll(share, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := pluginDir(home, legacyPluginID)
+	if err := os.MkdirAll(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "manifest.json"), []byte(`{"id":"kidtimer"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := pluginDest(home)
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "manifest.json"), []byte(`{"id":"`+pluginID+`"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(home, ".config", "omarchy", "shell.json")
+	if err := ensureWidget(shell, legacyPluginID, map[string]any{"url": "http://127.0.0.1:8742"}); err != nil {
+		t.Fatal(err)
+	}
+	migrateLivePlugin(share)
+	if _, err := os.Lstat(old); !os.IsNotExist(err) {
+		t.Fatalf("old plugin leftover %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "manifest.json")); err != nil {
+		t.Fatal("namespaced plugin missing")
+	}
+	doc, err := readJSON(shell)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	var got map[string]any
+	for _, w := range widgets(doc) {
+		switch str(w["id"]) {
+		case pluginID:
+			got = w
+			n++
+		case legacyPluginID, "kidtimer.kid", "kidtimer.parent", "allowance.parent":
+			t.Fatalf("second plugin remains %v", w)
+		}
+	}
+	if n != 1 || str(got["url"]) != "http://127.0.0.1:8742" {
+		t.Fatalf("migrated widget %v n=%d", got, n)
+	}
+}
+
 func widgetIDs(t *testing.T, path string) string {
 	t.Helper()
 	raw, err := os.ReadFile(path)

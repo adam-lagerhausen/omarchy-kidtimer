@@ -18,7 +18,7 @@ case $method in
     exit 2
     ;;
 esac
-token=$(/usr/bin/head -n 1)
+IFS= read -r token || true
 body=$(/usr/bin/cat)
 case $token in
   *$'\r'* | *$'\n'*)
