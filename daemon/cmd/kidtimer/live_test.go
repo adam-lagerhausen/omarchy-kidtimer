@@ -338,6 +338,28 @@ func liveLock(t *testing.T, d *liveDaemon) {
 	if postJSON(t, d.base+"/v1/lock", askSecret, `{"locked":true}`, "").status != 403 {
 		t.Fatal("ask must not lock")
 	}
+	if postJSON(t, d.base+"/v1/lock", d.parent, `{"locked":true}`, "").status != 200 {
+		t.Fatal("relock")
+	}
+	lockedAsk := postJSON(t, d.base+"/v1/asks", askSecret, `{"group":"fun","seconds":1800,"reason":"more time"}`, "")
+	if lockedAsk.status != 200 {
+		t.Fatalf("ask while locked: %d %s", lockedAsk.status, lockedAsk.body)
+	}
+	lockedID := asMap(t, lockedAsk.body)["id"].(string)
+	listed := getJSON(t, d.base+"/v1/asks", d.parent)
+	if listed.status != 200 {
+		t.Fatalf("list locked ask: %d %s", listed.status, listed.body)
+	}
+	if len(asMap(t, listed.body)["asks"].([]any)) != 1 {
+		t.Fatalf("pending while locked: %s", listed.body)
+	}
+	approve := postJSON(t, d.base+"/v1/asks/"+lockedID+"/decide", d.parent, `{"decision":"approve"}`, "")
+	if approve.status != 200 {
+		t.Fatalf("approve locked ask: %d %s", approve.status, approve.body)
+	}
+	if statusMap(t, d)["parent_locked"] != false {
+		t.Fatal("approve must unlock")
+	}
 }
 
 func livePolicy(t *testing.T, bin string) {

@@ -118,6 +118,67 @@ func TestDeskDialAttachGrant(t *testing.T) {
 	}
 }
 
+func TestDeskDialAskShowsOnHousehold(t *testing.T) {
+	parentHome := t.TempDir()
+	kidHome := t.TempDir()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("caller")
+	}
+	root := filepath.Join(filepath.Dir(file), "..", "..", "..")
+	cfg, err := config.ParseFile(filepath.Join(root, "packaging", "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := bank.Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ask, err := b.CreateAsk(askTok, "fun", 1800, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	httpAddr, sessAddr := startDesk(t, ctx, parentHome)
+	go func() {
+		_ = dial.Run(ctx, dial.Config{
+			Home:      kidHome,
+			Name:      "testMax",
+			Bank:      b,
+			Endpoints: []reverse.Endpoint{reverse.Endpoint(sessAddr)},
+		})
+	}()
+	deadline := time.Now().Add(3 * time.Second)
+	var last reverse.Household
+	for time.Now().Before(deadline) {
+		last = getHousehold(t, httpAddr)
+		if len(last.Kids) != 1 || last.Kids[0].Name != "testMax" || !last.Kids[0].Live {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		var asks []bank.Ask
+		if err := json.Unmarshal(last.Kids[0].Asks, &asks); err != nil {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		if len(asks) == 1 && asks[0].ID == ask.ID && asks[0].Seconds == 1800 && asks[0].Status == bank.AskPending {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("household missing pending ask from testMax: %+v", last)
+}
+
 func TestDialParentRoleDoesNotOffer(t *testing.T) {
 	home := t.TempDir()
 	if err := household.WriteRole(home, reverse.RoleParent); err != nil {
