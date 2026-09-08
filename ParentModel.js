@@ -717,9 +717,9 @@ function activitySessions(status, nowHour) {
 
 function friendlyApp(label) {
   var s = String(label || "").trim()
-  if (!s) return "on"
+  if (!s) return "Computer"
   var k = s.toLowerCase()
-  if (k === "on" || k === "free") return s
+  if (k === "on" || k === "free") return "Computer"
   if (k === "foot" || k === "footclient" || k.indexOf("dnkl.foot") >= 0) return "Terminal"
   if (k.indexOf("youtube") >= 0) return "YouTube"
   if (k.indexOf("khan") >= 0) return "Khan Academy"
@@ -807,7 +807,7 @@ function sittingName(apps) {
     if (b.dur !== a.dur) return b.dur - a.dur
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
   })
-  if (!rows.length) return "ON"
+  if (!rows.length) return "COMPUTER"
   var named = []
   for (var i = 0; i < rows.length; i++) {
     if (rows[i].dur >= DUST_MIN) named.push(rows[i].name)
