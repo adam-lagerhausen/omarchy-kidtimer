@@ -594,8 +594,8 @@ func bootstrapToken(t *testing.T, log string, stderr *bytes.Buffer) string {
 
 func runScript(t *testing.T, name, base, token string, args []string) string {
 	t.Helper()
-	cmdArgs := append([]string{filepath.Join(repoRoot(t), "testdata", name)}, args...)
-	cmd := exec.Command("sh", cmdArgs...)
+	script := filepath.Join(repoRoot(t), "testdata", name)
+	cmd := exec.Command(script, args...)
 	cmd.Env = append(os.Environ(),
 		"KIDTIMER_URL="+base,
 		"KIDTIMER_TOKEN="+token,
