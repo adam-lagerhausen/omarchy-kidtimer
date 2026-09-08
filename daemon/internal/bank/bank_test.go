@@ -669,6 +669,60 @@ func TestCreateAskDuringBedtimeAndLock(t *testing.T) {
 	}
 }
 
+func TestApproveAskClearsParentLock(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentLock(parent, true); err != nil {
+		t.Fatal(err)
+	}
+	before := remaining(t, b, "fun")
+	ask, err := b.CreateAsk(askTok, "fun", 1800, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Decide(parent, ask.ID, "approve"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.ParentLocked {
+		t.Fatal("approve ask must clear parent lock")
+	}
+	if remaining(t, b, "fun") != before+1800 {
+		t.Fatalf("approve still credits minutes: %d", remaining(t, b, "fun"))
+	}
+}
+
+func TestDenyAskLeavesParentLock(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentLock(parent, true); err != nil {
+		t.Fatal(err)
+	}
+	ask, err := b.CreateAsk(askTok, "fun", 600, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Decide(parent, ask.ID, "deny"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.ParentLocked {
+		t.Fatal("deny must leave parent lock")
+	}
+}
+
 func TestBedtimeFromTOMLUntilOverlay(t *testing.T) {
 	b, parent := openTest(t, afternoon)
 	st, err := b.Status(parent)

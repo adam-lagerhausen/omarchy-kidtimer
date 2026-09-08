@@ -78,7 +78,7 @@ It sits over a session that is still running. You are not looking at the Omarchy
 
 ### Asking for more
 
-They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay and pick minutes with −10 / +10. They can ask during bedtime and a parent lock. Approve during the day adds the minutes they asked for. Approve during bedtime sets the timer to those minutes and lifts the bedtime overlay until they run out, then bedtime comes back. It does not lift a parent lock. A parent lock still needs Unlock or the parent PIN.
+They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay and pick minutes with −10 / +10. They can ask during bedtime and a parent lock. Approve during the day adds the minutes they asked for. Approve during bedtime sets the timer to those minutes and lifts the bedtime overlay until they run out, then bedtime comes back. Approve during a parent lock unlocks them and adds the minutes they asked for.
 
 ![Pending asks](docs/screenshots/ask.png)
 

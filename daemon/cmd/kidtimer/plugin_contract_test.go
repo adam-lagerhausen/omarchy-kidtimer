@@ -56,6 +56,15 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidBar, "takeWarnings", "warning crossings")
 	mustContain(t, kidModel, `"kidtimer"`, "fallback title")
 	mustContain(t, kidModel, `"bedtime"`, "bedtime label")
+	mustContain(t, kidModel, "bankSetting", "bar ask uses kid-bar token")
+	mustContain(t, kidModel, "bedtime starts at ", "bedtime clock copy")
+	mustContain(t, kidPanel, "bedtimeInk", "bedtime soon is purple")
+	if strings.Contains(readPlugin(t, root, "ParentPanel.qml"), "This is the kid's computer") {
+		t.Fatal("parent panel must not label this a kid computer")
+	}
+	if strings.Contains(kidModel, "bedtime in ") {
+		t.Fatal("kid copy must not countdown to bedtime")
+	}
 	mustContain(t, kidModel, `"fun"`, "default fun")
 	mustContain(t, kidModel, "return [900, 300, 60]", "15/5/1 min warnings")
 	mustContain(t, kidPanel, "kidPost", "kid ask POST")

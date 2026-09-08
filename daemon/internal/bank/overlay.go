@@ -255,6 +255,14 @@ func (b *Bank) SetParentLock(actor *Token, locked bool) error {
 	return b.metaSet(metaParentLock, boolMeta(locked))
 }
 
+func (b *Bank) clearParentLockLocked() error {
+	if !b.ov.parentLock {
+		return nil
+	}
+	b.ov.parentLock = false
+	return b.metaSet(metaParentLock, boolMeta(false))
+}
+
 func (b *Bank) SetBedtime(actor *Token, start, end string, lock *bool) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()

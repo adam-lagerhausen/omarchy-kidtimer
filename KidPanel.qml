@@ -27,6 +27,7 @@ Item {
   FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/JetBrainsMono-SemiBold.ttf") }
   readonly property string contentFontFamily: plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
   readonly property color accent: "#1daeeb"
+  readonly property color bedtimeInk: "#7a82c4"
   readonly property color urgent: Color.urgent
   readonly property color dim: Qt.darker(contentForeground, 1.4)
   readonly property color fillSoft: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.04)
@@ -41,18 +42,14 @@ Item {
   readonly property string soonBanner: Model.bedtimeBanner(root.statusJson)
   readonly property color panelLine: {
     if (root.view === "locked") return root.urgent
-    if (root.view === "bedtime") return "#7a82c4"
+    if (root.view === "bedtime") return root.bedtimeInk
     return root.accent
   }
   width: parent ? parent.width : 340
   implicitHeight: Math.max(1, bodyHeight) + 14 + 18
 
   function setting(key, fallback) {
-    if (hostWidget && typeof hostWidget.setting === "function")
-      return hostWidget.setting(key, fallback)
-    var bank = hostWidget && hostWidget.kidBank
-    if (bank && key in bank) return bank[key]
-    return fallback
+    return Model.bankSetting(hostWidget && hostWidget.kidBank, hostWidget && hostWidget.settings, key, fallback)
   }
 
   readonly property real bodyHeight: {
@@ -144,9 +141,9 @@ Item {
           visible: root.soonBanner !== ""
           width: parent.width
           height: bannerText.implicitHeight + 16
-          color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.1)
+          color: Qt.rgba(root.bedtimeInk.r, root.bedtimeInk.g, root.bedtimeInk.b, 0.1)
           border.width: 1
-          border.color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.55)
+          border.color: Qt.rgba(root.bedtimeInk.r, root.bedtimeInk.g, root.bedtimeInk.b, 0.55)
           Text {
             textFormat: Text.PlainText
             id: bannerText
@@ -156,7 +153,7 @@ Item {
             anchors.leftMargin: 10
             anchors.rightMargin: 10
             text: root.soonBanner
-            color: root.urgent
+            color: root.bedtimeInk
             font.family: root.contentFontFamily
             font.pixelSize: 11
           }
