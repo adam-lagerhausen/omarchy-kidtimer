@@ -86,6 +86,7 @@ Item {
   }
 
   Tape {
+    id: paper
     width: parent.width
     tape: root.tape
     bar: root.bar

@@ -42,7 +42,7 @@ On yours, the tape waits until their computer shows up. Left-click the chip to o
 
 Set a 4-digit PIN next. Until one exists, time still counts but nothing covers their screen. The Lock square does nothing.
 
-If you picked parent by mistake, open the chip and pick the kid's computer. It asks for the password again. A kid computer cannot switch to parent. Uninstall Kidtimer first, then pick again.
+If you picked parent by mistake, uninstall Kidtimer first, then pick the kid's computer. A kid computer cannot switch to parent.
 
 To update later: `omarchy plugin update io.github.adam-lagerhausen.kidtimer`. Kid computers you already claimed stay claimed, including if you came from Allowance.
 
