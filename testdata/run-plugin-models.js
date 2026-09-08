@@ -283,6 +283,11 @@ assertEqual(spentOnly.kid.fun.usedLabel, "6m", "spent used")
 assertEqual(spentOnly.track.blocks.length, 1, "spent becomes a block")
 assertEqual(spentOnly.track.log[0].dur, "6m", "spent log dur")
 assertEqual(spentOnly.track.log[0].name, "ON", "spent log name")
+assertEqual(parent.askCardText("Ada", 1800), "Ada asked for 30 more minutes", "ask minutes copy")
+assertEqual(parent.askCardText("Ada", 1800, true), "Ada asked to unlock", "locked ask copy")
+assertEqual(parent.notifySummary({ seconds: 1800 }, null, { parentLocked: true }), "unlock", "locked notify")
+assertEqual(parent.notifySummary({ seconds: 1800 }, null, { parent_locked: true }), "unlock", "locked notify wire")
+assertEqual(parent.notifySummary({ seconds: 1800 }, null, {}), "+30m", "unlocked notify")
 assertEqual(home.asks[0].text, "Ada asked for 10 more minutes", "ask copy")
 
 const bea = parent.fixtureTape("bea", parent.chromeHome())
@@ -297,6 +302,7 @@ assertEqual(locked.showStamp, true, "locked stamp")
 assertEqual(locked.kid.face.coral, true, "locked coral")
 assertEqual(locked.kid.face.caption, "Locked", "locked caption")
 assertEqual(locked.lockLabel, "Unlock Ada", "unlock ada")
+assertEqual(locked.asks[0].text, "Ada asked to unlock", "locked tape ask")
 
 const settings = parent.fixtureTape("ada", parent.chromeSettings())
 assertEqual(settings.showLock, false, "settings hide lock")
@@ -465,9 +471,35 @@ assertEqual(kid.bedtimeEnd({ bedtime_end: "07:00" }), "7:00 AM", "bedtime end")
 assertEqual(kid.bedtimeEnd({ bedtime_end: "07:00", hour12: false }), "07:00", "bedtime end 24h")
 assertEqual(kid.parseStatus({}).hour12, true, "hour12 default")
 assertEqual(kid.parseStatus({ hour12: false }).hour12, false, "hour12 off")
-assertEqual(kid.bedtimeBanner({ bedtime_in: 480 }), "bedtime in 8 min", "bedtime banner")
-assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_active: true }), "", "banner off at bedtime")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_start: "21:00" }), "bedtime starts at 9:00 PM", "bedtime banner")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_start: "21:00", hour12: false }), "bedtime starts at 21:00", "bedtime banner 24h")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_active: true, bedtime_start: "21:00" }), "", "banner off at bedtime")
 assertEqual(kid.bedtimeBanner({}), "", "banner missing")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480 }), "", "banner needs start clock")
+assertEqual(kid.bankSetting({ askToken: "bank" }, { askToken: "settings" }, "askToken", ""), "bank", "bank wins over plugin settings")
+assertEqual(kid.bankSetting({ askToken: "" }, { askToken: "settings" }, "askToken", ""), "settings", "settings when bank empty")
+assertEqual(kid.bankSetting({}, {}, "askToken", ""), "", "empty token")
+assertEqual(kid.bankSetting({ askToken: "from-bar" }, {}, "askToken", ""), "from-bar", "kid-bar token")
+const householdAsk = parent.parseHousehold({
+  kids: [{ id: "m1", name: "Ada", asks: [{ id: "a1", group: "fun", seconds: 1800, reason: "more time", status: "pending" }] }]
+})
+assertEqual(parent.parseAsks(householdAsk[0].asks)[0].seconds, 1800, "household asks keep seconds")
+assertEqual(parent.projectTape([{
+  name: "Ada",
+  id: "m1",
+  claimed: false,
+  reachable: true,
+  status: {},
+  asks: parent.parseAsks(householdAsk[0].asks)
+}], 0, parent.chromeHome(), null, { pinSet: true }).bellCount, 1, "household ask reaches parent tape")
+assertEqual(parent.projectTape([{
+  name: "Ada",
+  id: "m1",
+  claimed: false,
+  reachable: true,
+  status: {},
+  asks: parent.parseAsks(householdAsk[0].asks)
+}], 0, parent.chromeHome(), null, { pinSet: true }).asks[0].text, "Ada asked for 30 more minutes", "household ask card")
 assertEqual(kid.barUrgent({ parent_locked: true }), true, "urgent locked")
 assertEqual(kid.barUrgent({ bedtime_active: true }), true, "urgent bedtime")
 assertEqual(kid.barUrgent({
@@ -534,22 +566,23 @@ assertEqual(kid.crossedWarning(900, 899), 0, "already at 15")
 assertEqual(kid.crossedWarning(901, 0), 0, "zero is the freeze")
 assertEqual(kid.crossedWarning(901, 50), 60, "lag fires lowest")
 assertEqual(kid.warningCopy("fun", 900), "15 min left", "remaining copy")
-assertEqual(kid.warningCopy("bedtime", 60), "bedtime in 1 min", "bedtime copy")
+assertEqual(kid.warningCopy("bedtime", 60, { bedtime_start: "21:00" }), "bedtime starts at 9:00 PM", "bedtime copy")
 
 const mcStatus = (path, bed) => ({
   focused_group: "minecraft",
   path_remaining: { minecraft: path, fun: 0 },
   bedtime_in: bed,
+  bedtime_start: "21:00",
   bedtime_active: false
 })
 let warned = kid.takeWarnings(kid.emptyWarnState(), mcStatus(901, 901))
 assertEqual(warned.notices, [], "seed silent")
 warned = kid.takeWarnings(warned.state, mcStatus(900, 900))
-assertEqual(warned.notices, ["15 min left", "bedtime in 15 min"], "15 min both")
+assertEqual(warned.notices, ["15 min left", "bedtime starts at 9:00 PM"], "15 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(300, 300))
-assertEqual(warned.notices, ["5 min left", "bedtime in 5 min"], "5 min both")
+assertEqual(warned.notices, ["5 min left", "bedtime starts at 9:00 PM"], "5 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(60, 60))
-assertEqual(warned.notices, ["1 min left", "bedtime in 1 min"], "1 min both")
+assertEqual(warned.notices, ["1 min left", "bedtime starts at 9:00 PM"], "1 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(59, 59))
 assertEqual(warned.notices, [], "no repeat")
 warned = kid.takeWarnings(warned.state, {
@@ -596,6 +629,9 @@ assertEqual(kid.pinGrantPayload("1234", 600), { pin: "1234", seconds: 600 }, "pi
 assertEqual(kid.kidSettingsFromShell({
   bar: { layout: { right: [{ id: "kidtimer", url: "http://x:8742/", askToken: "a", readToken: "r" }] } }
 }).url, "http://x:8742", "shell kid url")
+assertEqual(kid.kidSettingsFromShell({
+  bar: { layout: { right: [{ id: "io.github.adam-lagerhausen.kidtimer", url: "http://y:8742/", askToken: "a", readToken: "r" }] } }
+}).url, "http://y:8742", "namespaced shell kid url")
 assertEqual(kid.parseStatus({ parent_pin_set: true, overlay: true }).parent_pin_set, true, "parse pin set")
 assertEqual(home.lockArmed, true, "fixture has household pin")
 assertEqual(parent.fixtureTape("ada", parent.chromeHome(), { pinSet: true }).lockArmed, true, "household pin arms lock")

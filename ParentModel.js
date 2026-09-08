@@ -293,6 +293,7 @@ function notifyHeadline(kidName) {
 
 function notifySummary(ask, look, status) {
   if (!ask) return "new ask"
+  if (status && (status.parentLocked || status.parent_locked)) return "unlock"
   var m = Math.max(0, Math.floor(askSeconds(ask) / 60))
   return "+" + m + "m"
 }
@@ -308,7 +309,8 @@ function askSeconds(ask) {
   return Number(s) || 0
 }
 
-function askCardText(kidName, seconds) {
+function askCardText(kidName, seconds, locked) {
+  if (locked) return kidName + " asked to unlock"
   var m = Math.max(0, Math.round(Number(seconds) / 60))
   if (!m) m = 10
   return kidName + " asked for " + m + " more minutes"
@@ -975,6 +977,7 @@ function householdAsks(snapshots) {
     if (list[i] && list[i].claimed) continue
     var name = (list[i] && list[i].name) || "kid"
     var asks = snapshotAsks(list[i])
+    var locked = !!snapshotStatus(list[i]).parentLocked
     for (var j = 0; j < asks.length; j++) {
       var a = asks[j]
       out.push({
@@ -982,7 +985,7 @@ function householdAsks(snapshots) {
         kidIndex: i,
         kidName: name,
         seconds: a.seconds,
-        text: askCardText(name, a.seconds)
+        text: askCardText(name, a.seconds, locked)
       })
     }
   }

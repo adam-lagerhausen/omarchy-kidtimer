@@ -19,8 +19,16 @@ rm -f -- "$share/setup-error"
 fail() {
   echo "$1" >&2
   umask 077
-  printf '%s\n' "$1" >"$share/setup-error"
-  /usr/bin/chmod 600 -- "$share/setup-error" 2>/dev/null || true
+  local t
+  t=$(/usr/bin/mktemp -p "$share" .setup-error.XXXXXXXXXX) || exit 1
+  if ! printf '%s\n' "$1" >"$t"; then
+    rm -f -- "$t"
+    exit 1
+  fi
+  if ! /usr/bin/mv -f -T -- "$t" "$share/setup-error"; then
+    rm -f -- "$t"
+    exit 1
+  fi
   exit 1
 }
 

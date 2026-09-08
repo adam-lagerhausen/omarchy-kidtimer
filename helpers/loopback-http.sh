@@ -18,7 +18,7 @@ case $method in
     exit 2
     ;;
 esac
-token=$(/usr/bin/head -n 1)
+IFS= read -r token || true
 body=$(/usr/bin/cat)
 case $token in
   *$'\r'* | *$'\n'*)
@@ -39,9 +39,15 @@ if [[ -n $idem ]]; then
   curl+=(-H "Idempotency-Key: $idem")
 fi
 if [[ $method != GET ]]; then
-  curl+=(-H "Content-Type: application/json" --data-binary "$body")
+  curl+=(-H "Content-Type: application/json" --data-binary @-)
 fi
-if [[ -n $token ]]; then
+if [[ $method != GET ]]; then
+  if [[ -n $token ]]; then
+    printf '%s' "$body" | "${curl[@]}" -w '\n%{http_code}' -H @<(printf 'Authorization: Bearer %s\n' "$token") -- "$url"
+  else
+    printf '%s' "$body" | "${curl[@]}" -w '\n%{http_code}' -- "$url"
+  fi
+elif [[ -n $token ]]; then
   printf 'Authorization: Bearer %s\n' "$token" | "${curl[@]}" -w '\n%{http_code}' -H @- -- "$url"
 else
   "${curl[@]}" -w '\n%{http_code}' -- "$url"

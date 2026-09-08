@@ -87,6 +87,7 @@ function parseStatus(raw) {
   out.mode = src.mode
   out.pending_ask_count = Number(src.pending_ask_count) || 0
   out.bedtime_in = src.bedtime_in
+  out.bedtime_start = src.bedtime_start
   out.bedtime_end = src.bedtime_end
   out.path_remaining = copyGroups(src.path_remaining)
   out.parent_pin_set = !!src.parent_pin_set
@@ -157,12 +158,21 @@ function clockLabel(min, hour12) {
   return hr + ":" + mm + " " + ap
 }
 
-function bedtimeEnd(status) {
-  if (!status || status.bedtime_end === undefined || status.bedtime_end === null) return ""
-  var p = String(status.bedtime_end).split(":")
+function clockFromHHMM(hhmm, hour12) {
+  var p = String(hhmm || "").split(":")
   var h = Number(p[0]) || 0
   var m = Number(p[1]) || 0
-  return clockLabel(h * 60 + m, status.hour12)
+  return clockLabel(h * 60 + m, hour12)
+}
+
+function bedtimeEnd(status) {
+  if (!status || status.bedtime_end === undefined || status.bedtime_end === null) return ""
+  return clockFromHHMM(status.bedtime_end, status.hour12)
+}
+
+function bedtimeStart(status) {
+  if (!status || status.bedtime_start === undefined || status.bedtime_start === null) return ""
+  return clockFromHHMM(status.bedtime_start, status.hour12)
 }
 
 function bedtimeBanner(status) {
@@ -170,7 +180,9 @@ function bedtimeBanner(status) {
   if (status.bedtime_in === undefined || status.bedtime_in === null) return ""
   var n = Number(status.bedtime_in)
   if (!(n > 0)) return ""
-  return "bedtime in " + Math.round(n / 60) + " min"
+  var at = bedtimeStart(status)
+  if (!at) return ""
+  return "bedtime starts at " + at
 }
 
 function clockEmpty(status) {
@@ -311,9 +323,13 @@ function crossedWarning(prev, next) {
   return hit
 }
 
-function warningCopy(kind, seconds) {
+function warningCopy(kind, seconds, status) {
+  if (kind === "bedtime") {
+    var at = bedtimeStart(status)
+    if (at) return "bedtime starts at " + at
+    return ""
+  }
   var mins = Math.round(Number(seconds) / 60)
-  if (kind === "bedtime") return "bedtime in " + mins + " min"
   return mins + " min left"
 }
 
@@ -361,6 +377,13 @@ function overlayAskStepperLabel(minutes) {
   return String(clampOverlayAskMinutes(minutes))
 }
 
+function bankSetting(bank, settings, key, fallback) {
+  if (bank && bank[key]) return String(bank[key])
+  if (settings && settings[key]) return String(settings[key])
+  if (fallback === undefined || fallback === null) return ""
+  return fallback
+}
+
 function parseKidBank(raw) {
   var src = raw || {}
   var out = { url: "http://127.0.0.1:8742", readToken: "", askToken: "" }
@@ -379,7 +402,7 @@ function kidSettingsFromShell(doc) {
     var list = layout[names[n]] || []
     for (var i = 0; i < list.length; i++) {
       var row = list[i] || {}
-      if (row.id !== "kidtimer" && row.id !== "kidtimer.kid") continue
+      if (row.id !== "io.github.adam-lagerhausen.kidtimer" && row.id !== "kidtimer" && row.id !== "kidtimer.kid") continue
       if (row.url) out.url = String(row.url).replace(/\/$/, "")
       if (row.readToken) out.readToken = String(row.readToken)
       if (row.askToken) out.askToken = String(row.askToken)
@@ -421,7 +444,10 @@ function takeWarnings(state, status) {
   }
   if (nextBed !== null && prev.bedtimeIn !== null) {
     var bedHit = crossedWarning(prev.bedtimeIn, nextBed)
-    if (bedHit) notices.push(warningCopy("bedtime", bedHit))
+    if (bedHit) {
+      var bedCopy = warningCopy("bedtime", bedHit, status)
+      if (bedCopy) notices.push(bedCopy)
+    }
   }
   return { state: { seeded: true, remaining: remaining, bedtimeIn: nextBed }, notices: notices }
 }

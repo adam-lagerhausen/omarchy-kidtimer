@@ -84,11 +84,8 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 	if err != nil {
 		return nil, err
 	}
-	if b.ov.parentLock {
-		b.ov.parentLock = false
-		if err := b.metaSet(metaParentLock, boolMeta(false)); err != nil {
-			return nil, err
-		}
+	if err := b.clearParentLockLocked(); err != nil {
+		return nil, err
 	}
 	return g, nil
 }

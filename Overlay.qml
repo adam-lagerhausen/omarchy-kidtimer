@@ -217,10 +217,12 @@ Item {
     onStarted: {
       var job = root.httpJob || {}
       write(String(job.token || "") + "\n" + String(job.body || ""))
+      stdinEnabled = false
     }
     onExited: {
       var job = root.httpJob
       root.httpJob = null
+      stdinEnabled = true
       var parsed = root.splitHTTP(root.httpBuf)
       root.httpBuf = ""
       if (job && job.cb) job.cb(parsed.status, parsed.body)

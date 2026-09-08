@@ -4,8 +4,8 @@ import qs.Ui
 
 Panel {
   id: root
-  moduleName: "kidtimer"
-  ipcTarget: "kidtimer"
+  moduleName: "io.github.adam-lagerhausen.kidtimer"
+  ipcTarget: "io.github.adam-lagerhausen.kidtimer"
   manageIpc: false
 
   property var anchorItem: null

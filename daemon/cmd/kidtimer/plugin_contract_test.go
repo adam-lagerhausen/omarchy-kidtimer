@@ -113,6 +113,12 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, "blockAllReads: true", "FileView watcher only")
 	mustContain(t, parentBar, "state.py", "descriptor-bound state")
 	mustContain(t, parentBar, "loopback-http.sh", "loopback http helper")
+	mustContain(t, parentBar, "stdinEnabled = false", "close loopback-http stdin")
+	mustContain(t, readPlugin(t, root, "Overlay.qml"), "stdinEnabled = false", "overlay closes loopback-http stdin")
+	mustContain(t, parentBar, `moduleName: "io.github.adam-lagerhausen.kidtimer"`, "bar moduleName")
+	mustContain(t, parentBar, `target: "io.github.adam-lagerhausen.kidtimer"`, "ipc handler")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), `moduleName: "io.github.adam-lagerhausen.kidtimer"`, "panel moduleName")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), `ipcTarget: "io.github.adam-lagerhausen.kidtimer"`, "panel ipc")
 	if strings.Contains(parentBar+kidPanel+kidOverlay, "XMLHttpRequest") {
 		t.Fatal("qml must not use unbounded XMLHttpRequest")
 	}
@@ -240,7 +246,40 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("overlay Text properties must be one per line")
 	}
 	mustContain(t, parentManifest, `"bar-widget"`, "bar-widget")
-	mustContain(t, parentManifest, `"kidtimer"`, "one plugin id")
+	mustContain(t, parentManifest, `"io.github.adam-lagerhausen.kidtimer"`, "one plugin id")
+	if strings.Contains(parentManifest, `"id": "kidtimer"`) {
+		t.Fatal("catalog id must not stay bare kidtimer")
+	}
+	readme := readPlugin(t, root, "README.md")
+	mustContain(t, readme, "omarchy plugin update io.github.adam-lagerhausen.kidtimer", "update id")
+	mustContain(t, readme, "omarchy plugin remove io.github.adam-lagerhausen.kidtimer", "remove id")
+	if strings.Contains(readme, "omarchy plugin update kidtimer") || strings.Contains(readme, "omarchy plugin remove kidtimer") {
+		t.Fatal("readme still names the old plugin id")
+	}
+	loopback := readPlugin(t, root, "helpers/loopback-http.sh")
+	mustContain(t, loopback, "--data-binary @-", "http body on stdin")
+	if strings.Contains(loopback, `--data-binary "$body"`) {
+		t.Fatal("http body must not be in curl argv")
+	}
+	applyRole = readPlugin(t, root, "helpers/apply-role.sh")
+	mustContain(t, applyRole, `mktemp -p "$share" .setup-error.XXXXXXXXXX`, "setup-error exclusive temp")
+	ents, err := os.ReadDir(filepath.Join(root, "testdata"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range ents {
+		if !strings.HasSuffix(e.Name(), ".sh") {
+			continue
+		}
+		src := readPlugin(t, root, filepath.Join("testdata", e.Name()))
+		mustContain(t, src, "/usr/bin/curl", e.Name()+" pinned curl")
+		mustContain(t, src, " -q ", e.Name()+" curl -q")
+		mustContain(t, src, "--max-time", e.Name()+" time cap")
+		mustContain(t, src, "--max-filesize", e.Name()+" size cap")
+		if strings.Contains(src, " -d ") || strings.Contains(src, "--data-binary \"$") {
+			t.Fatalf("%s puts a body in curl argv", e.Name())
+		}
+	}
 }
 
 func TestPluginModels(t *testing.T) {

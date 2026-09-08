@@ -85,22 +85,11 @@ Item {
     onTriggered: root.nowPtr = new Date()
   }
 
-  Column {
+  Tape {
+    id: paper
     width: parent.width
-    Tape {
-      id: paper
-      width: parent.width
-      tape: root.tape
-      bar: root.bar
-      onAct: function (ev) { root.fire(ev) }
-    }
-    LookBtn {
-      width: parent.width - 32
-      x: 16
-      text: "This is the kid's computer"
-      ghost: true
-      fontFamily: paper.plex
-      onClicked: if (root.hostWidget) root.hostWidget.pickRole("kid")
-    }
+    tape: root.tape
+    bar: root.bar
+    onAct: function (ev) { root.fire(ev) }
   }
 }

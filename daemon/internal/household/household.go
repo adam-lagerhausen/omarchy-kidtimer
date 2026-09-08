@@ -95,12 +95,7 @@ func WriteRole(home string, role reverse.Role) error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return err
 	}
-	path := RolePath(home)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(s+"\n"), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return writeFile(RolePath(home), []byte(s+"\n"))
 }
 
 func Load(path string) ([]reverse.Record, error) {
@@ -125,23 +120,46 @@ func Save(path string, kids []reverse.Record) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(raw, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return writeFile(path, append(raw, '\n'))
 }
 
 func WritePin(home, encoded string) error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return err
 	}
-	path := PinPath(home)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(strings.TrimSpace(encoded)+"\n"), 0o600); err != nil {
+	return writeFile(PinPath(home), []byte(strings.TrimSpace(encoded)+"\n"))
+}
+
+func writeFile(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	ok := false
+	defer func() {
+		if !ok {
+			_ = tmp.Close()
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if err := tmp.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	ok = true
+	return nil
 }
 
 func ReadPin(home string) (string, bool, error) {
