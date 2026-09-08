@@ -44,7 +44,9 @@ Set a 4-digit PIN next. Until one exists, time still counts but nothing covers t
 
 If you picked parent by mistake, open the chip and pick the kid's computer. It asks for the password again. A kid computer cannot switch to parent. Uninstall Kidtimer first, then pick again.
 
-To update later: `omarchy plugin update kidtimer`. Kid computers you already claimed stay claimed, including if you came from Allowance.
+To update later: `omarchy plugin update io.github.adam-lagerhausen.kidtimer`. Kid computers you already claimed stay claimed, including if you came from Allowance.
+
+If you installed when the id was `kidtimer`, paste the install command again. Do not uninstall. Kidtimer moves the chip to the new id and removes the old plugin folder.
 
 ## How it works
 
@@ -169,7 +171,7 @@ Away from home the kid computer keeps counting, and the overlay still works. You
 On each computer:
 
 ```
-omarchy plugin remove kidtimer
+omarchy plugin remove io.github.adam-lagerhausen.kidtimer
 ```
 
 On a kid computer, also:

@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -88,9 +89,12 @@ func TestKidServicesIncludeLegacy(t *testing.T) {
 }
 
 func TestBrowseKidsRequestsBothServices(t *testing.T) {
+	var mu sync.Mutex
 	seen := map[string]bool{}
 	one := func(ctx context.Context, service string, out chan<- Found) error {
+		mu.Lock()
 		seen[service] = true
+		mu.Unlock()
 		if service == ServiceLegacy {
 			select {
 			case out <- Found{ID: "kid-1", Name: "testMax", URL: "http://192.168.1.20:8742"}:
@@ -104,7 +108,10 @@ func TestBrowseKidsRequestsBothServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	close(ch)
-	if !seen[ServiceType] || !seen[ServiceLegacy] {
+	mu.Lock()
+	ok := seen[ServiceType] && seen[ServiceLegacy]
+	mu.Unlock()
+	if !ok {
 		t.Fatalf("services %v", seen)
 	}
 	var got Found

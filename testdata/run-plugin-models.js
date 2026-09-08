@@ -596,6 +596,9 @@ assertEqual(kid.pinGrantPayload("1234", 600), { pin: "1234", seconds: 600 }, "pi
 assertEqual(kid.kidSettingsFromShell({
   bar: { layout: { right: [{ id: "kidtimer", url: "http://x:8742/", askToken: "a", readToken: "r" }] } }
 }).url, "http://x:8742", "shell kid url")
+assertEqual(kid.kidSettingsFromShell({
+  bar: { layout: { right: [{ id: "io.github.adam-lagerhausen.kidtimer", url: "http://y:8742/", askToken: "a", readToken: "r" }] } }
+}).url, "http://y:8742", "namespaced shell kid url")
 assertEqual(kid.parseStatus({ parent_pin_set: true, overlay: true }).parent_pin_set, true, "parse pin set")
 assertEqual(home.lockArmed, true, "fixture has household pin")
 assertEqual(parent.fixtureTape("ada", parent.chromeHome(), { pinSet: true }).lockArmed, true, "household pin arms lock")

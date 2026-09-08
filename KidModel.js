@@ -379,7 +379,7 @@ function kidSettingsFromShell(doc) {
     var list = layout[names[n]] || []
     for (var i = 0; i < list.length; i++) {
       var row = list[i] || {}
-      if (row.id !== "kidtimer" && row.id !== "kidtimer.kid") continue
+      if (row.id !== "io.github.adam-lagerhausen.kidtimer" && row.id !== "kidtimer" && row.id !== "kidtimer.kid") continue
       if (row.url) out.url = String(row.url).replace(/\/$/, "")
       if (row.readToken) out.readToken = String(row.readToken)
       if (row.askToken) out.askToken = String(row.askToken)
