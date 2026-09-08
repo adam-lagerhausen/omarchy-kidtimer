@@ -30,19 +30,19 @@ const classicPiles = [
 ]
 
 assertEqual(kid.barLabel({ bedtime_active: true }), "bedtime", "bedtime")
-assertEqual(kid.barLabel({ bedtime_active: false, focused_group: null, groups: { fun: 0 } }), "0min left", "idle null")
-assertEqual(kid.barLabel({ bedtime_active: false, groups: { fun: 2820 } }), "47min left", "remaining only")
+assertEqual(kid.barLabel({ bedtime_active: false, focused_group: null, groups: { fun: 0 } }), "0m left", "idle null")
+assertEqual(kid.barLabel({ bedtime_active: false, groups: { fun: 2820 } }), "47m left", "remaining only")
 assertEqual(kid.barLabel({
   bedtime_active: false,
   focused_app: "minecraft",
   focused_group: "fun",
   groups: { fun: 960 }
-}), "16min left", "countdown")
+}), "16m left", "countdown")
 assertEqual(kid.barLabel({
   bedtime_active: false,
   focused_app: "minecraft",
   groups: { fun: 5400 }
-}), "1h 30min left", "hour plus minutes")
+}), "1h 30m left", "hour plus minutes")
 assertEqual(kid.askPayload("", 0).group, "fun", "ask default group")
 assertEqual(kid.askPayload("", 0).seconds, 1800, "ask default seconds")
 assertEqual(kid.fillPercent(0), 0, "fill 0")
@@ -282,7 +282,7 @@ const spentOnly = parent.projectTape([{
 assertEqual(spentOnly.kid.fun.usedLabel, "6m", "spent used")
 assertEqual(spentOnly.track.blocks.length, 1, "spent becomes a block")
 assertEqual(spentOnly.track.log[0].dur, "6m", "spent log dur")
-assertEqual(spentOnly.track.log[0].name, "ON", "spent log name")
+assertEqual(spentOnly.track.log[0].name, "COMPUTER", "spent log name")
 assertEqual(home.asks[0].text, "Ada asked for 10 more minutes", "ask copy")
 
 const bea = parent.fixtureTape("bea", parent.chromeHome())
@@ -404,11 +404,11 @@ assertEqual(kid.barLabel({
   focused_group: "fun",
   focused_app: "minecraft",
   groups: { fun: 960 }
-}), "16min left", "fun caption remaining")
+}), "16m left", "fun caption remaining")
 assertEqual(kid.barLabel({
   focused_app: "khan academy",
   groups: { fun: 960 }
-}), "16min left", "any app spends")
+}), "16m left", "any app spends")
 assertEqual(kid.barUrgent({
   groups: { fun: 0 }
 }), true, "empty remaining is urgent")
@@ -422,7 +422,7 @@ assertEqual(kid.barLabel({
   parent_locked: true,
   focused_app: "minecraft"
 }), "bedtime", "bedtime wins lock")
-assertEqual(kid.barLabel({ focused_group: null, groups: { fun: 0 } }), "0min left", "empty idle")
+assertEqual(kid.barLabel({ focused_group: null, groups: { fun: 0 } }), "0m left", "empty idle")
 assertEqual(kid.panelCaption({ bedtime_active: true }), "bedtime", "caption bedtime")
 assertEqual(kid.panelCaption({ parent_locked: true }), "locked", "caption locked")
 assertEqual(kid.panelCaption({ bedtime_active: true, parent_locked: true }), "bedtime", "caption bedtime wins")
@@ -432,10 +432,10 @@ assertEqual(kid.panelKind({ bedtime_active: true, parent_locked: true }), "bedti
 assertEqual(kid.panelKind({ parent_locked: true }), "locked", "kind locked")
 assertEqual(kid.panelKind({ mode: "evening" }), "home", "leftover mode is home")
 assertEqual(kid.panelKind({ mode: "freetime", parent_locked: true }), "locked", "lock beats leftover mode")
-assertEqual(kid.clockFace({ groups: { fun: 960 }, spent: { fun: 2640 } }).leftLabel, "16min LEFT", "clock left")
+assertEqual(kid.clockFace({ groups: { fun: 960 }, spent: { fun: 2640 } }).leftLabel, "16m LEFT", "clock left")
 assertEqual(kid.clockFace({ groups: { fun: 960 }, spent: { fun: 2640 } }).fill, 960 / 3600, "clock fill")
 assertEqual(kid.clockFace({ groups: { fun: 960 }, spent: { fun: 2640 } }).empty, false, "clock not empty")
-assertEqual(kid.clockFace({ groups: { fun: 0 }, spent: { fun: 3600 } }).leftLabel, "0min LEFT", "clock empty label")
+assertEqual(kid.clockFace({ groups: { fun: 0 }, spent: { fun: 3600 } }).leftLabel, "0m LEFT", "clock empty label")
 assertEqual(kid.clockFace({ groups: { fun: 0 }, spent: { fun: 3600 } }).empty, true, "clock empty")
 assertEqual(kid.clockFace({ groups: { fun: 0 } }).fill, 0, "clock empty fill")
 assertEqual(kid.clockFace({ groups: { fun: 1800 } }, "fun").waiting, true, "clock waiting")
@@ -584,6 +584,10 @@ assertEqual(kid.parentPinLabel(), "Parent Pin", "parent pin label")
 assertEqual(kid.validPin("1234"), true, "pin 4 digits")
 assertEqual(kid.validPin("12a4"), false, "pin non-digit")
 assertEqual(kid.validPin("123"), false, "pin short")
+assertEqual(kid.pinFailLabel(403, '{"error":"forbidden: invalid pin"}'), "wrong pin", "wrong pin copy")
+assertEqual(kid.pinFailLabel(403, '{"error":"forbidden: too many pin attempts"}'), "wait 30 seconds", "cooldown copy")
+assertEqual(kid.pinFailLabel(429, "too many pin attempts"), "wait 30 seconds", "cooldown raw")
+assertEqual(kid.pinFailLabel(500, "nope"), "wrong pin", "other pin fail")
 assertEqual(kid.overlayFace({ overlay: false, parent_locked: true }), "", "no overlay")
 assertEqual(kid.overlayFace({ overlay: true, parent_locked: true }), "locked", "overlay locked")
 assertEqual(kid.overlayFace({ overlay: true, bedtime_active: true }), "bedtime", "overlay bedtime")
@@ -628,7 +632,9 @@ assertEqual(parent.parseSessions([{ start: 8 * 60, start_unix: localUnix, dur: 1
 assertEqual(parent.friendlyApp("foot"), "Terminal", "foot is terminal")
 assertEqual(parent.friendlyApp("footclient"), "Terminal", "footclient is terminal")
 assertEqual(parent.friendlyApp("google-chrome"), "Chrome", "google-chrome")
-assertEqual(parent.friendlyApp("on"), "on", "on stays on")
+assertEqual(parent.friendlyApp("on"), "Computer", "bare on is computer")
+assertEqual(parent.friendlyApp(""), "Computer", "missing app is computer")
+assertEqual(parent.sittingName({}), "COMPUTER", "empty sitting name")
 
 assertEqual(parent.clockLabel(21 * 60, true), "9:00 PM", "12h bed")
 assertEqual(parent.clockLabel(21 * 60, false), "21:00", "24h bed")

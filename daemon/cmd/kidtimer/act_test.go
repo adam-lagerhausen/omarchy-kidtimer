@@ -34,6 +34,30 @@ func TestParseDirectFromFlags(t *testing.T) {
 	if strings.Contains(fmt.Sprintf("%v", d), "secret") || strings.Contains(fmt.Sprintf("%#v", d), "secret") {
 		t.Fatal("token leaked")
 	}
+	g, ok := req.Action.(Grant)
+	if !ok || g.Seconds != 600 || g.Reason != "+10" || g.Group != "fun" {
+		t.Fatalf("default grant %+v", req.Action)
+	}
+}
+
+func TestParseGrantMinutesMatchPanel(t *testing.T) {
+	clearLabEnv(t)
+	req, err := Parse("grant", []string{"-url", "http://127.0.0.1:9", "-token", "secret", "-minutes", "10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, ok := req.Action.(Grant)
+	if !ok || g.Seconds != 600 || g.Reason != "+10" {
+		t.Fatalf("+10 %+v", req.Action)
+	}
+	req, err = Parse("grant", []string{"-url", "http://127.0.0.1:9", "-token", "secret", "-minutes=-10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, ok = req.Action.(Grant)
+	if !ok || g.Seconds != -600 || g.Reason != "-10" {
+		t.Fatalf("-10 %+v", req.Action)
+	}
 }
 
 func TestParseDirectFromEnv(t *testing.T) {
