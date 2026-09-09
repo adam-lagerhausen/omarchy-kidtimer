@@ -100,7 +100,7 @@ function parentPinLabel() {
 }
 
 function parentPinWhy() {
-  return "Required for the controls. Use it to make changes on the kids computer."
+  return "Required for the controls. Use it to make changes on the kid's computer."
 }
 
 function pinSlotKind(digits, index, caret, committed) {
@@ -1127,8 +1127,8 @@ function projectTape(snapshots, selectedIndex, chrome, now, household) {
     kids: kids,
     ours: ours,
     adopt: adopt,
-    asks: ours ? asks : [],
-    bellCount: ours ? asks.length : 0,
+    asks: asks,
+    bellCount: asks.length,
     track: ours ? track : emptyTrack(hour12),
     showLock: ch.face === "home" && ours,
     showStamp: ch.face === "home" && ours && kid.locked,
