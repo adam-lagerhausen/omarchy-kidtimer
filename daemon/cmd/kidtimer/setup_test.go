@@ -491,20 +491,37 @@ func TestInstallScriptParentHasNoSudo(t *testing.T) {
 	if strings.Contains(body, `exec sudo "$0"`) {
 		t.Fatal("must not sudo the installer script")
 	}
-	if !strings.Contains(body, "sudo install -o root -g root -m 0755") {
-		t.Fatal("kid must sudo install the hashed binary")
+	if idx := strings.Index(body, "kidtimer_run_privileged_install"); idx > 0 && strings.Contains(body[:idx], "sudo") {
+		t.Fatal("parent install must not run as root")
 	}
-	if !strings.Contains(body, "/usr/local/bin/kidtimer") {
-		t.Fatal("kid system binary")
+	if !strings.Contains(body, "kidtimer_run_privileged_install") {
+		t.Fatal("kid must bind the privileged copy to a digest")
+	}
+	if strings.Contains(body, "sudo install") || strings.Contains(body, "sudo cp") {
+		t.Fatal("must not sudo install/cp from a user path")
+	}
+	if strings.Contains(body, "mktemp") {
+		t.Fatal("must not stage kid files in a user-owned mktemp")
 	}
 	if !strings.Contains(body, `HOME}/.local/share/kidtimer/src`) {
 		t.Fatal("parent share dir")
 	}
-	if !strings.Contains(body, "/usr/local/share/kidtimer") {
-		t.Fatal("kid share dir")
-	}
 	if !strings.Contains(body, "manifest.json") {
 		t.Fatal("root plugin manifest")
+	}
+	lib, err := os.ReadFile(filepath.Join(repoRoot(t), "helpers", "install-lib.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	libBody := string(lib)
+	if !strings.Contains(libBody, "/usr/local/bin/kidtimer") {
+		t.Fatal("kid system binary")
+	}
+	if !strings.Contains(libBody, "/usr/local/share/kidtimer") {
+		t.Fatal("kid share dir")
+	}
+	if !strings.Contains(libBody, "KIDTIMER_INSTALL_MANIFEST") {
+		t.Fatal("digest manifest")
 	}
 }
 

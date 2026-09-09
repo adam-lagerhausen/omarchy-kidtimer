@@ -182,13 +182,22 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, applyRole, "--proto '=https'", "https-only download")
 	mustContain(t, applyRole, "SHA256SUMS", "committed checksums")
 	mustContain(t, applyRole, "stop-user-bank", "stop user daemons before sudo")
-	mustContain(t, applyRole, "/usr/local/share/kidtimer", "root-owned plugin tree")
-	mustContain(t, applyRole, "install -o root -g root -m 0755", "root-owned binary")
+	mustContain(t, applyRole, "kidtimer_run_privileged_install", "digest-bound root copy")
+	mustContain(t, applyRole, "install-lib.sh", "shared privileged install")
+	installLib := readPlugin(t, root, "helpers/install-lib.sh")
+	mustContain(t, installLib, "/usr/local/share/kidtimer", "root-owned plugin tree")
+	mustContain(t, installLib, "/usr/local/bin/kidtimer", "root-owned binary dest")
 	if strings.Contains(applyRole, "releases/latest") {
 		t.Fatal("must not fetch latest")
 	}
 	if strings.Contains(applyRole, `sudo "$tmp"`) || strings.Contains(applyRole, `sudo "$userbin"`) {
 		t.Fatal("must not sudo a user-owned binary")
+	}
+	if strings.Contains(applyRole, "sudo /usr/bin/install") || strings.Contains(applyRole, "sudo /usr/bin/cp") {
+		t.Fatal("must not sudo install/cp from a user path")
+	}
+	if strings.Contains(applyRole, "stage=$(/usr/bin/mktemp -d)") {
+		t.Fatal("must not stage kid files in a user-owned mktemp")
 	}
 	mustContain(t, applyRole, "setup-error", "kid setup error file")
 	mustContain(t, applyRole, "already a kid", "refuse parent after kid")

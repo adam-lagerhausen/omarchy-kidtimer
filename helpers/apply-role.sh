@@ -180,20 +180,15 @@ fi
 
 echo "Kidtimer needs your password to run the timer on this computer."
 trap 'fail "Could not set up this computer."' ERR
+# shellcheck source=install-lib.sh
+. "$(cd "$(dirname -- "$0")" && pwd)/install-lib.sh"
 userbin=${HOME}/.local/bin/kidtimer
 need_bin "$userbin"
 "$userbin" setup stop-user-bank || true
 
-stage=$(/usr/bin/mktemp -d)
 src=$here
 if [[ -n ${PINNED_TREE:-} && -f $PINNED_TREE/packaging/config.kid.toml ]]; then
   src=$PINNED_TREE
 fi
-copy_plugin_tree "$src" "$stage"
-/usr/bin/sudo /usr/bin/install -o root -g root -m 0755 -- "$userbin" /usr/local/bin/kidtimer
-/usr/bin/sudo /usr/bin/rm -rf -- /usr/local/share/kidtimer
-/usr/bin/sudo /usr/bin/mkdir -p -- /usr/local/share/kidtimer
-/usr/bin/sudo /usr/bin/cp -a -- "$stage"/. /usr/local/share/kidtimer/
-/usr/bin/sudo /usr/bin/chown -R root:root -- /usr/local/share/kidtimer
-/usr/bin/rm -rf -- "$stage" "${PINNED_TREE:-}"
-/usr/bin/sudo /usr/local/bin/kidtimer setup kid -repo /usr/local/share/kidtimer
+kidtimer_run_privileged_install "$src" "$userbin"
+/usr/bin/rm -rf -- "${PINNED_TREE:-}"
