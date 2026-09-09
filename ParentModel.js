@@ -965,7 +965,7 @@ function projectKid(snap, index, now, allotOverride, hour12) {
       fun: policy.fun || [],
       school: policy.school || []
     },
-    pickerLine: (face.live ? "●" : "○") + " " + face.caption + "  " + String((snap && snap.name) || "kid").toUpperCase(),
+    pickerLine: (face.live ? "●" : "○") + " " + String((snap && snap.name) || "kid").toUpperCase() + "  " + face.caption,
     on: face.caption
   }
 }

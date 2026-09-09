@@ -235,20 +235,20 @@ Rectangle {
           }
           Text {
             textFormat: Text.PlainText
-            anchors.verticalCenter: parent.verticalCenter
-            text: t.kid.face.caption
-            color: coralKid ? urgent : quiet
-            font.family: root.plex
-            font.pixelSize: 11
-          }
-          Text {
-            textFormat: Text.PlainText
             id: pickName
             text: t.kid.nameUp
             color: ink
             font.family: root.plex
             font.pixelSize: 16
             font.weight: Font.DemiBold
+          }
+          Text {
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            text: t.kid.face.caption
+            color: coralKid ? urgent : quiet
+            font.family: root.plex
+            font.pixelSize: 11
           }
         }
         Canvas {
@@ -386,7 +386,7 @@ Rectangle {
                 rightPadding: 10
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
-                text: (modelData.face.live ? "● " : "○ ") + modelData.face.caption + "  " + modelData.nameUp
+                text: (modelData.face.live ? "● " : "○ ") + modelData.nameUp + "  " + modelData.face.caption
                 color: foreground
                 font.family: root.plex
                 font.pixelSize: 12
