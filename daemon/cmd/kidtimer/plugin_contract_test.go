@@ -58,6 +58,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidModel, `"bedtime"`, "bedtime label")
 	mustContain(t, kidModel, `"fun"`, "default fun")
 	mustContain(t, kidModel, "return [900, 300, 60]", "15/5/1 min warnings")
+	mustContain(t, kidModel, "warnSeconds()[0]", "bedtime banner is soon-only")
 	mustContain(t, kidPanel, "kidPost", "kid ask POST")
 	mustContain(t, kidPanel, "/v1/asks", "kid ask path")
 	mustContain(t, kidPanel, "askToken", "ask token")
@@ -165,7 +166,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, "Color.urgent", "urgent token")
 	mustContain(t, parentPanel, `"deny"`, "deny decision")
 	mustContain(t, parentModel, "Parent Pin", "settings pin row")
-	mustContain(t, parentModel, "Required for the controls. Use it to make changes on the kids computer.", "pin why")
+	mustContain(t, parentModel, "Required for the controls. Use it to make changes on the kid's computer.", "pin why")
 	mustContain(t, parentPanel, "Change", "pin change")
 	if strings.Contains(readPlugin(t, root, "ParentPanel.qml"), "onOpenedChanged") {
 		t.Fatal("ParentPanel is an Item; opened lives on the host widget")
@@ -225,6 +226,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidModel, "hour12", "kid hour12")
 	tape := readPlugin(t, root, "Tape.qml")
 	mustContain(t, tape, `modelData.nameUp + "  " + modelData.face.caption`, "picker list is name then status")
+	mustContain(t, tape, "ElideRight", "long names elide")
 	if strings.Contains(tape, `modelData.face.caption + "  " + modelData.nameUp`) {
 		t.Fatal("picker list still status then name")
 	}
