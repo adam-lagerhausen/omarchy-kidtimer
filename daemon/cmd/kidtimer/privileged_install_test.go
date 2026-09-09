@@ -103,7 +103,7 @@ func TestPrivilegedInstallRunsSetupAfterVerify(t *testing.T) {
 	src, _, destBin, destShare := privInstallTree(t)
 	marker := filepath.Join(t.TempDir(), "setup-ran")
 	bin := filepath.Join(src, "fake-bin")
-	script := "#!/bin/bash\nprintf '%s\\n' \"$*\" >" + marker + "\n"
+	script := "#!/bin/bash\nprintf '%s\\n' \"$*\" \"$(umask)\" >" + marker + "\n"
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -113,9 +113,9 @@ func TestPrivilegedInstallRunsSetupAfterVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "setup kid -repo " + destShare + "\n"
+	want := "setup kid -repo " + destShare + "\n0022\n"
 	if string(got) != want {
-		t.Fatalf("setup argv %q", got)
+		t.Fatalf("setup argv/umask %q", got)
 	}
 }
 
@@ -140,6 +140,7 @@ func TestInstallLibHashesBeforeSudo(t *testing.T) {
 	mustContain(t, py, "tempfile.mkdtemp", "root-owned stage")
 	mustContain(t, py, "installed digest mismatch", "verify before exec")
 	mustContain(t, py, "os.fstat", "held descriptor stat")
+	mustContain(t, py, "os.umask(0o022)", "restore umask before setup")
 }
 
 func TestKidInstallPathsSharePrivilegedCopy(t *testing.T) {

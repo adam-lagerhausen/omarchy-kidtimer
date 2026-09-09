@@ -212,6 +212,7 @@ def chown_root(path):
 def install_tree(stage, dest, require_root_owner):
     remove_path(dest, require_root_owner)
     os.makedirs(dest, mode=0o755, exist_ok=False)
+    os.chmod(dest, 0o755)
     chown_root(dest)
     for dirpath, dirnames, filenames in os.walk(stage, followlinks=False):
         rel = os.path.relpath(dirpath, stage)
@@ -222,6 +223,7 @@ def install_tree(stage, dest, require_root_owner):
             sub = d if rel == "." else os.path.join(rel, d)
             outd = os.path.join(dest, sub)
             os.mkdir(outd, 0o755)
+            os.chmod(outd, 0o755)
             chown_root(outd)
         for name in filenames:
             srcf = os.path.join(dirpath, name)
@@ -296,7 +298,11 @@ def main():
         fail("missing KIDTIMER_INSTALL_MANIFEST")
     manifest = parse_manifest(text)
     require_root = os.geteuid() == 0
-    stage = stage_sources(args.src, args.bin, manifest, uid)
+    old_umask = os.umask(0o077)
+    try:
+        stage = stage_sources(args.src, args.bin, manifest, uid)
+    finally:
+        os.umask(old_umask)
     try:
         install_tree(stage, args.dest_share, require_root)
         install_bin(stage, args.dest_bin, require_root)
@@ -305,6 +311,7 @@ def main():
         shutil.rmtree(stage, ignore_errors=True)
     if not args.run_setup:
         return
+    os.umask(0o022)
     r = subprocess.run(
         [args.dest_bin, "setup", "kid", "-repo", args.dest_share],
         check=False,
