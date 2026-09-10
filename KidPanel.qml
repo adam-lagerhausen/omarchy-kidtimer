@@ -90,10 +90,7 @@ Item {
     var body = Model.askPayload(root.askGroup, root.chosenMinutes * 60, "more time")
     if (!hostWidget || typeof hostWidget.kidPost !== "function") return
     hostWidget.kidPost("/v1/asks", body, String(setting("askToken", "")), function(status, text) {
-      if (status !== 200) {
-        root.askGroup = ""
-        return
-      }
+      if (status !== 200) return
       var id = ""
       try {
         id = JSON.parse(text).id || ""

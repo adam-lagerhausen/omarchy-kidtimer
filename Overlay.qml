@@ -99,9 +99,12 @@ Item {
     askQueued = true
     var body = Model.askPayload("fun", chosenMinutes * 60, "more time")
     overlayHTTP("POST", bankUrl() + "/v1/asks", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
-      if (status !== 200) askQueued = false
+      if (status !== 200) {
+        askQueued = false
+        return
+      }
       step = "cover"
-      if (status === 200) poll()
+      poll()
     })
   }
 
