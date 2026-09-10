@@ -293,13 +293,14 @@ function notifyHeadline(kidName) {
 
 function notifySummary(ask, look, status) {
   if (!ask) return "new ask"
-  if (status && (status.parentLocked || status.parent_locked)) return "unlock"
+  if (status && (status.parentLocked || status.parent_locked)) return "asked to unlock"
   var m = Math.max(0, Math.floor(askSeconds(ask) / 60))
-  return "+" + m + "m"
+  if (!m) m = 10
+  return "asked for " + m + " more minutes"
 }
 
 function notifyBody(kidName, ask, look, status) {
-  return notifyHeadline(kidName) + " wants " + notifySummary(ask, look, status)
+  return notifyHeadline(kidName) + " " + notifySummary(ask, look, status)
 }
 
 function askSeconds(ask) {
@@ -320,10 +321,16 @@ function lockLabel(name, locked) {
   return (locked ? "Unlock " : "Lock ") + (name || "kid")
 }
 
+function leftoverMinutes(seconds) {
+  var sec = Number(seconds)
+  if (!isFinite(sec) || sec <= 0) return 0
+  var n = Math.floor(sec / 60)
+  if (n < 1) return 1
+  return n
+}
+
 function formatMinutes(seconds) {
-  var n = Math.floor(Number(seconds) / 60)
-  if (isNaN(n) || n < 0) n = 0
-  return minutesLabel(n)
+  return minutesLabel(leftoverMinutes(seconds))
 }
 
 function minutesLabel(n) {
@@ -660,7 +667,7 @@ function fillPct(leftMin, usedMin, allotMin) {
 function projectFun(status, allotSec) {
   var left = Number(status && status.funLeft) || 0
   var used = status ? status.spentFun : null
-  var leftMin = Math.floor(left / 60)
+  var leftMin = leftoverMinutes(left)
   var usedMin = used == null ? null : Math.floor(used / 60)
   var allotMin = Math.floor((Number(allotSec) || 0) / 60)
   return {
@@ -670,7 +677,7 @@ function projectFun(status, allotSec) {
     usedLabel: minutesLabel(usedMin == null ? 0 : usedMin),
     leftLabel: minutesLabel(leftMin) + " LEFT",
     fillPct: fillPct(leftMin, usedMin, allotMin),
-    empty: leftMin === 0,
+    empty: left <= 0,
     barLow: leftMin <= 8,
     guessedUsed: usedMin == null
   }
@@ -996,6 +1003,26 @@ function hourFromNow(now) {
   if (typeof now === "number") return now
   var d = now && typeof now.getHours === "function" ? now : new Date()
   return d.getHours() + d.getMinutes() / 60
+}
+
+function hour12PushKey(row) {
+  if (!row || row.claimed) return ""
+  return String(row.id || row.url || "")
+}
+
+function hour12ShouldPush(pushed, row) {
+  var id = hour12PushKey(row)
+  if (!id) return false
+  return !(pushed && pushed[id])
+}
+
+function hour12MarkPushed(pushed, row) {
+  var id = hour12PushKey(row)
+  var next = {}
+  var src = pushed || {}
+  for (var k in src) next[k] = src[k]
+  if (id) next[id] = true
+  return next
 }
 
 function emptyHowTo() {

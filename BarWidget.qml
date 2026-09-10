@@ -306,7 +306,7 @@ BarWidget {
       "omarchy-notification-send",
       "--app-name", "Kidtimer",
       Model.notifyHeadline(kid && kid.name),
-      Model.notifySummary(ask, kid && kid.look, kid && kid.status)
+      Model.notifyBody(kid && kid.name, ask, kid && kid.look, kid && kid.status)
     ])
   }
 
@@ -394,18 +394,17 @@ BarWidget {
     if (!root.prefsReady) return
     var body = Model.hour12Payload(root.hour12)
     var rows = kidRows()
-    var pushed = {}
-    for (var k in root.clockPushed) pushed[k] = root.clockPushed[k]
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i]
-      if (!row || row.claimed) continue
-      var id = row.id || row.url || ""
-      if (!id) continue
-      if (pushed[id]) continue
-      sendKid(row, "PATCH", "/v1/policy", body)
-      pushed[id] = true
+      if (!Model.hour12ShouldPush(root.clockPushed, row)) continue
+      pushHour12Row(row, body)
     }
-    root.clockPushed = pushed
+  }
+
+  function pushHour12Row(row, body) {
+    sendKid(row, "PATCH", "/v1/policy", body, function () {
+      root.clockPushed = Model.hour12MarkPushed(root.clockPushed, row)
+    })
   }
 
   function setBedtime(start, end) {
