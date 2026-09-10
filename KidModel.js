@@ -347,6 +347,15 @@ function parentPinLabel() {
   return "Parent Pin"
 }
 
+function kidRolePrompt() {
+  return {
+    title: "Make this the kid's computer?",
+    body: "The timer will run here. You cannot switch this chip back to yours.",
+    yes: "Yes, this is the kid's",
+    no: "Cancel"
+  }
+}
+
 function overlayVisible(status) {
   return !!(status && status.overlay)
 }

@@ -751,4 +751,10 @@ const sixLog = parent.layoutTrack(six, policy, 14, true)
 assertEqual(sixLog.log.length, 6, "six sittings stay six")
 assertEqual(sixLog.log[0].name, "CHROME", "six has no earlier")
 
+const kidPrompt = kid.kidRolePrompt()
+assertEqual(kidPrompt.title, "Make this the kid's computer?", "kid role title")
+assertEqual(kidPrompt.body, "The timer will run here. You cannot switch this chip back to yours.", "kid role body")
+assertEqual(kidPrompt.yes, "Yes, this is the kid's", "kid role yes")
+assertEqual(kidPrompt.no, "Cancel", "kid role cancel")
+
 console.log("ok")

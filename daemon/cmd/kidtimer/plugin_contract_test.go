@@ -256,6 +256,11 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "setupBusy", "setup loading until done")
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "onHostWidgetChanged", "push host into setup after inject")
 	mustContain(t, readPlugin(t, root, "Setup.qml"), "roleHost", "setup click finds host if inject was late")
+	mustContain(t, readPlugin(t, root, "Setup.qml"), "askKidRole", "kid role asks first")
+	mustContain(t, readPlugin(t, root, "Setup.qml"), "confirmKidRole", "kid role confirm")
+	mustContain(t, readPlugin(t, root, "Setup.qml"), "cancelKidRole", "kid role cancel")
+	mustContain(t, kidModel, "function kidRolePrompt", "kid role prompt copy")
+	mustContain(t, kidModel, "Make this the kid's computer?", "kid role confirm title")
 	if strings.Contains(readPlugin(t, root, "Overlay.qml"), "textFormat: Text.PlainText anchors") {
 		t.Fatal("overlay Text properties must be one per line")
 	}
