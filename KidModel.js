@@ -112,24 +112,30 @@ function isFreetime(status) {
   return modeId(status) === "freetime"
 }
 
+function stayingUp(status) {
+  return !!(status && status.bedtime_hold && !status.parent_locked)
+}
+
 function panelKind(status) {
-  if (status && status.bedtime_active) return "bedtime"
+  if (status && status.bedtime_active && !stayingUp(status)) return "bedtime"
   if (status && status.parent_locked) return "locked"
   return "home"
 }
 
 function barLabel(status) {
   if (!status) return "kidtimer"
-  if (status.bedtime_active) return "bedtime"
+  if (status.bedtime_active && !stayingUp(status)) return "bedtime"
   if (status.parent_locked) return "locked"
   return formatMinutes(remainingFor(status.groups, "fun")) + " left"
 }
 
 function barUrgent(status) {
   if (!status) return false
-  if (status.bedtime_active || status.parent_locked) return true
-  var bed = bedtimeIn(status)
-  if (bed !== null && bed <= 600) return true
+  if (!stayingUp(status) && (status.bedtime_active || status.parent_locked)) return true
+  if (!stayingUp(status)) {
+    var bed = bedtimeIn(status)
+    if (bed !== null && bed <= 600) return true
+  }
   return remainingFor(status.groups, "fun") <= 600
 }
 

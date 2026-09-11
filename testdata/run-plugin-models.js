@@ -228,6 +228,12 @@ assertFace({ reachable: false, status: { bedtime_active: true, parent_locked: tr
 assertFace({ error: true, reachable: false, status: { bedtime_active: true, parent_locked: true, focused_app: "minecraft" } }, "error", "Error", "error")
 assertFace({ reachable: true, status: { bedtime_active: true, parent_locked: true, focused_app: "minecraft" } }, "locked", "Locked", "locked beats bedtime")
 assertFace({ reachable: true, status: { bedtime_active: true, focused_app: "minecraft" } }, "bedtime", "Bedtime", "bedtime")
+assertFace({ reachable: true, status: { bedtime_active: true, bedtime_hold: true, focused_app: "minecraft" } }, "active", "Active · minecraft", "stay-up is active")
+assertFace({ reachable: true, status: { bedtime_active: true, bedtime_hold: true, parent_locked: true, focused_app: "minecraft" } }, "locked", "Locked", "lock beats stay-up")
+assertEqual(parent.grantAllowed({ claimed: false, status: { parent_locked: true } }), false, "no grant while locked")
+assertEqual(parent.grantAllowed({ claimed: false, status: { parent_locked: false } }), true, "grant when unlocked")
+assertEqual(parent.grantAllowed({ claimed: true, status: { parent_locked: false } }), false, "no grant claimed")
+assertEqual(parent.grantAllowed(null), false, "no grant missing kid")
 assertFace({ reachable: true, status: { parent_locked: true, focused_app: "minecraft" } }, "locked", "Locked", "locked")
 assertFace({ reachable: true, status: { focused_app: "minecraft" } }, "active", "Active · minecraft", "active app")
 assertEqual(parent.hostFace({ reachable: true, status: { focused_app: "minecraft" } }).doing, "minecraft", "doing app")
@@ -297,6 +303,21 @@ assertEqual(bea.kid.face.caption, "Active · khan", "bea active khan")
 assertEqual(bea.kid.fun.usedLabel, "20m", "bea used")
 assertEqual(bea.kid.fun.leftLabel, "40m LEFT", "bea left")
 assertEqual(bea.kid.policy.bedLabel, "8:00 PM", "bea bed")
+
+const stayUpTape = parent.projectTape([{
+  name: "Ada",
+  reachable: true,
+  status: parent.parseStatus({
+    bedtime_active: true,
+    bedtime_hold: true,
+    focused_app: "minecraft",
+    groups: { fun: 1800 },
+    spent: { fun: 600 }
+  })
+}], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(stayUpTape.kid.face.kind, "active", "stay-up tape kind")
+assertEqual(stayUpTape.kid.face.caption, "Active · minecraft", "stay-up tape caption")
+assertEqual(stayUpTape.kid.fun.leftLabel, "30m LEFT", "stay-up tape remaining")
 
 const locked = parent.fixtureTape("ada", parent.chromeHome(), { locked: true })
 assertEqual(locked.showStamp, true, "locked stamp")
@@ -429,6 +450,27 @@ assertEqual(kid.barLabel({
   parent_locked: true,
   focused_app: "minecraft"
 }), "bedtime", "bedtime wins lock")
+assertEqual(kid.stayingUp({ bedtime_active: true, bedtime_hold: true }), true, "stay-up")
+assertEqual(kid.stayingUp({ bedtime_active: true, bedtime_hold: true, parent_locked: true }), false, "lock is not stay-up")
+assertEqual(kid.stayingUp({ bedtime_active: true }), false, "plain bedtime is not stay-up")
+assertEqual(kid.panelKind({ bedtime_active: true, bedtime_hold: true }), "home", "stay-up panel is home")
+assertEqual(kid.panelCaption({ bedtime_active: true, bedtime_hold: true }), "", "stay-up has no bedtime caption")
+assertEqual(kid.barLabel({
+  bedtime_active: true,
+  bedtime_hold: true,
+  groups: { fun: 1800 }
+}), "30min left", "stay-up chip shows remaining")
+assertEqual(kid.barUrgent({
+  bedtime_active: true,
+  bedtime_hold: true,
+  groups: { fun: 1800 }
+}), false, "stay-up with time is not urgent")
+assertEqual(kid.barUrgent({
+  bedtime_active: true,
+  bedtime_hold: true,
+  groups: { fun: 600 }
+}), true, "stay-up low remaining is urgent")
+assertEqual(kid.panelKind({ bedtime_active: true, bedtime_hold: true, parent_locked: true }), "bedtime", "bedtime wins a locked stay-up")
 assertEqual(kid.barLabel({ focused_group: null, groups: { fun: 0 } }), "0min left", "empty idle")
 assertEqual(kid.panelCaption({ bedtime_active: true }), "bedtime", "caption bedtime")
 assertEqual(kid.panelCaption({ parent_locked: true }), "locked", "caption locked")
