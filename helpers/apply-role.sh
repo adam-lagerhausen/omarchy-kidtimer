@@ -179,7 +179,7 @@ if [[ $role == parent ]]; then
 fi
 
 echo "Kidtimer needs your password to run the timer on this computer."
-trap 'fail "Could not set up this computer."' ERR
+trap 'fail "Could not set up this computer."' ERR INT HUP TERM
 # shellcheck source=install-lib.sh
 . "$(cd "$(dirname -- "$0")" && pwd)/install-lib.sh"
 userbin=${HOME}/.local/bin/kidtimer

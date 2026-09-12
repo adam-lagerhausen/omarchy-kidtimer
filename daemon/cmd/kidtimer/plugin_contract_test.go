@@ -76,6 +76,9 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	kidOverlay := readPlugin(t, root, "Overlay.qml")
 	mustContain(t, kidOverlay, "Parent Pin", "overlay parent pin")
 	mustContain(t, kidOverlay, "/v1/pin/grant", "pin grant")
+	mustContain(t, kidOverlay, "advancePin", "overlay pin OK")
+	mustContain(t, kidOverlay, `text: "OK"`, "overlay pin OK label")
+	mustContain(t, kidModel, "function overlayPinAdvance", "pin advance helper")
 	mustContain(t, kidOverlay, "Ask", "overlay ask")
 	mustContain(t, kidOverlay, "/v1/asks", "overlay ask path")
 	mustContain(t, kidOverlay, "−10", "overlay ask nudge down")
@@ -200,6 +203,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("must not stage kid files in a user-owned mktemp")
 	}
 	mustContain(t, applyRole, "setup-error", "kid setup error file")
+	mustContain(t, applyRole, `trap 'fail "Could not set up this computer."' ERR INT HUP TERM`, "cancel password writes setup-error")
 	mustContain(t, applyRole, "already a kid", "refuse parent after kid")
 	mustContain(t, applyRole, "od -An -t x1 -j 18 -N 2", "ELF machine check")
 	mustContain(t, parentBar, "setup-error", "watch kid setup error")

@@ -343,6 +343,13 @@ function validPin(digits) {
   return true
 }
 
+function overlayPinAdvance(digits) {
+  if (!validPin(digits)) {
+    return { ok: false, step: "pin", chosenMinutes: ASK_DEFAULT_MIN }
+  }
+  return { ok: true, step: "minutes", chosenMinutes: ASK_DEFAULT_MIN }
+}
+
 function parentPinLabel() {
   return "Parent Pin"
 }
