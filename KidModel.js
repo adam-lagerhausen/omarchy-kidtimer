@@ -197,6 +197,10 @@ function overlayAskWaiting(status) {
   return (Number(status && status.pending_ask_count) || 0) > 0
 }
 
+function askWaiting(status, localWaiting) {
+  return !!localWaiting || overlayAskWaiting(status)
+}
+
 function askPayload(group, seconds, reason) {
   var g = group || "fun"
   var s = Number(seconds)
