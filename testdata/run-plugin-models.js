@@ -302,8 +302,46 @@ const locked = parent.fixtureTape("ada", parent.chromeHome(), { locked: true })
 assertEqual(locked.showStamp, true, "locked stamp")
 assertEqual(locked.kid.face.coral, true, "locked coral")
 assertEqual(locked.kid.face.caption, "Locked", "locked caption")
+assertEqual(locked.kid.bedtime, false, "locked is not bedtime overlay")
 assertEqual(locked.lockLabel, "Unlock Ada", "unlock ada")
 assertEqual(locked.asks[0].text, "Ada asked to unlock", "locked tape ask")
+
+const bedtimeSnap = {
+  name: "Ada",
+  claimed: false,
+  reachable: true,
+  status: parent.parseStatus({
+    bedtime_active: true,
+    groups: { fun: 1800 },
+    spent: { fun: 600 }
+  })
+}
+assertEqual(parent.grantAllowed(bedtimeSnap), false, "no grant at bedtime")
+assertEqual(parent.grantAllowed({
+  claimed: false,
+  status: { bedtime_active: true, bedtime_hold: true, groups: { fun: 1800 } }
+}), true, "grant during stay-up")
+assertEqual(parent.grantAllowed({
+  claimed: false,
+  status: { bedtime_active: false, groups: { fun: 1800 } }
+}), true, "grant during the day")
+assertEqual(parent.grantAllowed({ claimed: true, status: { bedtime_active: false } }), false, "no grant claimed")
+assertEqual(parent.grantAllowed(null), false, "no grant missing kid")
+const bedtimeTape = parent.projectTape([bedtimeSnap], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(bedtimeTape.kid.bedtime, true, "bedtime tape greys +10")
+assertEqual(bedtimeTape.kid.face.caption, "Bedtime", "bedtime tape caption")
+const stayGrant = parent.projectTape([{
+  name: "Ada",
+  claimed: false,
+  reachable: true,
+  status: parent.parseStatus({
+    bedtime_active: true,
+    bedtime_hold: true,
+    groups: { fun: 1800 },
+    spent: { fun: 600 }
+  })
+}], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(stayGrant.kid.bedtime, false, "stay-up keeps +10")
 
 const settings = parent.fixtureTape("ada", parent.chromeSettings())
 assertEqual(settings.showLock, false, "settings hide lock")
@@ -566,7 +604,8 @@ assertEqual(kid.crossedWarning(61, 60), 60, "cross 1")
 assertEqual(kid.crossedWarning(900, 899), 0, "already at 15")
 assertEqual(kid.crossedWarning(901, 0), 0, "zero is the freeze")
 assertEqual(kid.crossedWarning(901, 50), 60, "lag fires lowest")
-assertEqual(kid.warningCopy("fun", 900), "15 min left", "remaining copy")
+assertEqual(kid.warningCopy("fun", 900), "15min left", "remaining copy")
+assertEqual(kid.warningCopy("fun", 900), kid.barLabel({ groups: { fun: 900 } }), "warning matches chip")
 assertEqual(kid.warningCopy("bedtime", 60, { bedtime_start: "21:00" }), "bedtime starts at 9:00 PM", "bedtime copy")
 
 const mcStatus = (path, bed) => ({
@@ -579,11 +618,11 @@ const mcStatus = (path, bed) => ({
 let warned = kid.takeWarnings(kid.emptyWarnState(), mcStatus(901, 901))
 assertEqual(warned.notices, [], "seed silent")
 warned = kid.takeWarnings(warned.state, mcStatus(900, 900))
-assertEqual(warned.notices, ["15 min left", "bedtime starts at 9:00 PM"], "15 min both")
+assertEqual(warned.notices, ["15min left", "bedtime starts at 9:00 PM"], "15 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(300, 300))
-assertEqual(warned.notices, ["5 min left", "bedtime starts at 9:00 PM"], "5 min both")
+assertEqual(warned.notices, ["5min left", "bedtime starts at 9:00 PM"], "5 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(60, 60))
-assertEqual(warned.notices, ["1 min left", "bedtime starts at 9:00 PM"], "1 min both")
+assertEqual(warned.notices, ["1min left", "bedtime starts at 9:00 PM"], "1 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(59, 59))
 assertEqual(warned.notices, [], "no repeat")
 warned = kid.takeWarnings(warned.state, {
@@ -612,7 +651,7 @@ warned = kid.takeWarnings(warned.state, {
   focused_group: "minecraft",
   path_remaining: { minecraft: 900, fun: 0 }
 })
-assertEqual(warned.notices, ["15 min left"], "warn again after grant")
+assertEqual(warned.notices, ["15min left"], "warn again after grant")
 
 assertEqual(kid.parentPinLabel(), "Parent Pin", "parent pin label")
 assertEqual(kid.validPin("1234"), true, "pin 4 digits")

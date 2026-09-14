@@ -264,6 +264,16 @@ function lockPayload(locked) {
   return { locked: !!locked }
 }
 
+function bedtimeOverlay(status) {
+  var s = asStatus(status)
+  return !!(s.bedtimeActive && !s.bedtimeHold)
+}
+
+function grantAllowed(snap) {
+  if (!snap || snap.claimed) return false
+  return !bedtimeOverlay(snapshotStatus(snap))
+}
+
 function bedtimePayload(start, end) {
   if (typeof start === "number") start = hhmmFromMin(start)
   if (typeof end === "number") end = hhmmFromMin(end)
@@ -537,6 +547,7 @@ function parseStatus(raw) {
     parentLocked: !!s.parent_locked,
     parentPinSet: !!s.parent_pin_set || !!s.parentPinSet,
     bedtimeActive: !!s.bedtime_active,
+    bedtimeHold: !!s.bedtime_hold || !!s.bedtimeHold,
     bedtimeStart: s.bedtime_start ? minFromHHMM(s.bedtime_start) : null,
     bedtimeEnd: s.bedtime_end ? minFromHHMM(s.bedtime_end) : null,
     focusedApp: focused,
@@ -942,6 +953,7 @@ function projectKid(snap, index, now, allotOverride, hour12) {
     nameUp: String((snap && snap.name) || "kid").toUpperCase(),
     face: face,
     locked: !!status.parentLocked,
+    bedtime: bedtimeOverlay(status),
     schoolLabel: minutesLabel(schoolSec == null ? 0 : Math.floor(schoolSec / 60)),
     fun: projectFun(status, allot),
     policy: {
@@ -1013,6 +1025,7 @@ function blankKid() {
     name: "",
     nameUp: "",
     locked: false,
+    bedtime: false,
     face: { live: false, caption: "", coral: false },
     fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
     policy: { bedLabel: "", upLabel: "", funDayRows: [] }

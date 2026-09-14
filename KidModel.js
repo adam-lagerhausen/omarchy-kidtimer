@@ -329,8 +329,7 @@ function warningCopy(kind, seconds, status) {
     if (at) return "bedtime starts at " + at
     return ""
   }
-  var mins = Math.round(Number(seconds) / 60)
-  return mins + " min left"
+  return formatMinutes(seconds) + " left"
 }
 
 function validPin(digits) {

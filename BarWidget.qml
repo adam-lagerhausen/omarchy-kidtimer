@@ -335,7 +335,7 @@ BarWidget {
 
   function grantFun(seconds) {
     var kid = aimedKid()
-    if (kid && kid.claimed) return
+    if (!Model.grantAllowed(kid)) return
     if (!kid || !kid.id) return
     sendKid(kid, "POST", "/v1/grants", Model.grantPayload("fun", seconds))
   }
