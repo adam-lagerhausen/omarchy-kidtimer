@@ -1236,6 +1236,54 @@ func TestGrantRejectsOverflowSeconds(t *testing.T) {
 	}
 }
 
+func TestParentGrantClearsPendingAsks(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateAsk(askTok, "fun", 1800, "more time"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateAsk(askTok, "fun", 600, "also"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PendingAskCount != 2 {
+		t.Fatalf("pending before grant: %d", st.PendingAskCount)
+	}
+	if _, err := b.Grant(parent, "fun", -600, "-10", "take-10"); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PendingAskCount != 2 {
+		t.Fatalf("minus grant cleared asks: %d", st.PendingAskCount)
+	}
+	if _, err := b.Grant(parent, "fun", 600, "+10", "give-10"); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PendingAskCount != 0 {
+		t.Fatalf("plus grant left asks: %d", st.PendingAskCount)
+	}
+	listed, err := b.PendingAsks(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("inbox after plus grant: %+v", listed)
+	}
+}
+
 func TestCreateAskRejectsHugeSeconds(t *testing.T) {
 	b, parent := openTest(t, afternoon)
 	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})

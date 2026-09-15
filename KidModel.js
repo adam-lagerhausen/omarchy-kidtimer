@@ -113,15 +113,15 @@ function isFreetime(status) {
 }
 
 function panelKind(status) {
-  if (status && status.bedtime_active) return "bedtime"
   if (status && status.parent_locked) return "locked"
+  if (status && status.bedtime_active) return "bedtime"
   return "home"
 }
 
 function barLabel(status) {
   if (!status) return "kidtimer"
-  if (status.bedtime_active) return "bedtime"
   if (status.parent_locked) return "locked"
+  if (status.bedtime_active) return "bedtime"
   return formatMinutes(remainingFor(status.groups, "fun")) + " left"
 }
 
@@ -135,8 +135,8 @@ function barUrgent(status) {
 
 function panelCaption(status) {
   var kind = panelKind(status)
-  if (kind === "bedtime") return "bedtime"
   if (kind === "locked") return "locked"
+  if (kind === "bedtime") return "bedtime"
   return ""
 }
 

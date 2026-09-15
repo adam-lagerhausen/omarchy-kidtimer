@@ -611,12 +611,12 @@ func TestRouteAuthz(t *testing.T) {
 		idem   string
 		want   map[string]int
 	}{
+		{"decide", http.MethodPost, "/v1/asks/" + askID + "/decide", map[string]any{"decision": "deny"}, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 		{"grants", http.MethodPost, "/v1/grants", map[string]any{"group": "fun", "seconds": 10, "reason": "x"}, "authz-credit", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 200}},
 		{"grants debit", http.MethodPost, "/v1/grants", map[string]any{"group": "fun", "seconds": -600, "reason": "-10"}, "authz-debit", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 		{"status", http.MethodGet, "/v1/status", nil, "", map[string]int{"parent": 200, "ask": 403, "read": 200, "app": 403}},
 		{"create ask", http.MethodPost, "/v1/asks", map[string]any{"group": "fun", "seconds": 60, "reason": "more"}, "", map[string]int{"parent": 403, "ask": 200, "read": 403, "app": 403}},
 		{"list asks", http.MethodGet, "/v1/asks", nil, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
-		{"decide", http.MethodPost, "/v1/asks/" + askID + "/decide", map[string]any{"decision": "deny"}, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 		{"tokens", http.MethodPost, "/v1/tokens", map[string]any{"name": "extra-read", "kind": "read"}, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 		{"lock", http.MethodPost, "/v1/lock", map[string]any{"locked": false}, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 		{"parent pin", http.MethodPut, "/v1/parent-pin", map[string]any{"pin": "1234"}, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
