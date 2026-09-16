@@ -32,9 +32,16 @@ function remainingFor(groups, id) {
   return Number(v) || 0
 }
 
+function leftoverMinutes(seconds) {
+  var sec = Number(seconds)
+  if (!isFinite(sec) || sec <= 0) return 0
+  var n = Math.floor(sec / 60)
+  if (n < 1) return 1
+  return n
+}
+
 function formatMinutes(seconds) {
-  var n = Math.floor(Number(seconds) / 60)
-  if (isNaN(n) || n < 0) n = 0
+  var n = leftoverMinutes(seconds)
   var h = Math.floor(n / 60)
   var m = n % 60
   if (h > 0 && m > 0) return h + "h " + m + "min"
@@ -198,6 +205,19 @@ function clockEmpty(status) {
 
 function askBlocked(status) {
   return false
+}
+
+function panelShowsAsk(kind) {
+  return kind === "home" || kind === "bedtime" || kind === "locked"
+}
+
+function overlayCancel() {
+  return {
+    step: "cover",
+    pinDigits: "",
+    pinWrong: false,
+    chosenMinutes: ASK_DEFAULT_MIN
+  }
 }
 
 function overlayAskWaiting(status) {
