@@ -18,7 +18,7 @@ Rectangle {
     howTo: null,
     chrome: { face: "home", picker: false, bell: false },
     kid: {
-      name: "", nameUp: "", locked: false,
+      name: "", nameUp: "", locked: false, bedtime: false,
       face: { live: false, caption: "", coral: false },
       usedLabel: "0m",
       fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
@@ -558,11 +558,11 @@ Rectangle {
       Item {
         width: parent.width
         height: 36
-        opacity: t.kid.locked ? 0.35 : 1
+        opacity: (t.kid.locked || t.kid.bedtime) ? 0.35 : 1
         SquareBtn {
           width: 36
           height: 36
-          enabled: !t.kid.locked && !t.kid.fun.empty
+          enabled: !t.kid.locked && !t.kid.bedtime && !t.kid.fun.empty
           onClicked: root.act({ kind: "minus10" })
           Text {
             textFormat: Text.PlainText
@@ -586,7 +586,7 @@ Rectangle {
           anchors.right: parent.right
           width: 36
           height: 36
-          enabled: !t.kid.locked
+          enabled: !t.kid.locked && !t.kid.bedtime
           onClicked: root.act({ kind: "plus10" })
           Text {
             textFormat: Text.PlainText

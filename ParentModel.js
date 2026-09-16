@@ -264,6 +264,18 @@ function lockPayload(locked) {
   return { locked: !!locked }
 }
 
+function bedtimeOverlay(status) {
+  var s = asStatus(status)
+  return !!(s.bedtimeActive && !s.bedtimeHold)
+}
+
+function grantAllowed(snap) {
+  if (!snap || snap.claimed) return false
+  var status = snapshotStatus(snap)
+  if (status.parentLocked) return false
+  return !bedtimeOverlay(status)
+}
+
 function bedtimePayload(start, end) {
   if (typeof start === "number") start = hhmmFromMin(start)
   if (typeof end === "number") end = hhmmFromMin(end)
@@ -622,10 +634,6 @@ function hostFace(snap) {
   return faceOf("active")
 }
 
-function grantAllowed(snap) {
-  if (!snap || snap.claimed) return false
-  return !snapshotStatus(snap).parentLocked
-}
 
 function faceOf(kind, app) {
   var caption = ""
@@ -955,6 +963,7 @@ function projectKid(snap, index, now, allotOverride, hour12) {
     nameUp: String((snap && snap.name) || "kid").toUpperCase(),
     face: face,
     locked: !!status.parentLocked,
+    bedtime: bedtimeOverlay(status),
     schoolLabel: minutesLabel(schoolSec == null ? 0 : Math.floor(schoolSec / 60)),
     fun: projectFun(status, allot),
     policy: {
@@ -1046,6 +1055,7 @@ function blankKid() {
     name: "",
     nameUp: "",
     locked: false,
+    bedtime: false,
     face: { live: false, caption: "", coral: false },
     fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
     policy: { bedLabel: "", upLabel: "", funDayRows: [] }
