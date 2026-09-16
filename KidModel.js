@@ -112,24 +112,30 @@ function isFreetime(status) {
   return modeId(status) === "freetime"
 }
 
+function stayingUp(status) {
+  return !!(status && status.bedtime_hold && !status.parent_locked)
+}
+
 function panelKind(status) {
   if (status && status.parent_locked) return "locked"
-  if (status && status.bedtime_active) return "bedtime"
+  if (status && status.bedtime_active && !stayingUp(status)) return "bedtime"
   return "home"
 }
 
 function barLabel(status) {
   if (!status) return "kidtimer"
   if (status.parent_locked) return "locked"
-  if (status.bedtime_active) return "bedtime"
+  if (status.bedtime_active && !stayingUp(status)) return "bedtime"
   return formatMinutes(remainingFor(status.groups, "fun")) + " left"
 }
 
 function barUrgent(status) {
   if (!status) return false
-  if (status.bedtime_active || status.parent_locked) return true
-  var bed = bedtimeIn(status)
-  if (bed !== null && bed <= 600) return true
+  if (!stayingUp(status) && (status.bedtime_active || status.parent_locked)) return true
+  if (!stayingUp(status)) {
+    var bed = bedtimeIn(status)
+    if (bed !== null && bed <= 600) return true
+  }
   return remainingFor(status.groups, "fun") <= 600
 }
 
@@ -180,6 +186,7 @@ function bedtimeBanner(status) {
   if (status.bedtime_in === undefined || status.bedtime_in === null) return ""
   var n = Number(status.bedtime_in)
   if (!(n > 0)) return ""
+  if (n > warnSeconds()[0]) return ""
   var at = bedtimeStart(status)
   if (!at) return ""
   return "bedtime starts at " + at
@@ -195,6 +202,10 @@ function askBlocked(status) {
 
 function overlayAskWaiting(status) {
   return (Number(status && status.pending_ask_count) || 0) > 0
+}
+
+function askWaiting(status, localWaiting) {
+  return !!localWaiting || overlayAskWaiting(status)
 }
 
 function askPayload(group, seconds, reason) {
@@ -341,6 +352,13 @@ function validPin(digits) {
     if (c < "0" || c > "9") return false
   }
   return true
+}
+
+function overlayPinAdvance(digits) {
+  if (!validPin(digits)) {
+    return { ok: false, step: "pin", chosenMinutes: ASK_DEFAULT_MIN }
+  }
+  return { ok: true, step: "minutes", chosenMinutes: ASK_DEFAULT_MIN }
 }
 
 function parentPinLabel() {

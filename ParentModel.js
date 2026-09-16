@@ -100,7 +100,7 @@ function parentPinLabel() {
 }
 
 function parentPinWhy() {
-  return "Required for the controls. Use it to make changes on the kids computer."
+  return "Required for the controls. Use it to make changes on the kid's computer."
 }
 
 function pinSlotKind(digits, index, caret, committed) {
@@ -537,6 +537,7 @@ function parseStatus(raw) {
     parentLocked: !!s.parent_locked,
     parentPinSet: !!s.parent_pin_set || !!s.parentPinSet,
     bedtimeActive: !!s.bedtime_active,
+    bedtimeHold: !!s.bedtime_hold || !!s.bedtimeHold,
     bedtimeStart: s.bedtime_start ? minFromHHMM(s.bedtime_start) : null,
     bedtimeEnd: s.bedtime_end ? minFromHHMM(s.bedtime_end) : null,
     focusedApp: focused,
@@ -609,9 +610,14 @@ function hostFace(snap) {
   if (snap && snap.error) return faceOf("error")
   if (!reachable) return faceOf("offline")
   if (s.parentLocked) return faceOf("locked")
-  if (s.bedtimeActive) return faceOf("bedtime")
+  if (s.bedtimeActive && !s.bedtimeHold) return faceOf("bedtime")
   if (s.focusedApp) return faceOf("active", s.focusedApp)
   return faceOf("active")
+}
+
+function grantAllowed(snap) {
+  if (!snap || snap.claimed) return false
+  return !snapshotStatus(snap).parentLocked
 }
 
 function faceOf(kind, app) {
@@ -1127,8 +1133,8 @@ function projectTape(snapshots, selectedIndex, chrome, now, household) {
     kids: kids,
     ours: ours,
     adopt: adopt,
-    asks: ours ? asks : [],
-    bellCount: ours ? asks.length : 0,
+    asks: asks,
+    bellCount: asks.length,
     track: ours ? track : emptyTrack(hour12),
     showLock: ch.face === "home" && ours,
     showStamp: ch.face === "home" && ours && kid.locked,

@@ -1284,6 +1284,47 @@ func TestParentGrantClearsPendingAsks(t *testing.T) {
 	}
 }
 
+func TestPinGrantClearsPendingAsks(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateAsk(askTok, "fun", 1800, "more time"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateAsk(askTok, "fun", 600, "also"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PendingAskCount != 2 {
+		t.Fatalf("pending before pin: %d", st.PendingAskCount)
+	}
+	if _, err := b.PinGrant(askTok, "1234", 300); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PendingAskCount != 0 {
+		t.Fatalf("pin grant left asks: %d", st.PendingAskCount)
+	}
+	listed, err := b.PendingAsks(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("inbox after pin grant: %+v", listed)
+	}
+}
+
 func TestCreateAskRejectsHugeSeconds(t *testing.T) {
 	b, parent := openTest(t, afternoon)
 	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})

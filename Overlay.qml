@@ -78,6 +78,13 @@ Item {
     })
   }
 
+  function advancePin() {
+    var next = Model.overlayPinAdvance(pinDigits)
+    if (!next.ok) return
+    chosenMinutes = next.chosenMinutes
+    step = next.step
+  }
+
   function grant() {
     if (!Model.validPin(pinDigits)) return
     var body = Model.pinGrantPayload(pinDigits, chosenMinutes * 60)
@@ -442,11 +449,31 @@ Item {
           maximumLength: 4
           text: root.pinDigits
           onTextChanged: root.pinDigits = text
-          Keys.onReturnPressed: {
-            if (Model.validPin(root.pinDigits)) {
-              root.chosenMinutes = Model.ASK_DEFAULT_MIN
-              root.step = "minutes"
-            }
+          Keys.onReturnPressed: root.advancePin()
+        }
+
+        Rectangle {
+          visible: root.step === "pin"
+          width: parent.width
+          height: 36
+          color: "transparent"
+          border.width: 1
+          border.color: root.ink
+          opacity: Model.validPin(root.pinDigits) ? 1 : 0.55
+          Text {
+            textFormat: Text.PlainText
+            anchors.centerIn: parent
+            text: "OK"
+            color: root.ink
+            font.family: root.plex
+            font.pixelSize: 14
+            font.bold: true
+          }
+          MouseArea {
+            anchors.fill: parent
+            enabled: Model.validPin(root.pinDigits)
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: root.advancePin()
           }
         }
 

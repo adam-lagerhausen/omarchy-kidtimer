@@ -236,6 +236,8 @@ Rectangle {
           Text {
             textFormat: Text.PlainText
             id: pickName
+            width: Math.min(implicitWidth, Math.max(24, pickCol.width - 7 - 6 - 48))
+            elide: Text.ElideRight
             text: t.kid.nameUp
             color: ink
             font.family: root.plex
@@ -245,6 +247,8 @@ Rectangle {
           Text {
             textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(implicitWidth, Math.max(0, pickCol.width - pickName.width - 7 - 12))
+            elide: Text.ElideRight
             text: t.kid.face.caption
             color: coralKid ? urgent : quiet
             font.family: root.plex
@@ -386,6 +390,7 @@ Rectangle {
                 rightPadding: 10
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
                 text: (modelData.face.live ? "● " : "○ ") + modelData.nameUp + "  " + modelData.face.caption
                 color: foreground
                 font.family: root.plex
@@ -923,7 +928,10 @@ Rectangle {
           Text {
             textFormat: Text.PlainText
             anchors.left: logClock.right
+            anchors.right: logDur.left
+            anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
             text: modelData.name
             color: foreground
             font.family: root.plex
@@ -931,6 +939,7 @@ Rectangle {
             font.weight: Font.Medium
           }
           Text {
+            id: logDur
             textFormat: Text.PlainText
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter

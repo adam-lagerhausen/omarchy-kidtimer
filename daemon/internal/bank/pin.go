@@ -84,11 +84,15 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 	if err != nil {
 		return nil, err
 	}
+	if err := b.dismissPendingAsksLocked(); err != nil {
+		return nil, err
+	}
 	if err := b.clearParentLockLocked(); err != nil {
 		return nil, err
 	}
 	return g, nil
 }
+
 
 func (b *Bank) OverlayActive() bool {
 	b.mu.Lock()
