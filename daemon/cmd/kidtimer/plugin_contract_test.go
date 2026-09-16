@@ -70,6 +70,8 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidPanel, "Parent Pin", "waiting parent pin")
 	mustContain(t, kidPanel, "/v1/pin/approve", "pin approve")
 	mustContain(t, kidPanel, "pendingAskId", "saved ask id")
+	mustContain(t, kidPanel, "askBusy", "one ask in flight")
+	mustContain(t, kidModel, "function askWaiting", "chip waits on pending ask")
 	mustContain(t, kidPanel, "JetBrainsMono", "kid panel mono")
 	mustContain(t, kidPanel, "anchors.leftMargin: 18", "kid panel matches parent inset")
 	mustContain(t, kidPanel, "+ 14 + 18", "kid panel top and bottom inset")
