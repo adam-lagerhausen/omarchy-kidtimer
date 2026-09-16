@@ -97,10 +97,7 @@ Item {
     root.askBusy = true
     hostWidget.kidPost("/v1/asks", body, String(setting("askToken", "")), function(status, text) {
       root.askBusy = false
-      if (status !== 200) {
-        root.askGroup = ""
-        return
-      }
+      if (status !== 200) return
       var id = ""
       try {
         id = JSON.parse(text).id || ""
@@ -195,43 +192,10 @@ Item {
           }
         }
 
-        LookBtn {
-          visible: !root.clock.waiting
+        AskRow {
           width: parent.width
-          text: "Ask"
-          enabled: !root.blocked
-          foreground: root.contentForeground
-          fontFamily: root.contentFontFamily
-          onClicked: root.openAsk()
         }
 
-        Item {
-          visible: root.clock.waiting
-          width: parent.width
-          height: 28
-          LookBtn {
-            anchors.left: parent.left
-            width: (parent.width - 8) / 2
-            text: "Waiting"
-            enabled: false
-            foreground: root.contentForeground
-            fontFamily: root.contentFontFamily
-          }
-          LookBtn {
-            anchors.right: parent.right
-            width: (parent.width - 8) / 2
-            text: "Parent Pin"
-            enabled: root.pendingAskId !== ""
-            foreground: root.contentForeground
-            fontFamily: root.contentFontFamily
-            onClicked: {
-              root.pinOpen = true
-              root.pinWrong = false
-              root.pinFailText = "wrong pin"
-              root.pinDigits = ""
-            }
-          }
-        }
       }
 
       Column {
@@ -425,6 +389,10 @@ Item {
           font.pixelSize: 22
           font.bold: true
         }
+
+        AskRow {
+          width: parent.width
+        }
       }
 
       Column {
@@ -488,7 +456,55 @@ Item {
           font.family: root.contentFontFamily
           font.pixelSize: 16
         }
+
+        AskRow {
+          width: parent.width
+        }
+      }
+    }
+
+  component AskRow: Item {
+    implicitHeight: root.clock.waiting ? 28 : askBtn.implicitHeight
+    height: implicitHeight
+
+    LookBtn {
+      id: askBtn
+      visible: !root.clock.waiting
+      width: parent.width
+      text: "Ask"
+      enabled: !root.blocked && Model.panelShowsAsk(root.view)
+      foreground: root.contentForeground
+      fontFamily: root.contentFontFamily
+      onClicked: root.openAsk()
+    }
+
+    Item {
+      visible: root.clock.waiting
+      width: parent.width
+      height: 28
+      LookBtn {
+        anchors.left: parent.left
+        width: (parent.width - 8) / 2
+        text: "Waiting"
+        enabled: false
+        foreground: root.contentForeground
+        fontFamily: root.contentFontFamily
+      }
+      LookBtn {
+        anchors.right: parent.right
+        width: (parent.width - 8) / 2
+        text: "Parent Pin"
+        enabled: root.pendingAskId !== ""
+        foreground: root.contentForeground
+        fontFamily: root.contentFontFamily
+        onClicked: {
+          root.pinOpen = true
+          root.pinWrong = false
+          root.pinFailText = "wrong pin"
+          root.pinDigits = ""
+        }
       }
     }
   }
+}
 

@@ -105,14 +105,25 @@ Item {
     })
   }
 
+  function cancelPin() {
+    var next = Model.overlayCancel()
+    root.step = next.step
+    root.pinDigits = next.pinDigits
+    root.pinWrong = next.pinWrong
+    root.chosenMinutes = next.chosenMinutes
+  }
+
   function submitAsk() {
     if (root.waiting) return
     askQueued = true
     var body = Model.askPayload("fun", chosenMinutes * 60, "more time")
     overlayHTTP("POST", bankUrl() + "/v1/asks", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
-      if (status !== 200) askQueued = false
+      if (status !== 200) {
+        askQueued = false
+        return
+      }
       step = "cover"
-      if (status === 200) poll()
+      poll()
     })
   }
 
@@ -422,6 +433,7 @@ Item {
                 root.step = "pin"
                 root.pinWrong = false
                 root.pinFailText = "wrong pin"
+                root.pinDigits = "" 
                 pinField.forceActiveFocus()
               }
             }
@@ -479,6 +491,29 @@ Item {
             enabled: Model.validPin(root.pinDigits)
             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: root.advancePin()
+          }
+        }
+
+        Rectangle {
+          visible: root.step === "pin"
+          width: parent.width
+          height: 36
+          color: "transparent"
+          border.width: 1
+          border.color: root.ink
+          Text {
+            textFormat: Text.PlainText
+            anchors.centerIn: parent
+            text: "Cancel"
+            color: root.ink
+            font.family: root.plex
+            font.pixelSize: 14
+            font.bold: true
+          }
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.cancelPin()
           }
         }
 
@@ -548,25 +583,53 @@ Item {
           }
         }
 
-        Rectangle {
+        Item {
           visible: root.step === "minutes"
           width: parent.width
           height: 36
-          color: "transparent"
-          border.width: 1
-          border.color: root.ink
-          Text {
-            textFormat: Text.PlainText
-            anchors.centerIn: parent
-            text: "Give time"
-            color: root.ink
-            font.family: root.plex
-            font.pixelSize: 14
-            font.bold: true
+          Rectangle {
+            width: (parent.width - 8) / 2
+            height: parent.height
+            anchors.left: parent.left
+            color: "transparent"
+            border.width: 1
+            border.color: root.ink
+            Text {
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "Cancel"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 14
+              font.bold: true
+            }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.cancelPin()
+            }
           }
-          MouseArea {
-            anchors.fill: parent
-            onClicked: root.grant()
+          Rectangle {
+            width: (parent.width - 8) / 2
+            height: parent.height
+            anchors.right: parent.right
+            color: "transparent"
+            border.width: 1
+            border.color: root.ink
+            Text {
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "Give time"
+              color: root.ink
+              font.family: root.plex
+              font.pixelSize: 14
+              font.bold: true
+            }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.grant()
+            }
           }
         }
 
