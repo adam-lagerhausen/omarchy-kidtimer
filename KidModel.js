@@ -180,6 +180,7 @@ function bedtimeBanner(status) {
   if (status.bedtime_in === undefined || status.bedtime_in === null) return ""
   var n = Number(status.bedtime_in)
   if (!(n > 0)) return ""
+  if (n > warnSeconds()[0]) return ""
   var at = bedtimeStart(status)
   if (!at) return ""
   return "bedtime starts at " + at
