@@ -100,7 +100,7 @@ function parentPinLabel() {
 }
 
 function parentPinWhy() {
-  return "Required for the controls. Use it to make changes on the kids computer."
+  return "Required for the controls. Use it to make changes on the kid's computer."
 }
 
 function pinSlotKind(digits, index, caret, committed) {
@@ -270,22 +270,30 @@ function bedtimePayload(start, end) {
   return { bedtime_start: String(start || ""), bedtime_end: String(end || "") }
 }
 
+function hostSafe(s, max) {
+  var n = max || 80
+  var out = String(s || "").replace(/[<>&]/g, "")
+  if (out.length > n) out = out.slice(0, n)
+  return out
+}
+
 function householdBarLabel(snapshots) {
   var list = snapshots || []
   if (!list.length) return "no computers"
   var parts = []
   for (var i = 0; i < list.length; i++) {
-    parts.push((list[i] && list[i].name) || "kid")
+    parts.push(hostSafe((list[i] && list[i].name) || "kid", 40))
   }
-  return parts.join(" · ")
+  return hostSafe(parts.join(" · "), 80)
 }
 
 function notifyHeadline(kidName) {
-  return kidName || "kid"
+  return hostSafe(kidName || "kid", 40)
 }
 
 function notifySummary(ask, look, status) {
   if (!ask) return "new ask"
+  if (status && (status.parentLocked || status.parent_locked)) return "unlock"
   var m = Math.max(0, Math.floor(askSeconds(ask) / 60))
   return "+" + m + "m"
 }
@@ -301,7 +309,8 @@ function askSeconds(ask) {
   return Number(s) || 0
 }
 
-function askCardText(kidName, seconds) {
+function askCardText(kidName, seconds, locked) {
+  if (locked) return kidName + " asked to unlock"
   var m = Math.max(0, Math.round(Number(seconds) / 60))
   if (!m) m = 10
   return kidName + " asked for " + m + " more minutes"
@@ -528,6 +537,7 @@ function parseStatus(raw) {
     parentLocked: !!s.parent_locked,
     parentPinSet: !!s.parent_pin_set || !!s.parentPinSet,
     bedtimeActive: !!s.bedtime_active,
+    bedtimeHold: !!s.bedtime_hold || !!s.bedtimeHold,
     bedtimeStart: s.bedtime_start ? minFromHHMM(s.bedtime_start) : null,
     bedtimeEnd: s.bedtime_end ? minFromHHMM(s.bedtime_end) : null,
     focusedApp: focused,
@@ -600,9 +610,14 @@ function hostFace(snap) {
   if (snap && snap.error) return faceOf("error")
   if (!reachable) return faceOf("offline")
   if (s.parentLocked) return faceOf("locked")
-  if (s.bedtimeActive) return faceOf("bedtime")
+  if (s.bedtimeActive && !s.bedtimeHold) return faceOf("bedtime")
   if (s.focusedApp) return faceOf("active", s.focusedApp)
   return faceOf("active")
+}
+
+function grantAllowed(snap) {
+  if (!snap || snap.claimed) return false
+  return !snapshotStatus(snap).parentLocked
 }
 
 function faceOf(kind, app) {
@@ -956,7 +971,7 @@ function projectKid(snap, index, now, allotOverride, hour12) {
       fun: policy.fun || [],
       school: policy.school || []
     },
-    pickerLine: (face.live ? "●" : "○") + " " + face.caption + "  " + String((snap && snap.name) || "kid").toUpperCase(),
+    pickerLine: (face.live ? "●" : "○") + " " + String((snap && snap.name) || "kid").toUpperCase() + "  " + face.caption,
     on: face.caption
   }
 }
@@ -968,6 +983,7 @@ function householdAsks(snapshots) {
     if (list[i] && list[i].claimed) continue
     var name = (list[i] && list[i].name) || "kid"
     var asks = snapshotAsks(list[i])
+    var locked = !!snapshotStatus(list[i]).parentLocked
     for (var j = 0; j < asks.length; j++) {
       var a = asks[j]
       out.push({
@@ -975,7 +991,7 @@ function householdAsks(snapshots) {
         kidIndex: i,
         kidName: name,
         seconds: a.seconds,
-        text: askCardText(name, a.seconds)
+        text: askCardText(name, a.seconds, locked)
       })
     }
   }
@@ -1117,8 +1133,8 @@ function projectTape(snapshots, selectedIndex, chrome, now, household) {
     kids: kids,
     ours: ours,
     adopt: adopt,
-    asks: ours ? asks : [],
-    bellCount: ours ? asks.length : 0,
+    asks: asks,
+    bellCount: asks.length,
     track: ours ? track : emptyTrack(hour12),
     showLock: ch.face === "home" && ours,
     showStamp: ch.face === "home" && ours && kid.locked,

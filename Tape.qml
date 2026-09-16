@@ -235,20 +235,24 @@ Rectangle {
           }
           Text {
             textFormat: Text.PlainText
-            anchors.verticalCenter: parent.verticalCenter
-            text: t.kid.face.caption
-            color: coralKid ? urgent : quiet
-            font.family: root.plex
-            font.pixelSize: 11
-          }
-          Text {
-            textFormat: Text.PlainText
             id: pickName
+            width: Math.min(implicitWidth, Math.max(24, pickCol.width - 7 - 6 - 48))
+            elide: Text.ElideRight
             text: t.kid.nameUp
             color: ink
             font.family: root.plex
             font.pixelSize: 16
             font.weight: Font.DemiBold
+          }
+          Text {
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(implicitWidth, Math.max(0, pickCol.width - pickName.width - 7 - 12))
+            elide: Text.ElideRight
+            text: t.kid.face.caption
+            color: coralKid ? urgent : quiet
+            font.family: root.plex
+            font.pixelSize: 11
           }
         }
         Canvas {
@@ -386,7 +390,8 @@ Rectangle {
                 rightPadding: 10
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
-                text: (modelData.face.live ? "● " : "○ ") + modelData.face.caption + "  " + modelData.nameUp
+                elide: Text.ElideRight
+                text: (modelData.face.live ? "● " : "○ ") + modelData.nameUp + "  " + modelData.face.caption
                 color: foreground
                 font.family: root.plex
                 font.pixelSize: 12
@@ -923,7 +928,10 @@ Rectangle {
           Text {
             textFormat: Text.PlainText
             anchors.left: logClock.right
+            anchors.right: logDur.left
+            anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
             text: modelData.name
             color: foreground
             font.family: root.plex
@@ -931,6 +939,7 @@ Rectangle {
             font.weight: Font.Medium
           }
           Text {
+            id: logDur
             textFormat: Text.PlainText
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter

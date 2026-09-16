@@ -14,6 +14,7 @@ Item {
   property string askGroup: ""
   property int chosenMinutes: 30
   property string waitingGroup: ""
+  property bool askBusy: false
   property string pendingAskId: ""
   property bool pinOpen: false
   property string pinDigits: ""
@@ -27,6 +28,7 @@ Item {
   FontLoader { id: plexSemi; source: Qt.resolvedUrl("fonts/JetBrainsMono-SemiBold.ttf") }
   readonly property string contentFontFamily: plexReg.status === FontLoader.Ready ? plexReg.name : "JetBrains Mono"
   readonly property color accent: "#1daeeb"
+  readonly property color bedtimeInk: "#7a82c4"
   readonly property color urgent: Color.urgent
   readonly property color dim: Qt.darker(contentForeground, 1.4)
   readonly property color fillSoft: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.04)
@@ -37,22 +39,18 @@ Item {
     if (root.askGroup !== "") return "sheet"
     return Model.panelKind(root.statusJson)
   }
-  readonly property var clock: Model.clockFace(root.statusJson, root.waitingGroup !== "")
+  readonly property var clock: Model.clockFace(root.statusJson, Model.askWaiting(root.statusJson, root.waitingGroup !== "" || root.askBusy))
   readonly property string soonBanner: Model.bedtimeBanner(root.statusJson)
   readonly property color panelLine: {
     if (root.view === "locked") return root.urgent
-    if (root.view === "bedtime") return "#7a82c4"
+    if (root.view === "bedtime") return root.bedtimeInk
     return root.accent
   }
-  width: parent ? parent.width : 320
-  implicitHeight: Math.max(1, bodyHeight)
+  width: parent ? parent.width : 340
+  implicitHeight: Math.max(1, bodyHeight) + 14 + 18
 
   function setting(key, fallback) {
-    if (hostWidget && typeof hostWidget.setting === "function")
-      return hostWidget.setting(key, fallback)
-    var bank = hostWidget && hostWidget.kidBank
-    if (bank && key in bank) return bank[key]
-    return fallback
+    return Model.bankSetting(hostWidget && hostWidget.kidBank, hostWidget && hostWidget.settings, key, fallback)
   }
 
   readonly property real bodyHeight: {
@@ -83,47 +81,43 @@ Item {
 
   function openAsk() {
     if (Model.askBlocked(root.statusJson)) return
+    if (Model.askWaiting(root.statusJson, root.waitingGroup !== "" || root.askBusy)) return
     root.askGroup = "fun"
     root.chosenMinutes = Model.ASK_DEFAULT_MIN
   }
 
   function submit() {
     if (root.askGroup === "") return
+    if (root.askBusy) return
     if (Model.askBlocked(root.statusJson)) return
+    if (Model.askWaiting(root.statusJson, root.waitingGroup !== "")) return
     var body = Model.askPayload(root.askGroup, root.chosenMinutes * 60, "more time")
-    var req = new XMLHttpRequest()
-    req.open("POST", bankUrl() + "/v1/asks")
-    req.setRequestHeader("Authorization", "Bearer " + String(setting("askToken", "")))
-    req.setRequestHeader("Content-Type", "application/json")
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) {
+    if (!hostWidget || typeof hostWidget.kidPost !== "function") return
+    root.askBusy = true
+    hostWidget.kidPost("/v1/asks", body, String(setting("askToken", "")), function(status, text) {
+      root.askBusy = false
+      if (status !== 200) {
         root.askGroup = ""
         return
       }
       var id = ""
       try {
-        id = JSON.parse(req.responseText).id || ""
+        id = JSON.parse(text).id || ""
       } catch (e) {
         id = ""
       }
       root.pendingAskId = id
       root.waitingGroup = root.askGroup
       root.askGroup = ""
-    }
-    req.send(JSON.stringify(body))
+    })
   }
 
   function submitPin() {
     if (!Model.validPin(root.pinDigits) || root.pendingAskId === "") return
     var body = Model.pinApprovePayload(root.pinDigits, root.pendingAskId)
-    var req = new XMLHttpRequest()
-    req.open("POST", bankUrl() + "/v1/pin/approve")
-    req.setRequestHeader("Authorization", "Bearer " + String(setting("askToken", "")))
-    req.setRequestHeader("Content-Type", "application/json")
-    req.onreadystatechange = function() {
-      if (req.readyState !== XMLHttpRequest.DONE) return
-      if (req.status !== 200) {
+    if (!hostWidget || typeof hostWidget.kidPost !== "function") return
+    hostWidget.kidPost("/v1/pin/approve", body, String(setting("askToken", "")), function(status, text) {
+      if (status !== 200) {
         root.pinWrong = true
         return
       }
@@ -132,13 +126,16 @@ Item {
       root.pinWrong = false
       root.waitingGroup = ""
       root.pendingAskId = ""
-    }
-    req.send(JSON.stringify(body))
+    })
   }
 
   Item {
     id: panel
     anchors.fill: parent
+    anchors.leftMargin: 18
+    anchors.rightMargin: 18
+    anchors.topMargin: 14
+    anchors.bottomMargin: 18
 
       Column {
         id: homeColumn
@@ -150,9 +147,9 @@ Item {
           visible: root.soonBanner !== ""
           width: parent.width
           height: bannerText.implicitHeight + 16
-          color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.1)
+          color: Qt.rgba(root.bedtimeInk.r, root.bedtimeInk.g, root.bedtimeInk.b, 0.1)
           border.width: 1
-          border.color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.55)
+          border.color: Qt.rgba(root.bedtimeInk.r, root.bedtimeInk.g, root.bedtimeInk.b, 0.55)
           Text {
             textFormat: Text.PlainText
             id: bannerText
@@ -162,7 +159,7 @@ Item {
             anchors.leftMargin: 10
             anchors.rightMargin: 10
             text: root.soonBanner
-            color: root.urgent
+            color: root.bedtimeInk
             font.family: root.contentFontFamily
             font.pixelSize: 11
           }
@@ -200,14 +197,6 @@ Item {
           width: parent.width
         }
 
-        LookBtn {
-          width: parent.width
-          text: "This is my computer"
-          ghost: true
-          foreground: root.contentForeground
-          fontFamily: root.contentFontFamily
-          onClicked: if (root.hostWidget) root.hostWidget.pickRole("parent")
-        }
       }
 
       Column {
@@ -291,7 +280,7 @@ Item {
             anchors.right: parent.right
             text: "Ask"
             primary: true
-            enabled: !root.blocked
+            enabled: !root.blocked && !root.askBusy
             accent: root.accent
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
@@ -365,8 +354,6 @@ Item {
         id: lockColumn
         visible: root.view === "locked"
         width: parent.width
-        topPadding: 18
-        bottomPadding: 12
         spacing: 14
 
         Canvas {

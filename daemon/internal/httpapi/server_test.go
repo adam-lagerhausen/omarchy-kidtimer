@@ -255,22 +255,29 @@ func TestPairPublicForbidden(t *testing.T) {
 	req.RemoteAddr = "8.8.8.8:9"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 403 {
+	if rec.Code != 404 {
 		t.Fatalf("public: %d %s", rec.Code, rec.Body.String())
 	}
 	req = httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("{}"))
 	req.RemoteAddr = ""
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 403 {
+	if rec.Code != 404 {
 		t.Fatalf("unspecified: %d %s", rec.Code, rec.Body.String())
 	}
 	req = httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("{}"))
 	req.RemoteAddr = "192.168.1.9:9"
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 200 {
+	if rec.Code != 404 {
 		t.Fatalf("lan: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("{}"))
+	req.RemoteAddr = "127.0.0.1:9"
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("loopback: %d %s", rec.Code, rec.Body.String())
 	}
 	if asMap(t, rec.Body.String())["id"] != "machine-1" {
 		t.Fatalf("id: %s", rec.Body.String())
@@ -455,6 +462,33 @@ func TestParentLock(t *testing.T) {
 	st = get(t, h, parent, "/v1/status")
 	if asMap(t, st.Body)["parent_locked"] != false {
 		t.Fatalf("unlocked: %s", st.Body)
+	}
+}
+
+func TestApproveAskUnlocks(t *testing.T) {
+	h, parent, _ := start(t)
+	mint := post(t, h, parent, "/v1/tokens", map[string]any{
+		"name": "kid-bar", "kind": "ask",
+	}, "")
+	askSecret := asMap(t, mint.Body)["secret"].(string)
+	if post(t, h, parent, "/v1/lock", map[string]any{"locked": true}, "").StatusCode != 200 {
+		t.Fatal("lock")
+	}
+	ask := post(t, h, askSecret, "/v1/asks", map[string]any{
+		"group": "fun", "seconds": 1800, "reason": "more time",
+	}, "")
+	if ask.StatusCode != 200 {
+		t.Fatalf("ask: %d %s", ask.StatusCode, ask.Body)
+	}
+	askID := asMap(t, ask.Body)["id"].(string)
+	decide := post(t, h, parent, "/v1/asks/"+askID+"/decide", map[string]any{"decision": "approve"}, "")
+	if decide.StatusCode != 200 {
+		t.Fatalf("decide: %d %s", decide.StatusCode, decide.Body)
+	}
+	st := get(t, h, parent, "/v1/status")
+	status := asMap(t, st.Body)
+	if status["parent_locked"] != false {
+		t.Fatalf("approve must unlock: %s", st.Body)
 	}
 }
 

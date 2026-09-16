@@ -1,8 +1,8 @@
 kid_name = "kid-a"
 timezone = "America/New_York"
 enforcer = true
-advertise = true
-listen = "0.0.0.0:8742"
+advertise = false
+listen = "127.0.0.1:8742"
 bedtime_lock = true
 empty_lock = true
 bedtime_start = "21:00"

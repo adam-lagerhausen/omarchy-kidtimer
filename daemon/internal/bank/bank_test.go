@@ -669,6 +669,60 @@ func TestCreateAskDuringBedtimeAndLock(t *testing.T) {
 	}
 }
 
+func TestApproveAskClearsParentLock(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentLock(parent, true); err != nil {
+		t.Fatal(err)
+	}
+	before := remaining(t, b, "fun")
+	ask, err := b.CreateAsk(askTok, "fun", 1800, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Decide(parent, ask.ID, "approve"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.ParentLocked {
+		t.Fatal("approve ask must clear parent lock")
+	}
+	if remaining(t, b, "fun") != before+1800 {
+		t.Fatalf("approve still credits minutes: %d", remaining(t, b, "fun"))
+	}
+}
+
+func TestDenyAskLeavesParentLock(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentLock(parent, true); err != nil {
+		t.Fatal(err)
+	}
+	ask, err := b.CreateAsk(askTok, "fun", 600, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Decide(parent, ask.ID, "deny"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.ParentLocked {
+		t.Fatal("deny must leave parent lock")
+	}
+}
+
 func TestBedtimeFromTOMLUntilOverlay(t *testing.T) {
 	b, parent := openTest(t, afternoon)
 	st, err := b.Status(parent)
@@ -1179,6 +1233,47 @@ func TestGrantRejectsOverflowSeconds(t *testing.T) {
 	}
 	if remaining(t, b, "fun") != 3600 {
 		t.Fatal("overflow must not credit")
+	}
+}
+
+func TestPinGrantClearsPendingAsks(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateAsk(askTok, "fun", 1800, "more time"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateAsk(askTok, "fun", 600, "also"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PendingAskCount != 2 {
+		t.Fatalf("pending before pin: %d", st.PendingAskCount)
+	}
+	if _, err := b.PinGrant(askTok, "1234", 300); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PendingAskCount != 0 {
+		t.Fatalf("pin grant left asks: %d", st.PendingAskCount)
+	}
+	listed, err := b.PendingAsks(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("inbox after pin grant: %+v", listed)
 	}
 }
 

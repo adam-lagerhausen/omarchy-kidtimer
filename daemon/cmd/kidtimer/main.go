@@ -162,17 +162,20 @@ func runDaemon(args []string) error {
 		go func(ln net.Listener) { errCh <- srv.Serve(ln) }(ln)
 	}
 
-	if loop != nil {
-		go func() {
-			t := time.NewTicker(time.Second)
-			defer t.Stop()
-			for range t.C {
+	go func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		var stay stayAwake
+		for range t.C {
+			uid := attachSession()
+			stay.Sync(uid, b.OverlayActive())
+			if loop != nil {
 				if err := loop.Tick(); err != nil {
 					fmt.Fprintf(os.Stderr, "enforcer: %v\n", err)
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
@@ -192,9 +195,6 @@ func listenSpec(cfg *config.Config, flag string) string {
 	}
 	if cfg != nil && cfg.Listen != "" {
 		return cfg.Listen
-	}
-	if cfg != nil && cfg.Advertise {
-		return "0.0.0.0:8742"
 	}
 	return netaddr.DefaultListen
 }

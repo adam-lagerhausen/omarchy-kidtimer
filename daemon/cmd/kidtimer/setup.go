@@ -19,7 +19,6 @@ import (
 	"kidtimer/daemon/internal/bank"
 	"kidtimer/daemon/internal/config"
 	"kidtimer/daemon/internal/household"
-	"kidtimer/daemon/internal/netaddr"
 	"kidtimer/daemon/internal/reverse"
 )
 
@@ -31,13 +30,20 @@ type setupEnv struct {
 }
 
 func runSetup(args []string) error {
-	if len(args) < 1 || (args[0] != "parent" && args[0] != "kid") {
-		return fmt.Errorf("usage: kidtimer setup parent|kid")
+	if len(args) < 1 || (args[0] != "parent" && args[0] != "kid" && args[0] != "stop-user-bank") {
+		return fmt.Errorf("usage: kidtimer setup parent|kid|stop-user-bank")
 	}
 	role := args[0]
 	env, err := parseSetupEnv(args[1:])
 	if err != nil {
 		return err
+	}
+	if role == "stop-user-bank" {
+		if env.Home == "" {
+			return fmt.Errorf("home is required")
+		}
+		stopUserPickupDaemons(env.Home)
+		return nil
 	}
 	if role == "parent" {
 		return setupParent(env)
@@ -132,18 +138,168 @@ func isRepo(dir string) bool {
 	return err1 == nil && err2 == nil && err3 == nil
 }
 
-func pluginDest(home string) string {
-	return filepath.Join(home, ".config", "omarchy", "plugins", "kidtimer")
+const (
+	pluginID       = "io.github.adam-lagerhausen.kidtimer"
+	legacyPluginID = "kidtimer"
+)
+
+var retiredPluginIDs = []string{
+	legacyPluginID,
+	"kidtimer.parent",
+	"kidtimer.kid",
+	"allowance.parent",
 }
 
-func retireOldPlugins(home, shell string) error {
-	for _, id := range []string{"kidtimer.parent", "kidtimer.kid", "allowance.parent"} {
-		_ = os.RemoveAll(filepath.Join(home, ".config", "omarchy", "plugins", id))
+var barSections = []string{"left", "center", "right"}
+
+func pluginDest(home string) string {
+	return pluginDir(home, pluginID)
+}
+
+func pluginDir(home, id string) string {
+	return filepath.Join(home, ".config", "omarchy", "plugins", id)
+}
+
+func userHomeFromShare(share string) string {
+	share = filepath.ToSlash(filepath.Clean(share))
+	const suffix = "/.local/share/kidtimer"
+	if !strings.HasSuffix(share, suffix) {
+		return ""
+	}
+	return filepath.FromSlash(strings.TrimSuffix(share, suffix))
+}
+
+func migrateLivePlugin(share string) {
+	home := userHomeFromShare(share)
+	if home == "" {
+		return
+	}
+	if err := migrateInstalledPlugin(home); err != nil {
+		fmt.Fprintf(os.Stderr, "kidtimer: plugin id migrate: %v\n", err)
+	}
+}
+
+func migrateInstalledPlugin(home string) error {
+	dest := pluginDest(home)
+	if _, err := os.Stat(filepath.Join(dest, "manifest.json")); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	shell := filepath.Join(home, ".config", "omarchy", "shell.json")
+	if err := rewriteWidgetID(shell, legacyPluginID, pluginID); err != nil {
+		return err
+	}
+	return retireOldPlugins(home, shell, dest)
+}
+
+func retireOldPlugins(home, shell, dest string) error {
+	if dest != "" {
+		if err := materializeIfLinkToRetired(home, dest); err != nil {
+			return err
+		}
+	}
+	destAbs := ""
+	if dest != "" {
+		destAbs, _ = filepath.Abs(dest)
+	}
+	for _, id := range retiredPluginIDs {
+		dir := pluginDir(home, id)
+		if destAbs != "" {
+			if dirAbs, err := filepath.Abs(dir); err == nil && dirAbs == destAbs {
+				continue
+			}
+		}
+		_ = os.RemoveAll(dir)
 		if err := removeWidget(shell, id); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func materializeIfLinkToRetired(home, dest string) error {
+	target, err := os.Readlink(dest)
+	if err != nil {
+		return nil
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(dest), target)
+	}
+	target, err = filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	for _, id := range retiredPluginIDs {
+		oldAbs, err := filepath.Abs(pluginDir(home, id))
+		if err != nil {
+			continue
+		}
+		if oldAbs == target {
+			return materializePluginLink(dest)
+		}
+	}
+	return nil
+}
+
+func materializePluginLink(dest string) error {
+	target, err := os.Readlink(dest)
+	if err != nil {
+		return err
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(dest), target)
+	}
+	target, err = filepath.EvalSymlinks(target)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp(filepath.Dir(dest), ".kidtimer-plugin-*")
+	if err != nil {
+		return err
+	}
+	keep := tmp
+	defer func() {
+		if keep != "" {
+			_ = os.RemoveAll(keep)
+		}
+	}()
+	if err := copyTree(target, tmp); err != nil {
+		return err
+	}
+	if err := os.Remove(dest); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, dest); err != nil {
+		return err
+	}
+	keep = ""
+	return nil
+}
+
+func copyTree(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		out := filepath.Join(dst, rel)
+		if info.Mode()&os.ModeSymlink != 0 {
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, out)
+		}
+		if info.IsDir() {
+			return os.MkdirAll(out, 0o755)
+		}
+		return copyFile(path, out, info.Mode().Perm())
+	})
 }
 
 func placePlugin(repo, dest string) error {
@@ -153,9 +309,30 @@ func placePlugin(repo, dest string) error {
 	return linkPlugin(repo, dest)
 }
 
+func kidComputerLocked(env setupEnv) error {
+	share := filepath.Join(env.Home, ".local", "share", "kidtimer")
+	role, err := household.LoadRole(share)
+	if err != nil {
+		return err
+	}
+	if role == reverse.RoleKid {
+		return fmt.Errorf("this computer is already a kid; uninstall Kidtimer to use it as the parent desk")
+	}
+	if _, err := os.Stat(filepath.Join(env.etc(), "config.toml")); err == nil {
+		return fmt.Errorf("this computer is already a kid; uninstall Kidtimer to use it as the parent desk")
+	}
+	if _, err := os.Stat(env.unitPath()); err == nil {
+		return fmt.Errorf("this computer is already a kid; uninstall Kidtimer to use it as the parent desk")
+	}
+	return nil
+}
+
 func setupParent(env setupEnv) error {
 	if env.Home == "" {
 		return fmt.Errorf("home is required")
+	}
+	if err := kidComputerLocked(env); err != nil {
+		return err
 	}
 	bin := filepath.Join(env.Home, ".local", "bin", "kidtimer")
 	if err := installBinary(bin); err != nil {
@@ -175,12 +352,10 @@ func setupParent(env setupEnv) error {
 		return err
 	}
 	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
-	if err := retireOldPlugins(env.Home, shell); err != nil {
+	if err := migrateInstalledPlugin(env.Home); err != nil {
 		return err
 	}
-	return ensureWidget(shell, "kidtimer", map[string]any{
-		"parentBin": bin,
-	})
+	return ensureWidget(shell, pluginID, nil)
 }
 
 func (env setupEnv) etc() string {
@@ -250,12 +425,10 @@ func setupKid(env setupEnv) error {
 		return err
 	}
 	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
-	if err := retireOldPlugins(env.Home, shell); err != nil {
+	if err := migrateInstalledPlugin(env.Home); err != nil {
 		return err
 	}
-	if err := ensureWidget(shell, "kidtimer", map[string]any{
-		"kidBin": env.kidBin(),
-	}); err != nil {
+	if err := ensureWidget(shell, pluginID, nil); err != nil {
 		return err
 	}
 	if err := copyFile(filepath.Join(env.Repo, "packaging", "kidtimer.service"), env.unitPath(), 0o644); err != nil {
@@ -267,7 +440,7 @@ func setupKid(env setupEnv) error {
 	if env.SkipSystemd {
 		return nil
 	}
-	return startKidUnit(env.Home)
+	return startKidUnit()
 }
 
 func chownToHomeOwner(home string, paths ...string) error {
@@ -306,8 +479,7 @@ func chownToHomeOwner(home string, paths ...string) error {
 	return nil
 }
 
-func startKidUnit(home string) error {
-	stopUserPickupDaemons(home)
+func startKidUnit() error {
 	enable := exec.Command("systemctl", "enable", "kidtimer")
 	enable.Stdout = os.Stdout
 	enable.Stderr = os.Stderr
@@ -423,12 +595,12 @@ func ensureKidConfig(src, dst, host string) error {
 	if err != nil {
 		return writeKidConfig(src, dst, host)
 	}
-	return enableKidLAN(dst, cfg)
+	return pinKidLoopback(dst, cfg)
 }
 
-func enableKidLAN(dst string, cfg *config.Config) error {
-	needAdv := !cfg.Advertise
-	needListen := cfg.Listen == "" || cfg.Listen == netaddr.DefaultListen
+func pinKidLoopback(dst string, cfg *config.Config) error {
+	needAdv := cfg.Advertise
+	needListen := cfg.Listen == "" || strings.Contains(cfg.Listen, "0.0.0.0")
 	if !needAdv && !needListen {
 		return nil
 	}
@@ -439,16 +611,16 @@ func enableKidLAN(dst string, cfg *config.Config) error {
 	out := string(raw)
 	if needAdv {
 		if advertiseLine.MatchString(out) {
-			out = advertiseLine.ReplaceAllString(out, "advertise = true")
+			out = advertiseLine.ReplaceAllString(out, "advertise = false")
 		} else {
-			out = "advertise = true\n" + out
+			out = "advertise = false\n" + out
 		}
 	}
 	if needListen {
 		if listenLine.MatchString(out) {
-			out = listenLine.ReplaceAllString(out, `listen = "0.0.0.0:8742"`)
+			out = listenLine.ReplaceAllString(out, `listen = "127.0.0.1:8742"`)
 		} else {
-			out = "listen = \"0.0.0.0:8742\"\n" + out
+			out = "listen = \"127.0.0.1:8742\"\n" + out
 		}
 	}
 	return writeFileAtomic(dst, []byte(out), 0o644)
@@ -529,7 +701,7 @@ func existingKidTokens(home string) (readTok, askTok string, ok bool) {
 	}
 	for _, w := range widgets(doc) {
 		id := str(w["id"])
-		if id != "kidtimer.kid" && id != "kidtimer" {
+		if id != "kidtimer.kid" && id != legacyPluginID && id != pluginID {
 			continue
 		}
 		readTok = str(w["readToken"])
@@ -638,19 +810,92 @@ func emptyShell() map[string]any {
 	}
 }
 
-func loadShell(path string) map[string]any {
+func loadShell(path string) (map[string]any, error) {
 	doc, err := readJSON(path)
 	if err == nil {
-		return doc
+		return doc, nil
 	}
-	if !os.IsNotExist(err) {
-		_ = os.Rename(path, path+".bak")
+	if os.IsNotExist(err) {
+		return emptyShell(), nil
 	}
-	return emptyShell()
+	return nil, err
+}
+
+func rewriteWidgetID(shell, from, to string) error {
+	if from == "" || to == "" || from == to {
+		return nil
+	}
+	doc, err := readJSON(shell)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	bar, _ := doc["bar"].(map[string]any)
+	if bar == nil {
+		return nil
+	}
+	layout, _ := bar["layout"].(map[string]any)
+	if layout == nil {
+		return nil
+	}
+	hasTo := layoutHasID(layout, to)
+	changed := false
+	for _, key := range barSections {
+		list := asSlice(layout[key])
+		if list == nil {
+			continue
+		}
+		out := make([]any, 0, len(list))
+		sectionChanged := false
+		for _, raw := range list {
+			w, ok := raw.(map[string]any)
+			if !ok {
+				out = append(out, raw)
+				continue
+			}
+			if str(w["id"]) != from {
+				out = append(out, raw)
+				continue
+			}
+			sectionChanged = true
+			changed = true
+			if hasTo {
+				continue
+			}
+			w["id"] = to
+			out = append(out, w)
+			hasTo = true
+		}
+		if sectionChanged {
+			layout[key] = out
+		}
+	}
+	if !changed {
+		return nil
+	}
+	raw, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(shell, append(raw, '\n'), 0o644)
+}
+
+func layoutHasID(layout map[string]any, id string) bool {
+	for _, w := range widgetsFromLayout(layout) {
+		if str(w["id"]) == id {
+			return true
+		}
+	}
+	return false
 }
 
 func ensureWidget(shell, id string, extra map[string]any) error {
-	doc := loadShell(shell)
+	doc, err := loadShell(shell)
+	if err != nil {
+		return err
+	}
 	bar, _ := doc["bar"].(map[string]any)
 	if bar == nil {
 		bar = map[string]any{}
@@ -661,28 +906,37 @@ func ensureWidget(shell, id string, extra map[string]any) error {
 		layout = map[string]any{}
 		bar["layout"] = layout
 	}
-	right := asSlice(layout["right"])
 	found := false
-	for i, raw := range right {
-		w, _ := raw.(map[string]any)
-		if str(w["id"]) != id {
+	for _, key := range barSections {
+		list := asSlice(layout[key])
+		if list == nil {
 			continue
 		}
-		for k, v := range extra {
-			w[k] = v
+		for i, raw := range list {
+			w, _ := raw.(map[string]any)
+			if str(w["id"]) != id {
+				continue
+			}
+			for k, v := range extra {
+				w[k] = v
+			}
+			list[i] = w
+			layout[key] = list
+			found = true
+			break
 		}
-		right[i] = w
-		found = true
-		break
+		if found {
+			break
+		}
 	}
 	if !found {
+		right := asSlice(layout["right"])
 		w := map[string]any{"id": id}
 		for k, v := range extra {
 			w[k] = v
 		}
-		right = append(right, w)
+		layout["right"] = append(right, w)
 	}
-	layout["right"] = right
 	raw, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return err
@@ -696,7 +950,7 @@ func removeWidget(shell, id string) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return nil
+		return err
 	}
 	bar, _ := doc["bar"].(map[string]any)
 	if bar == nil {
@@ -706,19 +960,28 @@ func removeWidget(shell, id string) error {
 	if layout == nil {
 		return nil
 	}
-	right := asSlice(layout["right"])
-	out := make([]any, 0, len(right))
-	for _, raw := range right {
-		w, _ := raw.(map[string]any)
-		if str(w["id"]) == id {
+	changed := false
+	for _, key := range barSections {
+		list := asSlice(layout[key])
+		if list == nil {
 			continue
 		}
-		out = append(out, raw)
+		out := make([]any, 0, len(list))
+		for _, raw := range list {
+			w, _ := raw.(map[string]any)
+			if str(w["id"]) == id {
+				changed = true
+				continue
+			}
+			out = append(out, raw)
+		}
+		if len(out) != len(list) {
+			layout[key] = out
+		}
 	}
-	if len(out) == len(right) {
+	if !changed {
 		return nil
 	}
-	layout["right"] = out
 	raw, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return err
@@ -741,10 +1004,16 @@ func readJSON(path string) (map[string]any, error) {
 func widgets(doc map[string]any) []map[string]any {
 	bar, _ := doc["bar"].(map[string]any)
 	layout, _ := bar["layout"].(map[string]any)
+	return widgetsFromLayout(layout)
+}
+
+func widgetsFromLayout(layout map[string]any) []map[string]any {
 	var out []map[string]any
-	for _, raw := range asSlice(layout["right"]) {
-		if w, ok := raw.(map[string]any); ok {
-			out = append(out, w)
+	for _, key := range barSections {
+		for _, raw := range asSlice(layout[key]) {
+			if w, ok := raw.(map[string]any); ok {
+				out = append(out, w)
+			}
 		}
 	}
 	return out

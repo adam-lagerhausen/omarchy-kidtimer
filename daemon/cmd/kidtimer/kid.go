@@ -19,6 +19,7 @@ func runKid(args []string) error {
 	if err != nil {
 		return err
 	}
+	migrateLivePlugin(dir)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	return dial.Run(ctx, dial.Config{Home: dir})

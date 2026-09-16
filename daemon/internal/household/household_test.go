@@ -137,6 +137,36 @@ func TestAdoptKeepsURLAndToken(t *testing.T) {
 	}
 }
 
+func TestSaveDoesNotFollowPredictableTmp(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "kids.json")
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("must survive"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, path+".tmp"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(path, []reverse.Record{{ID: "a", Name: "Ada", Token: "secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(victim)
+	if err != nil || string(got) != "must survive" {
+		t.Fatalf("wrote through tmp symlink: %s %v", got, err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %o", st.Mode().Perm())
+	}
+	kids, err := Load(path)
+	if err != nil || len(kids) != 1 || kids[0].ID != "a" {
+		t.Fatalf("saved %+v %v", kids, err)
+	}
+}
+
 func TestRole(t *testing.T) {
 	home := t.TempDir()
 	role, err := LoadRole(home)

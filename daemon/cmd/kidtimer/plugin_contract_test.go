@@ -13,10 +13,8 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	files := []string{
 		"manifest.json",
 		"BarWidget.qml",
-		"KidBar.qml",
 		"KidPanel.qml",
 		"KidModel.js",
-		"ParentBar.qml",
 		"ParentPanel.qml",
 		"Tape.qml",
 		"ParentModel.js",
@@ -43,10 +41,10 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		}
 	}
 
-	kidBar := readPlugin(t, root, "KidBar.qml") + readPlugin(t, root, "BarWidget.qml")
+	kidBar := readPlugin(t, root, "BarWidget.qml")
 	kidPanel := readPlugin(t, root, "KidPanel.qml")
 	kidModel := readPlugin(t, root, "KidModel.js")
-	parentBar := readPlugin(t, root, "ParentBar.qml") + readPlugin(t, root, "BarWidget.qml")
+	parentBar := readPlugin(t, root, "BarWidget.qml")
 	parentPanel := readPlugin(t, root, "ParentPanel.qml") + readPlugin(t, root, "Tape.qml")
 	parentModel := readPlugin(t, root, "ParentModel.js")
 	kidManifest := readPlugin(t, root, "manifest.json")
@@ -58,11 +56,14 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidBar, "takeWarnings", "warning crossings")
 	mustContain(t, kidModel, `"kidtimer"`, "fallback title")
 	mustContain(t, kidModel, `"bedtime"`, "bedtime label")
+	mustContain(t, kidModel, "function stayingUp", "stay-up helper")
+	mustContain(t, kidModel, "bedtime_hold", "stay-up reads bedtime hold")
 	mustContain(t, kidModel, `"fun"`, "default fun")
 	mustContain(t, kidModel, "function panelShowsAsk", "ask on bedtime and lock")
 	mustContain(t, kidModel, "function overlayCancel", "leave parent pin")
 	mustContain(t, kidModel, "return [900, 300, 60]", "15/5/1 min warnings")
-	mustContain(t, kidPanel, "POST", "kid ask POST")
+	mustContain(t, kidModel, "warnSeconds()[0]", "bedtime banner is soon-only")
+	mustContain(t, kidPanel, "kidPost", "kid ask POST")
 	mustContain(t, kidPanel, "/v1/asks", "kid ask path")
 	mustContain(t, kidPanel, "askToken", "ask token")
 	mustContain(t, kidPanel, "Ask", "Ask")
@@ -72,10 +73,20 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidPanel, "panelShowsAsk", "ask stays on bedtime and lock")
 	mustContain(t, kidPanel, "/v1/pin/approve", "pin approve")
 	mustContain(t, kidPanel, "pendingAskId", "saved ask id")
+	mustContain(t, kidPanel, "askBusy", "one ask in flight")
+	mustContain(t, kidModel, "function askWaiting", "chip waits on pending ask")
 	mustContain(t, kidPanel, "JetBrainsMono", "kid panel mono")
+	mustContain(t, kidPanel, "anchors.leftMargin: 18", "kid panel matches parent inset")
+	mustContain(t, kidPanel, "+ 14 + 18", "kid panel top and bottom inset")
+	if strings.Contains(kidPanel, "This is my computer") || strings.Contains(kidPanel, `pickRole("parent")`) {
+		t.Fatal("kid panel must not switch to parent")
+	}
 	kidOverlay := readPlugin(t, root, "Overlay.qml")
 	mustContain(t, kidOverlay, "Parent Pin", "overlay parent pin")
 	mustContain(t, kidOverlay, "/v1/pin/grant", "pin grant")
+	mustContain(t, kidOverlay, "advancePin", "overlay pin OK")
+	mustContain(t, kidOverlay, `text: "OK"`, "overlay pin OK label")
+	mustContain(t, kidModel, "function overlayPinAdvance", "pin advance helper")
 	mustContain(t, kidOverlay, "Ask", "overlay ask")
 	mustContain(t, kidOverlay, "cancelPin", "leave parent pin")
 	mustContain(t, kidOverlay, "overlayCancel", "reset pin step")
@@ -83,17 +94,17 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidOverlay, "−10", "overlay ask nudge down")
 	mustContain(t, kidOverlay, "+10", "overlay ask nudge up")
 	mustContain(t, kidOverlay, "WlrLayer.Overlay", "overlay layer")
-	mustContain(t, kidOverlay, "stay-awake", "idle inhibit")
+	mustContain(t, kidOverlay, "/usr/bin/hyprctl", "pinned hyprctl")
 	mustContain(t, kidOverlay, "submap", "super submap")
 	mustContain(t, kidOverlay, "JetBrainsMono", "overlay mono")
 	mustContain(t, kidOverlay, "Key_Escape", "escape does nothing")
 	if strings.Contains(kidOverlay, `"overlay"`) && strings.Contains(kidManifest, `"overlay"`) {
 		t.Fatal("do not add overlay kind")
 	}
-	if strings.Contains(readPlugin(t, root, "KidBar.qml")+kidPanel+kidModel, "/v1/lock") {
+	if strings.Contains(kidPanel+kidModel, "/v1/lock") {
 		t.Fatal("kid plugin must not post /v1/lock")
 	}
-	if strings.Contains(readPlugin(t, root, "KidBar.qml")+kidPanel, "Unlock") {
+	if strings.Contains(kidPanel, "Unlock") {
 		t.Fatal("kid plugin must not offer unlock")
 	}
 
@@ -102,6 +113,9 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, "/v1/look", "parent look")
 	mustContain(t, parentBar, "interval: 5000", "asks poll 5s")
 	mustContain(t, parentBar, "/v1/grants", "parent grant")
+	mustContain(t, parentBar, "grantAllowed", "right-click grant respects lock")
+	mustContain(t, parentModel, "function grantAllowed", "grant while locked")
+	mustContain(t, parentModel, "bedtimeHold", "parent stay-up hold")
 	mustContain(t, parentBar, "omarchy-notification-send", "omarchy notification")
 	mustContain(t, parentBar, "newAskIds", "pending id diff")
 	mustContain(t, parentBar, `"fun"`, "default fun")
@@ -112,6 +126,18 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, `"PUT"`, "parent look put")
 	mustContain(t, parentBar, "kids.json", "household file")
 	mustContain(t, parentBar, "FileView", "watch kids.json")
+	mustContain(t, parentBar, "blockAllReads: true", "FileView watcher only")
+	mustContain(t, parentBar, "state.py", "descriptor-bound state")
+	mustContain(t, parentBar, "loopback-http.sh", "loopback http helper")
+	mustContain(t, parentBar, "stdinEnabled = false", "close loopback-http stdin")
+	mustContain(t, readPlugin(t, root, "Overlay.qml"), "stdinEnabled = false", "overlay closes loopback-http stdin")
+	mustContain(t, parentBar, `moduleName: "io.github.adam-lagerhausen.kidtimer"`, "bar moduleName")
+	mustContain(t, parentBar, `target: "io.github.adam-lagerhausen.kidtimer"`, "ipc handler")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), `moduleName: "io.github.adam-lagerhausen.kidtimer"`, "panel moduleName")
+	mustContain(t, readPlugin(t, root, "Panel.qml"), `ipcTarget: "io.github.adam-lagerhausen.kidtimer"`, "panel ipc")
+	if strings.Contains(parentBar+kidPanel+kidOverlay, "XMLHttpRequest") {
+		t.Fatal("qml must not use unbounded XMLHttpRequest")
+	}
 	mustContain(t, parentBar, `running: root.role === ""`, "poll role until the file appears")
 	mustContain(t, parentBar, `running: root.role === "parent" && snapshots.length === 0`, "poll household until the first kid appears")
 	mustContain(t, parentBar, `running: root.role === "parent" && !root.householdPinSet`, "poll parent-pin until it appears")
@@ -121,6 +147,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentBar, "/usr/bin/bash", "parent setup via bash")
 	mustContain(t, parentBar, "helperPath", "resolve apply-role path")
 	mustContain(t, parentBar, "finishSetup", "clear setup busy")
+	mustContain(t, parentBar, `root.role === "kid" && which !== "kid"`, "refuse kid to parent")
 	mustContain(t, parentBar, "/v1/household", "desk household")
 	mustContain(t, parentBar, "/v1/adopt", "desk adopt")
 	mustContain(t, parentBar, "/v1/kids/", "desk kid routes")
@@ -155,7 +182,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, `"deny"`, "deny decision")
 	mustContain(t, parentPanel, "body.implicitHeight", "kid switch stays inside the panel")
 	mustContain(t, parentModel, "Parent Pin", "settings pin row")
-	mustContain(t, parentModel, "Required for the controls. Use it to make changes on the kids computer.", "pin why")
+	mustContain(t, parentModel, "Required for the controls. Use it to make changes on the kid's computer.", "pin why")
 	mustContain(t, parentPanel, "Change", "pin change")
 	if strings.Contains(readPlugin(t, root, "ParentPanel.qml"), "onOpenedChanged") {
 		t.Fatal("ParentPanel is an Item; opened lives on the host widget")
@@ -168,7 +195,30 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("apply-role must prefer the matching plugin binary over a leftover ~/.local/bin/kidtimer")
 	}
 	mustContain(t, applyRole, "kidtimer-linux-$want", "arch plugin binary name")
+	mustContain(t, applyRole, "releases/download/v", "pinned versioned tarball")
+	mustContain(t, applyRole, "--proto '=https'", "https-only download")
+	mustContain(t, applyRole, "SHA256SUMS", "committed checksums")
+	mustContain(t, applyRole, "stop-user-bank", "stop user daemons before sudo")
+	mustContain(t, applyRole, "kidtimer_run_privileged_install", "digest-bound root copy")
+	mustContain(t, applyRole, "install-lib.sh", "shared privileged install")
+	installLib := readPlugin(t, root, "helpers/install-lib.sh")
+	mustContain(t, installLib, "/usr/local/share/kidtimer", "root-owned plugin tree")
+	mustContain(t, installLib, "/usr/local/bin/kidtimer", "root-owned binary dest")
+	if strings.Contains(applyRole, "releases/latest") {
+		t.Fatal("must not fetch latest")
+	}
+	if strings.Contains(applyRole, `sudo "$tmp"`) || strings.Contains(applyRole, `sudo "$userbin"`) {
+		t.Fatal("must not sudo a user-owned binary")
+	}
+	if strings.Contains(applyRole, "sudo /usr/bin/install") || strings.Contains(applyRole, "sudo /usr/bin/cp") {
+		t.Fatal("must not sudo install/cp from a user path")
+	}
+	if strings.Contains(applyRole, "stage=$(/usr/bin/mktemp -d)") {
+		t.Fatal("must not stage kid files in a user-owned mktemp")
+	}
 	mustContain(t, applyRole, "setup-error", "kid setup error file")
+	mustContain(t, applyRole, `trap 'fail "Could not set up this computer."' ERR INT HUP TERM`, "cancel password writes setup-error")
+	mustContain(t, applyRole, "already a kid", "refuse parent after kid")
 	mustContain(t, applyRole, "od -An -t x1 -j 18 -N 2", "ELF machine check")
 	mustContain(t, parentBar, "setup-error", "watch kid setup error")
 	mustContain(t, parentPanel, "model: track.blocks", "activity on the track")
@@ -191,6 +241,12 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, `kind: "clock"`, "clock format row")
 	mustContain(t, parentBar, "prefs.json", "clock prefs file")
 	mustContain(t, kidModel, "hour12", "kid hour12")
+	tape := readPlugin(t, root, "Tape.qml")
+	mustContain(t, tape, `modelData.nameUp + "  " + modelData.face.caption`, "picker list is name then status")
+	mustContain(t, tape, "ElideRight", "long names elide")
+	if strings.Contains(tape, `modelData.face.caption + "  " + modelData.nameUp`) {
+		t.Fatal("picker list still status then name")
+	}
 	if strings.Contains(parentPanel, "edit groups") || strings.Contains(parentPanel, "edit schedule") {
 		t.Fatal("till tape must not contain edit groups or edit schedule")
 	}
@@ -214,6 +270,11 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("do not add overlay kind")
 	}
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "Panel {", "shared panel")
+	panelQml := readPlugin(t, root, "Panel.qml")
+	mustContain(t, panelQml, "typeof root.bar.setCenterHoverRevealSuppressed", "close through the bar setter")
+	if strings.Contains(panelQml, ".centerHoverRevealSuppressed =") {
+		t.Fatal("do not assign readonly centerHoverRevealSuppressed")
+	}
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "Finishing setup", "setup loading copy")
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "RotationAnimation", "setup spinner")
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "setupBusy", "setup loading until done")
@@ -223,7 +284,40 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("overlay Text properties must be one per line")
 	}
 	mustContain(t, parentManifest, `"bar-widget"`, "bar-widget")
-	mustContain(t, parentManifest, `"kidtimer"`, "one plugin id")
+	mustContain(t, parentManifest, `"io.github.adam-lagerhausen.kidtimer"`, "one plugin id")
+	if strings.Contains(parentManifest, `"id": "kidtimer"`) {
+		t.Fatal("catalog id must not stay bare kidtimer")
+	}
+	readme := readPlugin(t, root, "README.md")
+	mustContain(t, readme, "omarchy plugin update io.github.adam-lagerhausen.kidtimer", "update id")
+	mustContain(t, readme, "omarchy plugin remove io.github.adam-lagerhausen.kidtimer", "remove id")
+	if strings.Contains(readme, "omarchy plugin update kidtimer") || strings.Contains(readme, "omarchy plugin remove kidtimer") {
+		t.Fatal("readme still names the old plugin id")
+	}
+	loopback := readPlugin(t, root, "helpers/loopback-http.sh")
+	mustContain(t, loopback, "--data-binary @-", "http body on stdin")
+	if strings.Contains(loopback, `--data-binary "$body"`) {
+		t.Fatal("http body must not be in curl argv")
+	}
+	applyRole = readPlugin(t, root, "helpers/apply-role.sh")
+	mustContain(t, applyRole, `mktemp -p "$share" .setup-error.XXXXXXXXXX`, "setup-error exclusive temp")
+	ents, err := os.ReadDir(filepath.Join(root, "testdata"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range ents {
+		if !strings.HasSuffix(e.Name(), ".sh") {
+			continue
+		}
+		src := readPlugin(t, root, filepath.Join("testdata", e.Name()))
+		mustContain(t, src, "/usr/bin/curl", e.Name()+" pinned curl")
+		mustContain(t, src, " -q ", e.Name()+" curl -q")
+		mustContain(t, src, "--max-time", e.Name()+" time cap")
+		mustContain(t, src, "--max-filesize", e.Name()+" size cap")
+		if strings.Contains(src, " -d ") || strings.Contains(src, "--data-binary \"$") {
+			t.Fatalf("%s puts a body in curl argv", e.Name())
+		}
+	}
 }
 
 func TestPluginModels(t *testing.T) {

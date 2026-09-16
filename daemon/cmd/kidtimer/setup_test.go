@@ -29,9 +29,9 @@ func TestSetupParentLeavesBankAlone(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(env.Home, ".local", "bin", "kidtimer")); err != nil {
 		t.Fatal("parent binary")
 	}
-	plug := filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer", "manifest.json")
+	plug := filepath.Join(env.Home, ".config", "omarchy", "plugins", pluginID, "manifest.json")
 	if _, err := os.Stat(plug); err != nil {
-		if dest, lerr := os.Readlink(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer")); lerr != nil {
+		if dest, lerr := os.Readlink(filepath.Join(env.Home, ".config", "omarchy", "plugins", pluginID)); lerr != nil {
 			t.Fatalf("plugin %v %v", err, lerr)
 		} else if dest == "" {
 			t.Fatalf("plugin dest %s", dest)
@@ -51,11 +51,14 @@ func TestSetupParentLeavesBankAlone(t *testing.T) {
 		t.Fatalf("parent role %v %v", role, err)
 	}
 	ids := widgetIDs(t, filepath.Join(env.Home, ".config", "omarchy", "shell.json"))
-	if strings.Contains(ids, "kidtimer.kid") || strings.Contains(ids, "kidtimer.parent") || !strings.Contains(ids, `"kidtimer"`) && !strings.Contains(ids, "kidtimer") {
+	if strings.Contains(ids, `"kidtimer.kid"`) || strings.Contains(ids, `"kidtimer.parent"`) || strings.Contains(ids, `"kidtimer"`) {
+		t.Fatalf("legacy widgets %s", ids)
+	}
+	if !strings.Contains(ids, `"`+pluginID+`"`) {
 		t.Fatalf("widgets %s", ids)
 	}
-	if !strings.Contains(ids, filepath.Join(env.Home, ".local", "bin", "kidtimer")) {
-		t.Fatalf("parentBin %s", ids)
+	if strings.Contains(ids, "parentBin") {
+		t.Fatalf("parentBin must not be written: %s", ids)
 	}
 }
 
@@ -101,8 +104,27 @@ func TestSetupParentRemovesAllowanceChip(t *testing.T) {
 	if strings.Contains(ids, "allowance.parent") {
 		t.Fatalf("widget leftover %s", ids)
 	}
-	if !strings.Contains(ids, "kidtimer") {
+	if !strings.Contains(ids, pluginID) {
 		t.Fatalf("kidtimer widget %s", ids)
+	}
+}
+
+func TestSetupParentRefusesKidComputer(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	if err := setupKid(env); err != nil {
+		t.Fatal(err)
+	}
+	err := setupParent(env)
+	if err == nil {
+		t.Fatal("parent setup must refuse a kid computer")
+	}
+	if !strings.Contains(err.Error(), "uninstall") {
+		t.Fatalf("want uninstall: %v", err)
+	}
+	role, rerr := household.LoadRole(filepath.Join(env.Home, ".local", "share", "kidtimer"))
+	if rerr != nil || role != reverse.RoleKid {
+		t.Fatalf("kid role kept %v %v", role, rerr)
 	}
 }
 
@@ -147,7 +169,7 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	}
 	var kid map[string]any
 	for _, w := range widgets(doc) {
-		if str(w["id"]) == "kidtimer" {
+		if str(w["id"]) == pluginID {
 			kid = w
 		}
 	}
@@ -161,8 +183,8 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	if err != nil || str(bar["readToken"]) == "" || str(bar["askToken"]) == "" {
 		t.Fatalf("kid-bar: %v %v", bar, err)
 	}
-	if str(kid["kidBin"]) != filepath.Join(root, "usr", "local", "bin", "kidtimer") {
-		t.Fatalf("kidBin %v", kid["kidBin"])
+	if str(kid["kidBin"]) != "" {
+		t.Fatalf("kidBin must not be written %v", kid["kidBin"])
 	}
 	if str(bar["url"]) != "http://127.0.0.1:8742" {
 		t.Fatalf("url %v", bar["url"])
@@ -178,7 +200,7 @@ func TestSetupKidMintsBarTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(cfg), "advertise = true") {
+	if strings.Contains(string(cfg), "advertise = true") {
 		t.Fatal("advertise")
 	}
 	if strings.Contains(string(cfg), `kid_name = "kid-a"`) {
@@ -197,7 +219,7 @@ func TestSetupKidTwice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	custom := strings.Replace(string(raw), `listen = "0.0.0.0:8742"`, `listen = "127.0.0.1:8742"`, 1)
+	custom := strings.Replace(string(raw), `listen = "127.0.0.1:8742"`, `listen = "0.0.0.0:8742"`, 1)
 	if custom == string(raw) {
 		t.Fatal("need packaged listen to customize")
 	}
@@ -211,8 +233,8 @@ func TestSetupKidTwice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(got), `listen = "0.0.0.0:8742"`) || !strings.Contains(string(got), "advertise = true") {
-		t.Fatalf("localhost workaround must become LAN: %s", got)
+	if !strings.Contains(string(got), `listen = "127.0.0.1:8742"`) || strings.Contains(string(got), "0.0.0.0") {
+		t.Fatalf("LAN listen must become loopback: %s", got)
 	}
 }
 
@@ -241,8 +263,8 @@ func TestSetupKidKeepsOtherKidEdits(t *testing.T) {
 	if err != nil || !strings.Contains(string(got), `bedtime_start = "20:00"`) {
 		t.Fatalf("other edits must stay: %s %v", got, err)
 	}
-	if !strings.Contains(string(got), `listen = "0.0.0.0:8742"`) {
-		t.Fatalf("lan listen: %s", got)
+	if !strings.Contains(string(got), `listen = "127.0.0.1:8742"`) {
+		t.Fatalf("loopback listen: %s", got)
 	}
 }
 
@@ -256,10 +278,7 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	if err := os.WriteFile(cfgPath, []byte("not toml"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
-	if err := os.WriteFile(shell, []byte("{"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", pluginID))
 	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer"))
 	_ = os.RemoveAll(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer.kid"))
 	if err := os.Remove(filepath.Join(root, "etc", "systemd", "system", "kidtimer.service")); err != nil {
@@ -271,13 +290,14 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	if _, err := config.ParseFile(cfgPath); err != nil {
 		t.Fatalf("repaired config: %v", err)
 	}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
 	doc, err := readJSON(shell)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var kid map[string]any
 	for _, w := range widgets(doc) {
-		if str(w["id"]) == "kidtimer" {
+		if str(w["id"]) == pluginID {
 			kid = w
 		}
 	}
@@ -287,13 +307,32 @@ func TestSetupKidRepairsHalfway(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(env.Home, ".local", "share", "kidtimer", "kid-bar.json")); err != nil {
 		t.Fatal("repaired kid-bar")
 	}
-	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer", "manifest.json")); err != nil {
-		if _, lerr := os.Lstat(filepath.Join(env.Home, ".config", "omarchy", "plugins", "kidtimer")); lerr != nil {
+	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", pluginID, "manifest.json")); err != nil {
+		if _, lerr := os.Lstat(filepath.Join(env.Home, ".config", "omarchy", "plugins", pluginID)); lerr != nil {
 			t.Fatal("repaired plugin")
 		}
 	}
 	if _, err := os.Stat(filepath.Join(root, "etc", "systemd", "system", "kidtimer.service")); err != nil {
 		t.Fatal("repaired unit")
+	}
+}
+
+func TestSetupCorruptShellFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	if err := setupParent(env); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
+	if err := os.WriteFile(shell, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := setupParent(env); err == nil {
+		t.Fatal("corrupt shell.json must fail closed")
+	}
+	got, err := os.ReadFile(shell)
+	if err != nil || string(got) != "{" {
+		t.Fatalf("must not replace the bar: %s %v", got, err)
 	}
 }
 
@@ -449,20 +488,40 @@ func TestInstallScriptParentHasNoSudo(t *testing.T) {
 	if !strings.Contains(body, "setup parent") {
 		t.Fatal("missing setup parent")
 	}
-	if strings.Count(body, "sudo") != 1 {
-		t.Fatalf("sudo should only re-exec kid, got %d", strings.Count(body, "sudo"))
+	if strings.Contains(body, `exec sudo "$0"`) {
+		t.Fatal("must not sudo the installer script")
 	}
-	if !strings.Contains(body, `exec sudo "$0" kid`) {
-		t.Fatal("kid must re-exec sudo")
+	if idx := strings.Index(body, "kidtimer_run_privileged_install"); idx > 0 && strings.Contains(body[:idx], "sudo") {
+		t.Fatal("parent install must not run as root")
+	}
+	if !strings.Contains(body, "kidtimer_run_privileged_install") {
+		t.Fatal("kid must bind the privileged copy to a digest")
+	}
+	if strings.Contains(body, "sudo install") || strings.Contains(body, "sudo cp") {
+		t.Fatal("must not sudo install/cp from a user path")
+	}
+	if strings.Contains(body, "mktemp") {
+		t.Fatal("must not stage kid files in a user-owned mktemp")
 	}
 	if !strings.Contains(body, `HOME}/.local/share/kidtimer/src`) {
 		t.Fatal("parent share dir")
 	}
-	if !strings.Contains(body, "/usr/local/share/kidtimer") {
-		t.Fatal("kid share dir")
-	}
 	if !strings.Contains(body, "manifest.json") {
 		t.Fatal("root plugin manifest")
+	}
+	lib, err := os.ReadFile(filepath.Join(repoRoot(t), "helpers", "install-lib.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	libBody := string(lib)
+	if !strings.Contains(libBody, "/usr/local/bin/kidtimer") {
+		t.Fatal("kid system binary")
+	}
+	if !strings.Contains(libBody, "/usr/local/share/kidtimer") {
+		t.Fatal("kid share dir")
+	}
+	if !strings.Contains(libBody, "KIDTIMER_INSTALL_MANIFEST") {
+		t.Fatal("digest manifest")
 	}
 }
 
@@ -505,6 +564,229 @@ func TestBootstrapFetchesPack(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "omarchy plugin add") {
 		t.Fatalf("usage: %s", out)
+	}
+}
+
+func TestSetupParentMigratesBarePluginID(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	old := filepath.Join(env.Home, ".config", "omarchy", "plugins", legacyPluginID)
+	if err := os.MkdirAll(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "manifest.json"), []byte(`{"id":"kidtimer"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
+	if err := ensureWidget(shell, legacyPluginID, map[string]any{"url": "http://127.0.0.1:8742"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := setupParent(env); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(old); !os.IsNotExist(err) {
+		t.Fatalf("old plugin leftover %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(env.Home, ".config", "omarchy", "plugins", pluginID, "manifest.json")); err != nil {
+		if _, lerr := os.Lstat(filepath.Join(env.Home, ".config", "omarchy", "plugins", pluginID)); lerr != nil {
+			t.Fatal("namespaced plugin missing")
+		}
+	}
+	doc, err := readJSON(shell)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	n := 0
+	for _, w := range widgets(doc) {
+		switch str(w["id"]) {
+		case pluginID:
+			got = w
+			n++
+		case legacyPluginID, "kidtimer.kid", "kidtimer.parent", "allowance.parent":
+			t.Fatalf("legacy widget remains %v", w)
+		}
+	}
+	if n != 1 || got == nil {
+		t.Fatalf("want one namespaced widget: %v", doc)
+	}
+	if str(got["url"]) != "http://127.0.0.1:8742" {
+		t.Fatalf("url not preserved %v", got["url"])
+	}
+	if _, err := os.Stat(filepath.Join(env.Home, ".local", "share", "kidtimer")); err != nil {
+		t.Fatal("share dir moved")
+	}
+}
+
+func TestSetupParentRewritesCenterChip(t *testing.T) {
+	root := t.TempDir()
+	env := setupEnv{Root: root, Repo: repoRoot(t), Home: filepath.Join(root, "home"), SkipSystemd: true}
+	shell := filepath.Join(env.Home, ".config", "omarchy", "shell.json")
+	doc := map[string]any{
+		"version": 1.0,
+		"bar": map[string]any{
+			"layout": map[string]any{
+				"center": []any{map[string]any{"id": legacyPluginID, "url": "http://127.0.0.1:8742"}},
+				"right":  []any{},
+			},
+		},
+	}
+	raw, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(shell), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(shell, append(raw, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := setupParent(env); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readJSON(shell)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bar, _ := got["bar"].(map[string]any)
+	layout, _ := bar["layout"].(map[string]any)
+	center := asSlice(layout["center"])
+	if len(center) != 1 || str(center[0].(map[string]any)["id"]) != pluginID {
+		t.Fatalf("center %v", layout["center"])
+	}
+	if str(center[0].(map[string]any)["url"]) != "http://127.0.0.1:8742" {
+		t.Fatalf("center url %v", center[0])
+	}
+	for _, w := range asSlice(layout["right"]) {
+		if str(w.(map[string]any)["id"]) == pluginID {
+			t.Fatal("duplicated chip on the right")
+		}
+	}
+}
+
+func TestMigrateKeepsOldPluginUntilNamespacedExists(t *testing.T) {
+	home := t.TempDir()
+	old := filepath.Join(home, ".config", "omarchy", "plugins", legacyPluginID)
+	if err := os.MkdirAll(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "manifest.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(home, ".config", "omarchy", "shell.json")
+	if err := ensureWidget(shell, legacyPluginID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateInstalledPlugin(home); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(old, "manifest.json")); err != nil {
+		t.Fatal("old plugin must stay until the namespaced plugin is installed")
+	}
+	ids := widgetIDs(t, shell)
+	if !strings.Contains(ids, `"kidtimer"`) {
+		t.Fatalf("bar still names the old chip until migrate can run: %s", ids)
+	}
+}
+
+func TestRetireOldPluginsMaterializesSymlink(t *testing.T) {
+	home := t.TempDir()
+	old := pluginDir(home, legacyPluginID)
+	if err := os.MkdirAll(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "manifest.json"), []byte(`{"id":"kidtimer"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := pluginDest(home)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(old, dest); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(home, ".config", "omarchy", "shell.json")
+	if err := ensureWidget(shell, legacyPluginID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := rewriteWidgetID(shell, legacyPluginID, pluginID); err != nil {
+		t.Fatal(err)
+	}
+	if err := retireOldPlugins(home, shell, dest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(old); !os.IsNotExist(err) {
+		t.Fatalf("old plugin leftover %v", err)
+	}
+	st, err := os.Lstat(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("dest still a symlink to the retired folder")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "manifest.json")); err != nil {
+		t.Fatal("materialized manifest")
+	}
+}
+
+func TestUserHomeFromShare(t *testing.T) {
+	if got := userHomeFromShare("/home/ada/.local/share/kidtimer"); got != "/home/ada" {
+		t.Fatalf("got %q", got)
+	}
+	if got := userHomeFromShare("/tmp/kidtimer"); got != "" {
+		t.Fatalf("temp share %q", got)
+	}
+}
+
+func TestMigrateLivePluginRemovesSecondPlugin(t *testing.T) {
+	home := t.TempDir()
+	share := filepath.Join(home, ".local", "share", "kidtimer")
+	if err := os.MkdirAll(share, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := pluginDir(home, legacyPluginID)
+	if err := os.MkdirAll(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "manifest.json"), []byte(`{"id":"kidtimer"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := pluginDest(home)
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "manifest.json"), []byte(`{"id":"`+pluginID+`"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(home, ".config", "omarchy", "shell.json")
+	if err := ensureWidget(shell, legacyPluginID, map[string]any{"url": "http://127.0.0.1:8742"}); err != nil {
+		t.Fatal(err)
+	}
+	migrateLivePlugin(share)
+	if _, err := os.Lstat(old); !os.IsNotExist(err) {
+		t.Fatalf("old plugin leftover %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "manifest.json")); err != nil {
+		t.Fatal("namespaced plugin missing")
+	}
+	doc, err := readJSON(shell)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	var got map[string]any
+	for _, w := range widgets(doc) {
+		switch str(w["id"]) {
+		case pluginID:
+			got = w
+			n++
+		case legacyPluginID, "kidtimer.kid", "kidtimer.parent", "allowance.parent":
+			t.Fatalf("second plugin remains %v", w)
+		}
+	}
+	if n != 1 || str(got["url"]) != "http://127.0.0.1:8742" {
+		t.Fatalf("migrated widget %v n=%d", got, n)
 	}
 }
 

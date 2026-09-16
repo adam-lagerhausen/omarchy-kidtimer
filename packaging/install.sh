@@ -16,10 +16,6 @@ if [ "$role" = "parent" ] && [ "$(id -u)" -eq 0 ]; then
 	exit 1
 fi
 
-if [ "$role" = "kid" ] && [ "$(id -u)" -ne 0 ]; then
-	exec sudo "$0" kid
-fi
-
 here=$(cd "$(dirname "$0")" && pwd)
 
 repo=""
@@ -58,26 +54,25 @@ fi
 
 if [ "$role" = "parent" ]; then
 	dest=${HOME}/.local/share/kidtimer/src
-else
-	dest=/usr/local/share/kidtimer
-fi
-
-mkdir -p "$dest"
-dest=$(cd "$dest" && pwd)
-if [ "$repo" != "$dest" ]; then
-	cp -a "$repo/packaging" "$dest/"
-	cp -a "$repo/manifest.json" "$repo/BarWidget.qml" "$repo/Overlay.qml" "$dest/"
-fi
-if [ "$bin" != "$dest/kidtimer" ]; then
-	cp -a "$bin" "$dest/kidtimer"
-fi
-chmod 755 "$dest/kidtimer"
-
-if [ "$role" = "parent" ]; then
+	mkdir -p "$dest"
+	dest=$(cd "$dest" && pwd)
+	if [ "$repo" != "$dest" ]; then
+		cp -a "$repo/packaging" "$dest/"
+		cp -a "$repo/manifest.json" "$repo/BarWidget.qml" "$repo/Overlay.qml" "$dest/"
+	fi
+	if [ "$bin" != "$dest/kidtimer" ]; then
+		cp -a "$bin" "$dest/kidtimer"
+	fi
+	chmod 755 "$dest/kidtimer"
 	"$dest/kidtimer" setup parent -repo "$dest"
-else
-	"$dest/kidtimer" setup kid -repo "$dest"
+	echo
+	echo "Done. If the bar does not update: omarchy restart shell"
+	exit 0
 fi
+
+# shellcheck source=../helpers/install-lib.sh
+. "$repo/helpers/install-lib.sh"
+kidtimer_run_privileged_install "$repo" "$bin"
 
 echo
 echo "Done. If the bar does not update: omarchy restart shell"

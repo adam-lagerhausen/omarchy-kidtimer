@@ -214,8 +214,8 @@ func (s *Server) handleReclaim(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) writePair(w http.ResponseWriter, r *http.Request, fn func() (string, *bank.Token, error)) {
 	ip := netaddr.PeerIP(r.RemoteAddr)
-	if !netaddr.IsHousehold(ip) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "pair is LAN only"})
+	if ip == nil || !ip.IsLoopback() {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		return
 	}
 	secret, tok, err := fn()

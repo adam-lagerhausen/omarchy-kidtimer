@@ -72,7 +72,7 @@ Do not show `reachable: yes`.
 
 ## Lock
 
-Square next to the dropdown, on the same row as the bell. Open padlock unlocked, closed padlock locked. It locks or unlocks the selected kid. Remaining looks faded. A LOCKED stamp sits on the panel. The kid cannot turn it off. No Seize, Release, ARM, session seized, hack the box.
+Square next to the dropdown, on the same row as the bell. Open padlock unlocked, closed padlock locked. It locks or unlocks the selected kid. Remaining looks faded. A LOCKED stamp sits on the panel. The kid can Ask to unlock. Approve lifts the lock. No Seize, Release, ARM, session seized, hack the box.
 
 The square does nothing until a Parent PIN exists (household file or any kid `parent_pin_set`). Clicking it then opens settings so the parent can Set the PIN. After that, lock is a flag on the kid. The kid box shows an overlay, not a real session lock.
 
@@ -108,6 +108,7 @@ Sound like a parent.
 - `9:00 PM` / `7:00 AM`
 - `MON` … `SUN`
 - `Ada asked for 10 more minutes`
+- `Ada asked to unlock`
 - `DENY` / `APPROVE`
 
 Do not sound like a sysadmin or a hacker movie. Never say overflow, pile, metered, bypass, or regex. Minecraft is Minecraft. Do not say Fun or School.

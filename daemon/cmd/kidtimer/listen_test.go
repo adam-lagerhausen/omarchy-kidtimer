@@ -34,14 +34,14 @@ func TestKidListenIsExplicit(t *testing.T) {
 		t.Fatal(err)
 	}
 	addrs, err := netaddr.ParseListen(listenSpec(cfg, ""))
-	if err != nil || len(addrs) != 1 || addrs[0] != "0.0.0.0:8742" {
-		t.Fatalf("kid listen is the config set, not every iface: %v %v", addrs, err)
+	if err != nil || len(addrs) != 1 || addrs[0] != "127.0.0.1:8742" {
+		t.Fatalf("kid listen is loopback: %v %v", addrs, err)
 	}
 }
 
-func TestAdvertiseWithoutListenBindsLAN(t *testing.T) {
+func TestAdvertiseWithoutListenStaysLoopback(t *testing.T) {
 	cfg := &config.Config{Advertise: true}
-	if listenSpec(cfg, "") != "0.0.0.0:8742" {
+	if listenSpec(cfg, "") != "127.0.0.1:8742" {
 		t.Fatalf("advertise default listen %q", listenSpec(cfg, ""))
 	}
 	if listenSpec(cfg, "127.0.0.1:9123") != "127.0.0.1:9123" {
