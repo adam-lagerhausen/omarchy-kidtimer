@@ -84,10 +84,22 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 	if err != nil {
 		return nil, err
 	}
+	if err := b.dismissPendingAsksLocked(); err != nil {
+		return nil, err
+	}
 	if err := b.clearParentLockLocked(); err != nil {
 		return nil, err
 	}
 	return g, nil
+}
+
+func (b *Bank) dismissPendingAsksLocked() error {
+	now := b.nowLocal().Format(time.RFC3339)
+	_, err := b.db.Exec(
+		`UPDATE asks SET status = ?, decided_at = ? WHERE status = ?`,
+		string(AskDenied), now, string(AskPending),
+	)
+	return err
 }
 
 func (b *Bank) OverlayActive() bool {
