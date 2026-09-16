@@ -323,9 +323,9 @@ function askSeconds(ask) {
 }
 
 function askCardText(kidName, seconds, locked) {
-  if (locked) return kidName + " asked to unlock"
   var m = Math.max(0, Math.round(Number(seconds) / 60))
   if (!m) m = 10
+  if (locked) return kidName + " asked to unlock for " + m + " more minutes"
   return kidName + " asked for " + m + " more minutes"
 }
 

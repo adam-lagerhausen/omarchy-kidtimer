@@ -620,7 +620,21 @@ func (b *Bank) Grant(actor *Token, group string, seconds int, reason, idemKey st
 			return nil, err
 		}
 	}
+	if actor.Kind == KindParent && delta > 0 {
+		if err := b.dismissPendingAsksLocked(); err != nil {
+			return nil, err
+		}
+	}
 	return g, nil
+}
+
+func (b *Bank) dismissPendingAsksLocked() error {
+	now := b.nowLocal().Format(time.RFC3339)
+	_, err := b.db.Exec(
+		`UPDATE asks SET status = ?, decided_at = ? WHERE status = ?`,
+		string(AskDenied), now, string(AskPending),
+	)
+	return err
 }
 
 func parseGrantDelta(seconds int) (int, error) {

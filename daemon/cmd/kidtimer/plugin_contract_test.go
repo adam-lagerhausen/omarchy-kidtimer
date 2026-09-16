@@ -247,6 +247,9 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	}
 	mustContain(t, parentModel, "Lock ", "lock")
 	mustContain(t, parentModel, "Unlock ", "unlock")
+	mustContain(t, parentModel, "asked to unlock for ", "locked ask keeps minutes")
+	mustContain(t, kidModel, "if (status.parent_locked) return \"locked\"", "chip lock label")
+	mustContain(t, kidModel, "if (status && status.parent_locked) return \"locked\"", "chip lock kind")
 	mustContain(t, parentModel, `"fun"`, "model default fun")
 	mustContain(t, parentModel, "http://127.0.0.1:8742", "localhost default")
 	mustContain(t, parentModel, "fixtureTape", "fixture tape")

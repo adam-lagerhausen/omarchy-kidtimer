@@ -310,7 +310,7 @@ assertEqual(spentOnly.track.blocks.length, 1, "spent becomes a block")
 assertEqual(spentOnly.track.log[0].dur, "6m", "spent log dur")
 assertEqual(spentOnly.track.log[0].name, "COMPUTER", "spent log name")
 assertEqual(parent.askCardText("Ada", 1800), "Ada asked for 30 more minutes", "ask minutes copy")
-assertEqual(parent.askCardText("Ada", 1800, true), "Ada asked to unlock", "locked ask copy")
+assertEqual(parent.askCardText("Ada", 1800, true), "Ada asked to unlock for 30 more minutes", "locked ask copy")
 assertEqual(parent.notifySummary({ seconds: 1800 }, null, { parentLocked: true }), "asked to unlock", "locked notify")
 assertEqual(parent.notifySummary({ seconds: 1800 }, null, { parent_locked: true }), "asked to unlock", "locked notify wire")
 assertEqual(parent.notifySummary({ seconds: 1800 }, null, {}), "asked for 30 more minutes", "unlocked notify")
@@ -353,7 +353,44 @@ assertEqual(locked.kid.face.coral, true, "locked coral")
 assertEqual(locked.kid.face.caption, "Locked", "locked caption")
 assertEqual(locked.kid.bedtime, false, "locked is not bedtime overlay")
 assertEqual(locked.lockLabel, "Unlock Ada", "unlock ada")
-assertEqual(locked.asks[0].text, "Ada asked to unlock", "locked tape ask")
+assertEqual(locked.asks[0].text, "Ada asked to unlock for 10 more minutes", "locked tape ask")
+
+const bedtimeSnap = {
+  name: "Ada",
+  claimed: false,
+  reachable: true,
+  status: parent.parseStatus({
+    bedtime_active: true,
+    groups: { fun: 1800 },
+    spent: { fun: 600 }
+  })
+}
+assertEqual(parent.grantAllowed(bedtimeSnap), false, "no grant at bedtime")
+assertEqual(parent.grantAllowed({
+  claimed: false,
+  status: { bedtime_active: true, bedtime_hold: true, groups: { fun: 1800 } }
+}), true, "grant during stay-up")
+assertEqual(parent.grantAllowed({
+  claimed: false,
+  status: { bedtime_active: false, groups: { fun: 1800 } }
+}), true, "grant during the day")
+assertEqual(parent.grantAllowed({ claimed: true, status: { bedtime_active: false } }), false, "no grant claimed")
+assertEqual(parent.grantAllowed(null), false, "no grant missing kid")
+const bedtimeTape = parent.projectTape([bedtimeSnap], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(bedtimeTape.kid.bedtime, true, "bedtime tape greys +10")
+assertEqual(bedtimeTape.kid.face.caption, "Bedtime", "bedtime tape caption")
+const stayGrant = parent.projectTape([{
+  name: "Ada",
+  claimed: false,
+  reachable: true,
+  status: parent.parseStatus({
+    bedtime_active: true,
+    bedtime_hold: true,
+    groups: { fun: 1800 },
+    spent: { fun: 600 }
+  })
+}], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(stayGrant.kid.bedtime, false, "stay-up keeps +10")
 
 const bedtimeSnap = {
   name: "Ada",
@@ -515,7 +552,7 @@ assertEqual(kid.barLabel({
   bedtime_active: true,
   parent_locked: true,
   focused_app: "minecraft"
-}), "bedtime", "bedtime wins lock")
+}), "locked", "lock wins bedtime")
 assertEqual(kid.stayingUp({ bedtime_active: true, bedtime_hold: true }), true, "stay-up")
 assertEqual(kid.stayingUp({ bedtime_active: true, bedtime_hold: true, parent_locked: true }), false, "lock is not stay-up")
 assertEqual(kid.stayingUp({ bedtime_active: true }), false, "plain bedtime is not stay-up")
@@ -536,14 +573,14 @@ assertEqual(kid.barUrgent({
   bedtime_hold: true,
   groups: { fun: 600 }
 }), true, "stay-up low remaining is urgent")
-assertEqual(kid.panelKind({ bedtime_active: true, bedtime_hold: true, parent_locked: true }), "bedtime", "bedtime wins a locked stay-up")
+assertEqual(kid.panelKind({ bedtime_active: true, bedtime_hold: true, parent_locked: true }), "locked", "lock wins a locked stay-up")
 assertEqual(kid.barLabel({ focused_group: null, groups: { fun: 0 } }), "0m left", "empty idle")
 assertEqual(kid.panelCaption({ bedtime_active: true }), "bedtime", "caption bedtime")
 assertEqual(kid.panelCaption({ parent_locked: true }), "locked", "caption locked")
-assertEqual(kid.panelCaption({ bedtime_active: true, parent_locked: true }), "bedtime", "caption bedtime wins")
+assertEqual(kid.panelCaption({ bedtime_active: true, parent_locked: true }), "locked", "caption lock wins")
 assertEqual(kid.panelCaption({ mode: "evening" }), "", "status.mode is ignored")
 assertEqual(kid.panelCaption({}), "", "caption gap")
-assertEqual(kid.panelKind({ bedtime_active: true, parent_locked: true }), "bedtime", "kind bedtime")
+assertEqual(kid.panelKind({ bedtime_active: true, parent_locked: true }), "locked", "kind lock wins")
 assertEqual(kid.panelKind({ parent_locked: true }), "locked", "kind locked")
 assertEqual(kid.panelKind({ mode: "evening" }), "home", "leftover mode is home")
 assertEqual(kid.panelKind({ mode: "freetime", parent_locked: true }), "locked", "lock beats leftover mode")
