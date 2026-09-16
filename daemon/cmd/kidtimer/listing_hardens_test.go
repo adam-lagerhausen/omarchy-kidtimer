@@ -186,6 +186,42 @@ func TestApplyRoleWritesSetupError(t *testing.T) {
 	}
 }
 
+func TestApplyRoleInterruptWritesSetupError(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	share := filepath.Join(home, ".local", "share", "kidtimer")
+	if err := os.MkdirAll(share, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(repoRoot(t), "helpers", "apply-role.sh")
+	src, err := os.ReadFile(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trap := `trap 'fail "Could not set up this computer."' ERR INT HUP TERM`
+	if !strings.Contains(string(src), trap) {
+		t.Fatal("kid setup must trap cancel")
+	}
+	cmd := exec.Command("bash", "-c", `
+set -euo pipefail
+export HOME="$1"
+share="$HOME/.local/share/kidtimer"
+eval "$(sed -n '/^fail()/,/^}/p' "$2")"
+`+trap+`
+kill -s INT $$
+`, "int-setup", home, script)
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("SIGINT should fail setup: %s", out)
+	}
+	raw, err := os.ReadFile(filepath.Join(share, "setup-error"))
+	if err != nil {
+		t.Fatalf("setup-error missing: %v", err)
+	}
+	if !strings.Contains(string(raw), "Could not set up this computer.") {
+		t.Fatalf("setup-error %q", raw)
+	}
+}
+
 func TestApplyRoleSetupErrorDoesNotFollowSymlink(t *testing.T) {
 	dir := t.TempDir()
 	share := filepath.Join(dir, "share")

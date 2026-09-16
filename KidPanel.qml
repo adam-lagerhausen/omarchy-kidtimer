@@ -14,6 +14,7 @@ Item {
   property string askGroup: ""
   property int chosenMinutes: 30
   property string waitingGroup: ""
+  property bool askBusy: false
   property string pendingAskId: ""
   property bool pinOpen: false
   property string pinDigits: ""
@@ -38,7 +39,7 @@ Item {
     if (root.askGroup !== "") return "sheet"
     return Model.panelKind(root.statusJson)
   }
-  readonly property var clock: Model.clockFace(root.statusJson, root.waitingGroup !== "")
+  readonly property var clock: Model.clockFace(root.statusJson, Model.askWaiting(root.statusJson, root.waitingGroup !== "" || root.askBusy))
   readonly property string soonBanner: Model.bedtimeBanner(root.statusJson)
   readonly property color panelLine: {
     if (root.view === "locked") return root.urgent
@@ -80,16 +81,21 @@ Item {
 
   function openAsk() {
     if (Model.askBlocked(root.statusJson)) return
+    if (Model.askWaiting(root.statusJson, root.waitingGroup !== "" || root.askBusy)) return
     root.askGroup = "fun"
     root.chosenMinutes = Model.ASK_DEFAULT_MIN
   }
 
   function submit() {
     if (root.askGroup === "") return
+    if (root.askBusy) return
     if (Model.askBlocked(root.statusJson)) return
+    if (Model.askWaiting(root.statusJson, root.waitingGroup !== "")) return
     var body = Model.askPayload(root.askGroup, root.chosenMinutes * 60, "more time")
     if (!hostWidget || typeof hostWidget.kidPost !== "function") return
+    root.askBusy = true
     hostWidget.kidPost("/v1/asks", body, String(setting("askToken", "")), function(status, text) {
+      root.askBusy = false
       if (status !== 200) return
       var id = ""
       try {
@@ -303,7 +309,7 @@ Item {
             anchors.right: parent.right
             text: "Ask"
             primary: true
-            enabled: !root.blocked
+            enabled: !root.blocked && !root.askBusy
             accent: root.accent
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
