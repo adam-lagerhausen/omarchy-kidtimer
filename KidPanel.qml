@@ -96,10 +96,7 @@ Item {
     root.askBusy = true
     hostWidget.kidPost("/v1/asks", body, String(setting("askToken", "")), function(status, text) {
       root.askBusy = false
-      if (status !== 200) {
-        root.askGroup = ""
-        return
-      }
+      if (status !== 200) return
       var id = ""
       try {
         id = JSON.parse(text).id || ""
