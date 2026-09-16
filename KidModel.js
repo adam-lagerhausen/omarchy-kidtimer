@@ -220,6 +220,14 @@ function overlayCancel() {
   }
 }
 
+function askFailLabel() {
+  return "try again"
+}
+
+function chipShowsParentPin(askId) {
+  return String(askId || "") !== ""
+}
+
 function overlayAskWaiting(status) {
   return (Number(status && status.pending_ask_count) || 0) > 0
 }
@@ -257,6 +265,22 @@ function clampOverlayAskMinutes(n) {
 
 function nudgeOverlayAskMinutes(current, delta) {
   return clampOverlayAskMinutes((Number(current) || ASK_DEFAULT_MIN) + Number(delta))
+}
+
+function overlayAskMinusOn(minutes) {
+  return clampOverlayAskMinutes(minutes) > OVERLAY_ASK_MIN
+}
+
+function overlayAskPlusOn(minutes) {
+  return clampOverlayAskMinutes(minutes) < ASK_MAX
+}
+
+function overlayPinMinusOn(minutes) {
+  return clampAskMinutes(minutes) > ASK_MIN
+}
+
+function overlayPinPlusOn(minutes) {
+  return clampAskMinutes(minutes) < ASK_MAX
 }
 
 function askGroups(status) {

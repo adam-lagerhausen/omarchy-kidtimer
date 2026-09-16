@@ -20,6 +20,8 @@ Item {
   property string pinDigits: ""
   property bool pinWrong: false
   property string pinFailText: "wrong pin"
+  property bool askWrong: false
+  property string askFailText: "try again"
   property int lastPending: -1
 
   readonly property var barIdentity: hostWidget || root
@@ -85,6 +87,8 @@ Item {
     if (Model.askWaiting(root.statusJson, root.waitingGroup !== "" || root.askBusy)) return
     root.askGroup = "fun"
     root.chosenMinutes = Model.ASK_DEFAULT_MIN
+    root.askWrong = false
+    root.askFailText = Model.askFailLabel()
   }
 
   function submit() {
@@ -97,7 +101,11 @@ Item {
     root.askBusy = true
     hostWidget.kidPost("/v1/asks", body, String(setting("askToken", "")), function(status, text) {
       root.askBusy = false
-      if (status !== 200) return
+      if (status !== 200) {
+        root.askWrong = true
+        root.askFailText = Model.askFailLabel()
+        return
+      }
       var id = ""
       try {
         id = JSON.parse(text).id || ""
@@ -107,6 +115,7 @@ Item {
       root.pendingAskId = id
       root.waitingGroup = root.askGroup
       root.askGroup = ""
+      root.askWrong = false
     })
   }
 
@@ -206,8 +215,8 @@ Item {
 
         Text {
           textFormat: Text.PlainText
-          text: "Ask for more"
-          color: root.dim
+          text: root.askWrong ? root.askFailText : "Ask for more"
+          color: root.askWrong ? root.urgent : root.dim
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
           font.letterSpacing: 1
@@ -227,7 +236,10 @@ Item {
             enabled: root.chosenMinutes > 5
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
-            onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, -5)
+            onClicked: {
+              root.askWrong = false
+              root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, -5)
+            }
           }
 
           Column {
@@ -259,7 +271,10 @@ Item {
             enabled: root.chosenMinutes < 120
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
-            onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, 5)
+            onClicked: {
+              root.askWrong = false
+              root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, 5)
+            }
           }
         }
 
@@ -272,7 +287,10 @@ Item {
             text: "Cancel"
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
-            onClicked: root.askGroup = ""
+            onClicked: {
+              root.askGroup = ""
+              root.askWrong = false
+            }
           }
 
           LookBtn {
@@ -484,17 +502,18 @@ Item {
       height: 28
       LookBtn {
         anchors.left: parent.left
-        width: (parent.width - 8) / 2
+        width: Model.chipShowsParentPin(root.pendingAskId) ? (parent.width - 8) / 2 : parent.width
         text: "Waiting"
         enabled: false
         foreground: root.contentForeground
         fontFamily: root.contentFontFamily
       }
       LookBtn {
+        visible: Model.chipShowsParentPin(root.pendingAskId)
         anchors.right: parent.right
         width: (parent.width - 8) / 2
         text: "Parent Pin"
-        enabled: root.pendingAskId !== ""
+        enabled: Model.chipShowsParentPin(root.pendingAskId)
         foreground: root.contentForeground
         fontFamily: root.contentFontFamily
         onClicked: {

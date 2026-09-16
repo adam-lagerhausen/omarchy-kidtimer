@@ -392,43 +392,6 @@ const stayGrant = parent.projectTape([{
 }], 0, parent.chromeHome(), null, { pinSet: true })
 assertEqual(stayGrant.kid.bedtime, false, "stay-up keeps +10")
 
-const bedtimeSnap = {
-  name: "Ada",
-  claimed: false,
-  reachable: true,
-  status: parent.parseStatus({
-    bedtime_active: true,
-    groups: { fun: 1800 },
-    spent: { fun: 600 }
-  })
-}
-assertEqual(parent.grantAllowed(bedtimeSnap), false, "no grant at bedtime")
-assertEqual(parent.grantAllowed({
-  claimed: false,
-  status: { bedtime_active: true, bedtime_hold: true, groups: { fun: 1800 } }
-}), true, "grant during stay-up")
-assertEqual(parent.grantAllowed({
-  claimed: false,
-  status: { bedtime_active: false, groups: { fun: 1800 } }
-}), true, "grant during the day")
-assertEqual(parent.grantAllowed({ claimed: true, status: { bedtime_active: false } }), false, "no grant claimed")
-assertEqual(parent.grantAllowed(null), false, "no grant missing kid")
-const bedtimeTape = parent.projectTape([bedtimeSnap], 0, parent.chromeHome(), null, { pinSet: true })
-assertEqual(bedtimeTape.kid.bedtime, true, "bedtime tape greys +10")
-assertEqual(bedtimeTape.kid.face.caption, "Bedtime", "bedtime tape caption")
-const stayGrant = parent.projectTape([{
-  name: "Ada",
-  claimed: false,
-  reachable: true,
-  status: parent.parseStatus({
-    bedtime_active: true,
-    bedtime_hold: true,
-    groups: { fun: 1800 },
-    spent: { fun: 600 }
-  })
-}], 0, parent.chromeHome(), null, { pinSet: true })
-assertEqual(stayGrant.kid.bedtime, false, "stay-up keeps +10")
-
 const settings = parent.fixtureTape("ada", parent.chromeSettings())
 assertEqual(settings.showLock, false, "settings hide lock")
 assertEqual(settings.showStamp, false, "settings hide stamp")
@@ -608,6 +571,17 @@ assertEqual(kid.overlayCancel(), {
   pinWrong: false,
   chosenMinutes: 30
 }, "overlay pin cancel")
+assertEqual(kid.askFailLabel(), "try again", "ask fail copy")
+assertEqual(kid.chipShowsParentPin(""), false, "no pin without ask id")
+assertEqual(kid.chipShowsParentPin("a1"), true, "pin with ask id")
+assertEqual(kid.overlayAskMinusOn(10), false, "overlay ask minus off at floor")
+assertEqual(kid.overlayAskMinusOn(20), true, "overlay ask minus on")
+assertEqual(kid.overlayAskPlusOn(120), false, "overlay ask plus off at ceil")
+assertEqual(kid.overlayAskPlusOn(110), true, "overlay ask plus on")
+assertEqual(kid.overlayPinMinusOn(5), false, "overlay pin minus off at floor")
+assertEqual(kid.overlayPinMinusOn(10), true, "overlay pin minus on")
+assertEqual(kid.overlayPinPlusOn(120), false, "overlay pin plus off at ceil")
+assertEqual(kid.overlayPinPlusOn(115), true, "overlay pin plus on")
 assertEqual(kid.askBlocked({ mode: "freetime" }), false, "ask open in leftover mode")
 assertEqual(kid.clockEmpty({ groups: { fun: 0 } }), true, "empty clock")
 assertEqual(kid.clockEmpty({ groups: { fun: 1 } }), false, "has remaining")
