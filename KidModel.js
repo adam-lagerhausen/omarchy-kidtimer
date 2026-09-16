@@ -44,9 +44,9 @@ function formatMinutes(seconds) {
   var n = leftoverMinutes(seconds)
   var h = Math.floor(n / 60)
   var m = n % 60
-  if (h > 0 && m > 0) return h + "h " + m + "min"
+  if (h > 0 && m > 0) return h + "h " + m + "m"
   if (h > 0) return h + "h"
-  return m + "min"
+  return m + "m"
 }
 
 function pileDisplayName(id, status) {
@@ -360,8 +360,7 @@ function warningCopy(kind, seconds, status) {
     if (at) return "bedtime starts at " + at
     return ""
   }
-  var mins = Math.round(Number(seconds) / 60)
-  return mins + " min left"
+  return formatMinutes(seconds) + " left"
 }
 
 function validPin(digits) {
@@ -372,6 +371,18 @@ function validPin(digits) {
     if (c < "0" || c > "9") return false
   }
   return true
+}
+
+function pinFailLabel(status, text) {
+  var raw = String(text || "")
+  try {
+    var doc = JSON.parse(raw)
+    if (doc && doc.error) raw = String(doc.error)
+  } catch (e) {
+    raw = String(text || "")
+  }
+  if (String(raw).toLowerCase().indexOf("too many") >= 0) return "wait 30 seconds"
+  return "wrong pin"
 }
 
 function overlayPinAdvance(digits) {
