@@ -251,6 +251,11 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		t.Fatal("do not add overlay kind")
 	}
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "Panel {", "shared panel")
+	panelQml := readPlugin(t, root, "Panel.qml")
+	mustContain(t, panelQml, "typeof root.bar.setCenterHoverRevealSuppressed", "close through the bar setter")
+	if strings.Contains(panelQml, ".centerHoverRevealSuppressed =") {
+		t.Fatal("do not assign readonly centerHoverRevealSuppressed")
+	}
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "Finishing setup", "setup loading copy")
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "RotationAnimation", "setup spinner")
 	mustContain(t, readPlugin(t, root, "Panel.qml"), "setupBusy", "setup loading until done")
