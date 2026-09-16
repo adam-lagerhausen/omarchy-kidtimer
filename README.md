@@ -16,7 +16,7 @@ This is unofficial and not affiliated with Omarchy.
           |                         |
    +------+-----+            +------+-----+
    |   kid 1    |            |   kid 2    |
-   | 47min left |            |   1h left  |
+   | 47m left   |            |   1h left  |
    +------------+            +------------+
 ```
 

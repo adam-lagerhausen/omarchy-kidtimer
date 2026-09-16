@@ -121,7 +121,7 @@ func Parse(verb string, args []string) (Request, error) {
 	switch verb {
 	case "grant":
 		fs.StringVar(&grant.Group, "group", "", "group id")
-		fs.IntVar(&grant.Seconds, "seconds", 900, "seconds to credit")
+		fs.IntVar(&grant.Seconds, "seconds", 600, "seconds to credit")
 		fs.StringVar(&grant.Reason, "reason", "", "reason")
 		fs.StringVar(&grant.IdempotencyKey, "idempotency-key", "", "Idempotency-Key")
 		fs.IntVar(&minutes, "minutes", 0, "minutes to credit")
@@ -171,6 +171,14 @@ func Parse(verb string, args []string) (Request, error) {
 		}
 		if minutesSet {
 			grant.Seconds = minutes * 60
+		}
+		if grant.Reason == "" {
+			mins := grant.Seconds / 60
+			if grant.Seconds < 0 {
+				grant.Reason = fmt.Sprintf("%d", mins)
+			} else {
+				grant.Reason = fmt.Sprintf("+%d", mins)
+			}
 		}
 		action = grant
 	case "status":
