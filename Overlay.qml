@@ -19,6 +19,7 @@ Item {
   property int chosenMinutes: 30
   property bool submapOn: false
   property bool pinWrong: false
+  property string pinFailText: "wrong pin"
   property bool askQueued: false
   property var httpQueue: []
   property var httpJob: null
@@ -69,6 +70,7 @@ Item {
         step = "cover"
         pinDigits = ""
         pinWrong = false
+        pinFailText = "wrong pin"
         askQueued = false
         chosenMinutes = Model.ASK_DEFAULT_MIN
       } else if (Model.overlayAskWaiting(statusJson)) {
@@ -91,11 +93,13 @@ Item {
     overlayHTTP("POST", bankUrl() + "/v1/pin/grant", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
       if (status !== 200) {
         pinWrong = true
+        pinFailText = Model.pinFailLabel(status, text)
         step = "pin"
         return
       }
       pinDigits = ""
       pinWrong = false
+      pinFailText = "wrong pin"
       step = "cover"
       poll()
     })
@@ -428,7 +432,8 @@ Item {
               onClicked: {
                 root.step = "pin"
                 root.pinWrong = false
-                root.pinDigits = ""
+                root.pinFailText = "wrong pin"
+                root.pinDigits = "" 
                 pinField.forceActiveFocus()
               }
             }
@@ -440,7 +445,7 @@ Item {
           visible: root.step === "pin"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
-          text: root.pinWrong ? "wrong pin" : "Parent Pin"
+          text: root.pinWrong ? root.pinFailText : "Parent Pin"
           color: root.pinWrong ? root.urgent : root.ink
           font.family: root.plex
           font.pixelSize: 18

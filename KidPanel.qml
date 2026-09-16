@@ -19,6 +19,7 @@ Item {
   property bool pinOpen: false
   property string pinDigits: ""
   property bool pinWrong: false
+  property string pinFailText: "wrong pin"
   property int lastPending: -1
 
   readonly property var barIdentity: hostWidget || root
@@ -116,6 +117,7 @@ Item {
     hostWidget.kidPost("/v1/pin/approve", body, String(setting("askToken", "")), function(status, text) {
       if (status !== 200) {
         root.pinWrong = true
+        root.pinFailText = Model.pinFailLabel(status, text)
         return
       }
       root.pinOpen = false
@@ -295,7 +297,7 @@ Item {
 
         Text {
           textFormat: Text.PlainText
-          text: root.pinWrong ? "wrong pin" : "Parent Pin"
+          text: root.pinWrong ? root.pinFailText : "Parent Pin"
           color: root.pinWrong ? root.urgent : root.dim
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
@@ -331,6 +333,7 @@ Item {
               root.pinOpen = false
               root.pinDigits = ""
               root.pinWrong = false
+              root.pinFailText = "wrong pin"
             }
           }
           LookBtn {
@@ -497,6 +500,7 @@ Item {
         onClicked: {
           root.pinOpen = true
           root.pinWrong = false
+          root.pinFailText = "wrong pin"
           root.pinDigits = ""
         }
       }
