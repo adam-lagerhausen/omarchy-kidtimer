@@ -20,6 +20,8 @@ Item {
   property bool submapOn: false
   property bool pinWrong: false
   property string pinFailText: "wrong pin"
+  property bool askWrong: false
+  property string askFailText: "try again"
   property bool askQueued: false
   property var httpQueue: []
   property var httpJob: null
@@ -72,6 +74,8 @@ Item {
         pinWrong = false
         pinFailText = "wrong pin"
         askQueued = false
+        askWrong = false
+        askFailText = "try again"
         chosenMinutes = Model.ASK_DEFAULT_MIN
       } else if (Model.overlayAskWaiting(statusJson)) {
         askQueued = false
@@ -116,12 +120,16 @@ Item {
   function submitAsk() {
     if (root.waiting) return
     askQueued = true
+    askWrong = false
     var body = Model.askPayload("fun", chosenMinutes * 60, "more time")
     overlayHTTP("POST", bankUrl() + "/v1/asks", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
       if (status !== 200) {
         askQueued = false
+        askWrong = true
+        askFailText = Model.askFailLabel()
         return
       }
+      askWrong = false
       step = "cover"
       poll()
     })
@@ -406,6 +414,8 @@ Item {
               cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: {
                 root.chosenMinutes = Model.ASK_DEFAULT_MIN
+                root.askWrong = false
+                root.askFailText = Model.askFailLabel()
                 root.step = "ask"
               }
             }
@@ -528,6 +538,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
+            opacity: Model.overlayPinMinusOn(root.chosenMinutes) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -538,6 +549,8 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
+              enabled: Model.overlayPinMinusOn(root.chosenMinutes)
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, -5)
             }
           }
@@ -568,6 +581,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
+            opacity: Model.overlayPinPlusOn(root.chosenMinutes) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -578,6 +592,8 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
+              enabled: Model.overlayPinPlusOn(root.chosenMinutes)
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, 5)
             }
           }
@@ -633,6 +649,18 @@ Item {
           }
         }
 
+        Text {
+          textFormat: Text.PlainText
+          visible: root.step === "ask"
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: root.askWrong ? root.askFailText : "Ask for more"
+          color: root.askWrong ? root.urgent : root.dim
+          font.family: root.plex
+          font.pixelSize: 14
+          font.bold: true
+        }
+
         Item {
           visible: root.step === "ask"
           width: parent.width
@@ -644,7 +672,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
-            opacity: root.chosenMinutes <= Model.OVERLAY_ASK_MIN ? 0.55 : 1
+            opacity: Model.overlayAskMinusOn(root.chosenMinutes) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -655,7 +683,12 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
-              onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, -10)
+              enabled: Model.overlayAskMinusOn(root.chosenMinutes)
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+              onClicked: {
+                root.askWrong = false
+                root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, -10)
+              }
             }
           }
           Column {
@@ -685,7 +718,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
-            opacity: root.chosenMinutes >= Model.ASK_MAX ? 0.55 : 1
+            opacity: Model.overlayAskPlusOn(root.chosenMinutes) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -696,7 +729,12 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
-              onClicked: root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, 10)
+              enabled: Model.overlayAskPlusOn(root.chosenMinutes)
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+              onClicked: {
+                root.askWrong = false
+                root.chosenMinutes = Model.nudgeOverlayAskMinutes(root.chosenMinutes, 10)
+              }
             }
           }
         }
@@ -727,6 +765,7 @@ Item {
               onClicked: {
                 root.step = "cover"
                 root.chosenMinutes = Model.ASK_DEFAULT_MIN
+                root.askWrong = false
               }
             }
           }
@@ -737,6 +776,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
+            opacity: root.waiting ? 0.55 : 1
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -748,7 +788,8 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
+              enabled: !root.waiting
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: root.submitAsk()
             }
           }
