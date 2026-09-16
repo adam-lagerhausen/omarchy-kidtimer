@@ -21,7 +21,7 @@ Item {
   readonly property var tape: Model.projectTape(snapshots, selectedIndex, chrome, nowPtr, { pinSet: householdPinSet, hour12: root.hour12 })
   readonly property real panelWidth: 340
   width: parent ? parent.width : panelWidth
-  implicitHeight: paper.implicitHeight
+  implicitHeight: Math.max(1, body.implicitHeight)
 
   function setPage(id) {
     if (id === "settings") root.chrome = Model.chromeSettings()
@@ -85,11 +85,15 @@ Item {
     onTriggered: root.nowPtr = new Date()
   }
 
-  Tape {
-    id: paper
+  Column {
+    id: body
     width: parent.width
-    tape: root.tape
-    bar: root.bar
-    onAct: function (ev) { root.fire(ev) }
+    Tape {
+      id: paper
+      width: parent.width
+      tape: root.tape
+      bar: root.bar
+      onAct: function (ev) { root.fire(ev) }
+    }
   }
 }
