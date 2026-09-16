@@ -7,7 +7,7 @@ import "KidModel.js" as Kid
 
 BarWidget {
   id: root
-  moduleName: "kidtimer"
+  moduleName: "io.github.adam-lagerhausen.kidtimer"
 
   property string role: ""
   property string statusText: "Kidtimer"
@@ -335,7 +335,7 @@ BarWidget {
 
   function grantFun(seconds) {
     var kid = aimedKid()
-    if (kid && kid.claimed) return
+    if (!Model.grantAllowed(kid)) return
     if (!kid || !kid.id) return
     sendKid(kid, "POST", "/v1/grants", Model.grantPayload("fun", seconds))
   }
@@ -566,7 +566,7 @@ BarWidget {
   Component.onCompleted: seedFromSettings()
 
   IpcHandler {
-    target: "kidtimer"
+    target: "io.github.adam-lagerhausen.kidtimer"
     function open(): void { root.open() }
     function close(): void { root.close() }
     function show(): void { root.open() }
@@ -679,10 +679,12 @@ BarWidget {
     onStarted: {
       var job = root.httpJob || {}
       write(String(job.token || "") + "\n" + String(job.body || ""))
+      stdinEnabled = false
     }
     onExited: {
       var job = root.httpJob
       root.httpJob = null
+      stdinEnabled = true
       var parsed = root.splitHTTP(root.httpBuf)
       root.httpBuf = ""
       if (job && job.cb) job.cb(parsed.status, parsed.body)
@@ -718,7 +720,9 @@ BarWidget {
     onStarted: {
       write(prefsWrite.payload || "{}")
       prefsWrite.payload = ""
+      stdinEnabled = false
     }
+    onExited: stdinEnabled = true
   }
 
   Process {
@@ -808,8 +812,12 @@ BarWidget {
     onStarted: {
       write(secret + "\n")
       secret = ""
+      stdinEnabled = false
     }
-    onExited: pinStat.running = true
+    onExited: {
+      stdinEnabled = true
+      pinStat.running = true
+    }
   }
 
   Process {

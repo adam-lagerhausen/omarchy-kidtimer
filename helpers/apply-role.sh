@@ -19,8 +19,16 @@ rm -f -- "$share/setup-error"
 fail() {
   echo "$1" >&2
   umask 077
-  printf '%s\n' "$1" >"$share/setup-error"
-  /usr/bin/chmod 600 -- "$share/setup-error" 2>/dev/null || true
+  local t
+  t=$(/usr/bin/mktemp -p "$share" .setup-error.XXXXXXXXXX) || exit 1
+  if ! printf '%s\n' "$1" >"$t"; then
+    rm -f -- "$t"
+    exit 1
+  fi
+  if ! /usr/bin/mv -f -T -- "$t" "$share/setup-error"; then
+    rm -f -- "$t"
+    exit 1
+  fi
   exit 1
 }
 
@@ -171,21 +179,16 @@ if [[ $role == parent ]]; then
 fi
 
 echo "Kidtimer needs your password to run the timer on this computer."
-trap 'fail "Could not set up this computer."' ERR
+trap 'fail "Could not set up this computer."' ERR INT HUP TERM
+# shellcheck source=install-lib.sh
+. "$(cd "$(dirname -- "$0")" && pwd)/install-lib.sh"
 userbin=${HOME}/.local/bin/kidtimer
 need_bin "$userbin"
 "$userbin" setup stop-user-bank || true
 
-stage=$(/usr/bin/mktemp -d)
 src=$here
 if [[ -n ${PINNED_TREE:-} && -f $PINNED_TREE/packaging/config.kid.toml ]]; then
   src=$PINNED_TREE
 fi
-copy_plugin_tree "$src" "$stage"
-/usr/bin/sudo /usr/bin/install -o root -g root -m 0755 -- "$userbin" /usr/local/bin/kidtimer
-/usr/bin/sudo /usr/bin/rm -rf -- /usr/local/share/kidtimer
-/usr/bin/sudo /usr/bin/mkdir -p -- /usr/local/share/kidtimer
-/usr/bin/sudo /usr/bin/cp -a -- "$stage"/. /usr/local/share/kidtimer/
-/usr/bin/sudo /usr/bin/chown -R root:root -- /usr/local/share/kidtimer
-/usr/bin/rm -rf -- "$stage" "${PINNED_TREE:-}"
-/usr/bin/sudo /usr/local/bin/kidtimer setup kid -repo /usr/local/share/kidtimer
+kidtimer_run_privileged_install "$src" "$userbin"
+/usr/bin/rm -rf -- "${PINNED_TREE:-}"

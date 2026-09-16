@@ -42,9 +42,11 @@ On yours, the tape waits until their computer shows up. Left-click the chip to o
 
 Set a 4-digit PIN next. Until one exists, time still counts but nothing covers their screen. The Lock square does nothing.
 
-If you picked parent by mistake, open the chip and pick the kid's computer. It asks for the password again. A kid computer cannot switch to parent. Uninstall Kidtimer first, then pick again.
+If you picked parent by mistake, uninstall Kidtimer first, then pick the kid's computer. A kid computer cannot switch to parent.
 
-To update later: `omarchy plugin update kidtimer`. Kid computers you already claimed stay claimed, including if you came from Allowance.
+To update later: `omarchy plugin update io.github.adam-lagerhausen.kidtimer`. Kid computers you already claimed stay claimed, including if you came from Allowance.
+
+If you installed when the id was `kidtimer`, paste the install command again. Do not uninstall. Kidtimer moves the chip to the new id and removes the old plugin folder.
 
 ## How it works
 
@@ -76,7 +78,7 @@ It sits over a session that is still running. You are not looking at the Omarchy
 
 ### Asking for more
 
-They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay and pick minutes with −10 / +10. They can ask during bedtime and a parent lock. Approve during the day adds the minutes they asked for. Approve during bedtime sets the timer to those minutes and lifts the bedtime overlay until they run out, then bedtime comes back. It does not lift a parent lock. A parent lock still needs Unlock or the parent PIN.
+They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay and pick minutes with −10 / +10. They can ask during bedtime and a parent lock. Approve during the day adds the minutes they asked for. Approve during bedtime sets the timer to those minutes and lifts the bedtime overlay until they run out, then bedtime comes back. Approve during a parent lock unlocks them and adds the minutes they asked for.
 
 ![Pending asks](docs/screenshots/ask.png)
 
@@ -169,7 +171,7 @@ Away from home the kid computer keeps counting, and the overlay still works. You
 On each computer:
 
 ```
-omarchy plugin remove kidtimer
+omarchy plugin remove io.github.adam-lagerhausen.kidtimer
 ```
 
 On a kid computer, also:

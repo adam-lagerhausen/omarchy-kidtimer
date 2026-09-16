@@ -70,19 +70,9 @@ if [ "$role" = "parent" ]; then
 	exit 0
 fi
 
-stage=$(mktemp -d)
-trap 'rm -rf -- "$stage"' EXIT
-mkdir -p "$stage"
-cp -a "$repo/packaging" "$stage/"
-cp -a "$repo/manifest.json" "$repo/BarWidget.qml" "$repo/Overlay.qml" "$stage/"
-cp -a "$bin" "$stage/kidtimer"
-chmod 755 "$stage/kidtimer"
-sudo install -o root -g root -m 0755 "$stage/kidtimer" /usr/local/bin/kidtimer
-sudo rm -rf /usr/local/share/kidtimer
-sudo mkdir -p /usr/local/share/kidtimer
-sudo cp -a "$stage"/. /usr/local/share/kidtimer/
-sudo chown -R root:root /usr/local/share/kidtimer
-sudo /usr/local/bin/kidtimer setup kid -repo /usr/local/share/kidtimer
+# shellcheck source=../helpers/install-lib.sh
+. "$repo/helpers/install-lib.sh"
+kidtimer_run_privileged_install "$repo" "$bin"
 
 echo
 echo "Done. If the bar does not update: omarchy restart shell"

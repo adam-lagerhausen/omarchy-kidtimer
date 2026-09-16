@@ -28,6 +28,7 @@ func runParent(args []string) error {
 	if err != nil {
 		return err
 	}
+	migrateLivePlugin(dir)
 	if _, err := ensureHousehold(dir); err != nil {
 		return err
 	}

@@ -4,8 +4,8 @@ import qs.Ui
 
 Panel {
   id: root
-  moduleName: "kidtimer"
-  ipcTarget: "kidtimer"
+  moduleName: "io.github.adam-lagerhausen.kidtimer"
+  ipcTarget: "io.github.adam-lagerhausen.kidtimer"
   manageIpc: false
 
   property var anchorItem: null
@@ -40,8 +40,8 @@ Panel {
   }
 
   function close() {
-    setCenterHoverRevealSuppressed(false)
     root.controller.hide()
+    setCenterHoverRevealSuppressed(false)
   }
 
   function toggle() {
@@ -56,8 +56,8 @@ Panel {
   }
 
   function setCenterHoverRevealSuppressed(value) {
-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
-      root.bar.centerHoverRevealSuppressed = value
+    if (root.bar && typeof root.bar.setCenterHoverRevealSuppressed === "function")
+      root.bar.setCenterHoverRevealSuppressed(value)
   }
 
   function setPage(id) {

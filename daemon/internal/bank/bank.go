@@ -853,6 +853,9 @@ func (b *Bank) decideLocked(actor *Token, askID, decision string) (*Grant, *Ask,
 			return nil, nil, err
 		}
 		ask.Status = AskApproved
+		if err := b.clearParentLockLocked(); err != nil {
+			return nil, nil, err
+		}
 		return g, &ask, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: decision must be approve or deny", ErrInvalid)

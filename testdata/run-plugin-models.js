@@ -201,6 +201,15 @@ assertEqual(claimedTape.ours, false, "claimed-only is not ours")
 assertEqual(claimedTape.showLock, false, "claimed-only hides lock")
 assertEqual(claimedTape.kid.face.caption, "Already claimed", "claimed caption")
 assertEqual(claimedTape.kids.length, 1, "claimed stays in picker")
+assertEqual(claimedTape.bellCount, 0, "claimed-only has no asks")
+const claimedWithOurs = parent.projectTape([
+  { name: "Ada", claimed: false, reachable: true, status: {}, asks: [{ id: "a1", seconds: 600 }] },
+  { name: "Max", claimed: true, reachable: true, status: {} }
+], 1, parent.chromeHome(), null, { pinSet: true })
+assertEqual(claimedWithOurs.ours, false, "claimed selected is not ours")
+assertEqual(claimedWithOurs.showLock, false, "claimed selected hides lock")
+assertEqual(claimedWithOurs.bellCount, 1, "claimed select keeps household badge")
+assertEqual(claimedWithOurs.asks[0].text, "Ada asked for 10 more minutes", "claimed select keeps household asks")
 const pickClaimed = parent.reduceChrome(claimedTape.chrome, { kind: "pick" }, claimedTape)
 assertEqual(pickClaimed.chrome.picker, true, "claimed picker opens")
 const selClaimed = parent.reduceChrome(pickClaimed.chrome, { kind: "select", kidIndex: 0 }, claimedTape)
@@ -228,6 +237,12 @@ assertFace({ reachable: false, status: { bedtime_active: true, parent_locked: tr
 assertFace({ error: true, reachable: false, status: { bedtime_active: true, parent_locked: true, focused_app: "minecraft" } }, "error", "Error", "error")
 assertFace({ reachable: true, status: { bedtime_active: true, parent_locked: true, focused_app: "minecraft" } }, "locked", "Locked", "locked beats bedtime")
 assertFace({ reachable: true, status: { bedtime_active: true, focused_app: "minecraft" } }, "bedtime", "Bedtime", "bedtime")
+assertFace({ reachable: true, status: { bedtime_active: true, bedtime_hold: true, focused_app: "minecraft" } }, "active", "Active · minecraft", "stay-up is active")
+assertFace({ reachable: true, status: { bedtime_active: true, bedtime_hold: true, parent_locked: true, focused_app: "minecraft" } }, "locked", "Locked", "lock beats stay-up")
+assertEqual(parent.grantAllowed({ claimed: false, status: { parent_locked: true } }), false, "no grant while locked")
+assertEqual(parent.grantAllowed({ claimed: false, status: { parent_locked: false } }), true, "grant when unlocked")
+assertEqual(parent.grantAllowed({ claimed: true, status: { parent_locked: false } }), false, "no grant claimed")
+assertEqual(parent.grantAllowed(null), false, "no grant missing kid")
 assertFace({ reachable: true, status: { parent_locked: true, focused_app: "minecraft" } }, "locked", "Locked", "locked")
 assertFace({ reachable: true, status: { focused_app: "minecraft" } }, "active", "Active · minecraft", "active app")
 assertEqual(parent.hostFace({ reachable: true, status: { focused_app: "minecraft" } }).doing, "minecraft", "doing app")
@@ -244,12 +259,13 @@ const errKid = parent.projectKid({
 }, 0, new Date())
 assertEqual(errKid.face.kind, "error", "projectKid error kind")
 assertEqual(errKid.face.caption, "Error", "projectKid error cap")
-assertEqual(errKid.pickerLine.indexOf("Error") >= 0, true, "picker status")
+assertEqual(errKid.pickerLine, "○ ADA  Error", "picker is dot, name, status")
 
 const home = parent.fixtureTape("ada", parent.chromeHome())
 assertEqual(home.theme, undefined, "tape has no theme")
 assertEqual(home.kid.nameUp, "ADA", "fixture ada")
 assertEqual(home.kid.face.caption, "Active · minecraft", "ada active minecraft")
+assertEqual(home.kid.pickerLine, "● ADA  Active · minecraft", "home picker is dot, name, status")
 assertEqual(home.kid.fun.usedLabel, "44m", "ada used")
 assertEqual(home.kid.fun.leftLabel, "16m LEFT", "ada left")
 assertEqual(home.kid.fun.empty, false, "ada not empty")
@@ -283,6 +299,11 @@ assertEqual(spentOnly.kid.fun.usedLabel, "6m", "spent used")
 assertEqual(spentOnly.track.blocks.length, 1, "spent becomes a block")
 assertEqual(spentOnly.track.log[0].dur, "6m", "spent log dur")
 assertEqual(spentOnly.track.log[0].name, "COMPUTER", "spent log name")
+assertEqual(parent.askCardText("Ada", 1800), "Ada asked for 30 more minutes", "ask minutes copy")
+assertEqual(parent.askCardText("Ada", 1800, true), "Ada asked to unlock", "locked ask copy")
+assertEqual(parent.notifySummary({ seconds: 1800 }, null, { parentLocked: true }), "unlock", "locked notify")
+assertEqual(parent.notifySummary({ seconds: 1800 }, null, { parent_locked: true }), "unlock", "locked notify wire")
+assertEqual(parent.notifySummary({ seconds: 1800 }, null, {}), "+30m", "unlocked notify")
 assertEqual(home.asks[0].text, "Ada asked for 10 more minutes", "ask copy")
 
 const bea = parent.fixtureTape("bea", parent.chromeHome())
@@ -292,11 +313,27 @@ assertEqual(bea.kid.fun.usedLabel, "20m", "bea used")
 assertEqual(bea.kid.fun.leftLabel, "40m LEFT", "bea left")
 assertEqual(bea.kid.policy.bedLabel, "8:00 PM", "bea bed")
 
+const stayUpTape = parent.projectTape([{
+  name: "Ada",
+  reachable: true,
+  status: parent.parseStatus({
+    bedtime_active: true,
+    bedtime_hold: true,
+    focused_app: "minecraft",
+    groups: { fun: 1800 },
+    spent: { fun: 600 }
+  })
+}], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(stayUpTape.kid.face.kind, "active", "stay-up tape kind")
+assertEqual(stayUpTape.kid.face.caption, "Active · minecraft", "stay-up tape caption")
+assertEqual(stayUpTape.kid.fun.leftLabel, "30m LEFT", "stay-up tape remaining")
+
 const locked = parent.fixtureTape("ada", parent.chromeHome(), { locked: true })
 assertEqual(locked.showStamp, true, "locked stamp")
 assertEqual(locked.kid.face.coral, true, "locked coral")
 assertEqual(locked.kid.face.caption, "Locked", "locked caption")
 assertEqual(locked.lockLabel, "Unlock Ada", "unlock ada")
+assertEqual(locked.asks[0].text, "Ada asked to unlock", "locked tape ask")
 
 const settings = parent.fixtureTape("ada", parent.chromeSettings())
 assertEqual(settings.showLock, false, "settings hide lock")
@@ -422,6 +459,27 @@ assertEqual(kid.barLabel({
   parent_locked: true,
   focused_app: "minecraft"
 }), "bedtime", "bedtime wins lock")
+assertEqual(kid.stayingUp({ bedtime_active: true, bedtime_hold: true }), true, "stay-up")
+assertEqual(kid.stayingUp({ bedtime_active: true, bedtime_hold: true, parent_locked: true }), false, "lock is not stay-up")
+assertEqual(kid.stayingUp({ bedtime_active: true }), false, "plain bedtime is not stay-up")
+assertEqual(kid.panelKind({ bedtime_active: true, bedtime_hold: true }), "home", "stay-up panel is home")
+assertEqual(kid.panelCaption({ bedtime_active: true, bedtime_hold: true }), "", "stay-up has no bedtime caption")
+assertEqual(kid.barLabel({
+  bedtime_active: true,
+  bedtime_hold: true,
+  groups: { fun: 1800 }
+}), "30m left", "stay-up chip shows remaining")
+assertEqual(kid.barUrgent({
+  bedtime_active: true,
+  bedtime_hold: true,
+  groups: { fun: 1800 }
+}), false, "stay-up with time is not urgent")
+assertEqual(kid.barUrgent({
+  bedtime_active: true,
+  bedtime_hold: true,
+  groups: { fun: 600 }
+}), true, "stay-up low remaining is urgent")
+assertEqual(kid.panelKind({ bedtime_active: true, bedtime_hold: true, parent_locked: true }), "bedtime", "bedtime wins a locked stay-up")
 assertEqual(kid.barLabel({ focused_group: null, groups: { fun: 0 } }), "0m left", "empty idle")
 assertEqual(kid.panelCaption({ bedtime_active: true }), "bedtime", "caption bedtime")
 assertEqual(kid.panelCaption({ parent_locked: true }), "locked", "caption locked")
@@ -450,6 +508,10 @@ assertEqual(kid.askBlocked({}), false, "ask open")
 assertEqual(kid.overlayAskWaiting({ pending_ask_count: 1 }), true, "overlay waiting")
 assertEqual(kid.overlayAskWaiting({ pending_ask_count: 0 }), false, "overlay not waiting")
 assertEqual(kid.overlayAskWaiting({}), false, "overlay waiting missing")
+assertEqual(kid.askWaiting({ pending_ask_count: 1 }, false), true, "chip waits on overlay ask")
+assertEqual(kid.askWaiting({ pending_ask_count: 0 }, true), true, "chip waits on local ask")
+assertEqual(kid.askWaiting({ pending_ask_count: 0 }, false), false, "chip ask open")
+assertEqual(kid.askWaiting({}, false), false, "chip ask open missing")
 assertEqual(kid.clampOverlayAskMinutes(0), 10, "overlay ask clamp min")
 assertEqual(kid.clampOverlayAskMinutes(200), 120, "overlay ask clamp max")
 assertEqual(kid.nudgeOverlayAskMinutes(30, -10), 20, "overlay ask nudge down")
@@ -465,9 +527,38 @@ assertEqual(kid.bedtimeEnd({ bedtime_end: "07:00" }), "7:00 AM", "bedtime end")
 assertEqual(kid.bedtimeEnd({ bedtime_end: "07:00", hour12: false }), "07:00", "bedtime end 24h")
 assertEqual(kid.parseStatus({}).hour12, true, "hour12 default")
 assertEqual(kid.parseStatus({ hour12: false }).hour12, false, "hour12 off")
-assertEqual(kid.bedtimeBanner({ bedtime_in: 480 }), "bedtime in 8 min", "bedtime banner")
-assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_active: true }), "", "banner off at bedtime")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_start: "21:00" }), "bedtime starts at 9:00 PM", "bedtime banner")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_start: "21:00", hour12: false }), "bedtime starts at 21:00", "bedtime banner 24h")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 900, bedtime_start: "21:00" }), "bedtime starts at 9:00 PM", "banner at 15 min")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 901, bedtime_start: "21:00" }), "", "banner not all day")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 6 * 3600, bedtime_start: "21:00" }), "", "banner off in the afternoon")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480, bedtime_active: true, bedtime_start: "21:00" }), "", "banner off at bedtime")
 assertEqual(kid.bedtimeBanner({}), "", "banner missing")
+assertEqual(kid.bedtimeBanner({ bedtime_in: 480 }), "", "banner needs start clock")
+assertEqual(kid.bankSetting({ askToken: "bank" }, { askToken: "settings" }, "askToken", ""), "bank", "bank wins over plugin settings")
+assertEqual(kid.bankSetting({ askToken: "" }, { askToken: "settings" }, "askToken", ""), "settings", "settings when bank empty")
+assertEqual(kid.bankSetting({}, {}, "askToken", ""), "", "empty token")
+assertEqual(kid.bankSetting({ askToken: "from-bar" }, {}, "askToken", ""), "from-bar", "kid-bar token")
+const householdAsk = parent.parseHousehold({
+  kids: [{ id: "m1", name: "Ada", asks: [{ id: "a1", group: "fun", seconds: 1800, reason: "more time", status: "pending" }] }]
+})
+assertEqual(parent.parseAsks(householdAsk[0].asks)[0].seconds, 1800, "household asks keep seconds")
+assertEqual(parent.projectTape([{
+  name: "Ada",
+  id: "m1",
+  claimed: false,
+  reachable: true,
+  status: {},
+  asks: parent.parseAsks(householdAsk[0].asks)
+}], 0, parent.chromeHome(), null, { pinSet: true }).bellCount, 1, "household ask reaches parent tape")
+assertEqual(parent.projectTape([{
+  name: "Ada",
+  id: "m1",
+  claimed: false,
+  reachable: true,
+  status: {},
+  asks: parent.parseAsks(householdAsk[0].asks)
+}], 0, parent.chromeHome(), null, { pinSet: true }).asks[0].text, "Ada asked for 30 more minutes", "household ask card")
 assertEqual(kid.barUrgent({ parent_locked: true }), true, "urgent locked")
 assertEqual(kid.barUrgent({ bedtime_active: true }), true, "urgent bedtime")
 assertEqual(kid.barUrgent({
@@ -534,22 +625,23 @@ assertEqual(kid.crossedWarning(900, 899), 0, "already at 15")
 assertEqual(kid.crossedWarning(901, 0), 0, "zero is the freeze")
 assertEqual(kid.crossedWarning(901, 50), 60, "lag fires lowest")
 assertEqual(kid.warningCopy("fun", 900), "15 min left", "remaining copy")
-assertEqual(kid.warningCopy("bedtime", 60), "bedtime in 1 min", "bedtime copy")
+assertEqual(kid.warningCopy("bedtime", 60, { bedtime_start: "21:00" }), "bedtime starts at 9:00 PM", "bedtime copy")
 
 const mcStatus = (path, bed) => ({
   focused_group: "minecraft",
   path_remaining: { minecraft: path, fun: 0 },
   bedtime_in: bed,
+  bedtime_start: "21:00",
   bedtime_active: false
 })
 let warned = kid.takeWarnings(kid.emptyWarnState(), mcStatus(901, 901))
 assertEqual(warned.notices, [], "seed silent")
 warned = kid.takeWarnings(warned.state, mcStatus(900, 900))
-assertEqual(warned.notices, ["15 min left", "bedtime in 15 min"], "15 min both")
+assertEqual(warned.notices, ["15 min left", "bedtime starts at 9:00 PM"], "15 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(300, 300))
-assertEqual(warned.notices, ["5 min left", "bedtime in 5 min"], "5 min both")
+assertEqual(warned.notices, ["5 min left", "bedtime starts at 9:00 PM"], "5 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(60, 60))
-assertEqual(warned.notices, ["1 min left", "bedtime in 1 min"], "1 min both")
+assertEqual(warned.notices, ["1 min left", "bedtime starts at 9:00 PM"], "1 min both")
 warned = kid.takeWarnings(warned.state, mcStatus(59, 59))
 assertEqual(warned.notices, [], "no repeat")
 warned = kid.takeWarnings(warned.state, {
@@ -588,6 +680,9 @@ assertEqual(kid.pinFailLabel(403, '{"error":"forbidden: invalid pin"}'), "wrong 
 assertEqual(kid.pinFailLabel(403, '{"error":"forbidden: too many pin attempts"}'), "wait 30 seconds", "cooldown copy")
 assertEqual(kid.pinFailLabel(429, "too many pin attempts"), "wait 30 seconds", "cooldown raw")
 assertEqual(kid.pinFailLabel(500, "nope"), "wrong pin", "other pin fail")
+assertEqual(kid.overlayPinAdvance("12"), { ok: false, step: "pin", chosenMinutes: 30 }, "short pin stays")
+assertEqual(kid.overlayPinAdvance("12a4"), { ok: false, step: "pin", chosenMinutes: 30 }, "bad pin stays")
+assertEqual(kid.overlayPinAdvance("1234"), { ok: true, step: "minutes", chosenMinutes: 30 }, "ok pin continues")
 assertEqual(kid.overlayFace({ overlay: false, parent_locked: true }), "", "no overlay")
 assertEqual(kid.overlayFace({ overlay: true, parent_locked: true }), "locked", "overlay locked")
 assertEqual(kid.overlayFace({ overlay: true, bedtime_active: true }), "bedtime", "overlay bedtime")
@@ -600,6 +695,9 @@ assertEqual(kid.pinGrantPayload("1234", 600), { pin: "1234", seconds: 600 }, "pi
 assertEqual(kid.kidSettingsFromShell({
   bar: { layout: { right: [{ id: "kidtimer", url: "http://x:8742/", askToken: "a", readToken: "r" }] } }
 }).url, "http://x:8742", "shell kid url")
+assertEqual(kid.kidSettingsFromShell({
+  bar: { layout: { right: [{ id: "io.github.adam-lagerhausen.kidtimer", url: "http://y:8742/", askToken: "a", readToken: "r" }] } }
+}).url, "http://y:8742", "namespaced shell kid url")
 assertEqual(kid.parseStatus({ parent_pin_set: true, overlay: true }).parent_pin_set, true, "parse pin set")
 assertEqual(home.lockArmed, true, "fixture has household pin")
 assertEqual(parent.fixtureTape("ada", parent.chromeHome(), { pinSet: true }).lockArmed, true, "household pin arms lock")
@@ -609,7 +707,7 @@ assertEqual(parent.pinBoxText("42", 0), "4", "pin box 0")
 assertEqual(parent.pinBoxText("42", 1), "2", "pin box 1")
 assertEqual(parent.pinBoxText("42", 2), "", "pin box empty")
 assertEqual(parent.parentPinLabel(), "Parent Pin", "parent pin label")
-assertEqual(parent.parentPinWhy(), "Required for the controls. Use it to make changes on the kids computer.", "parent pin why")
+assertEqual(parent.parentPinWhy(), "Required for the controls. Use it to make changes on the kid's computer.", "parent pin why")
 assertEqual(parent.pinSlotKind("", 0, 0, false), "caret", "empty caret")
 assertEqual(parent.pinSlotKind("", 1, 0, false), "empty", "empty other")
 assertEqual(parent.pinSlotKind("25", 0, 2, false), "digit", "typed digit")
