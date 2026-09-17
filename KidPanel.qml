@@ -20,6 +20,7 @@ Item {
   property string pinDigits: ""
   property bool pinWrong: false
   property string pinFailText: "wrong pin"
+  property bool pinBusy: false
   property bool askWrong: false
   property string askFailText: "try again"
   property int lastPending: -1
@@ -73,6 +74,7 @@ Item {
       root.pendingAskId = ""
       root.pinOpen = false
       root.pinDigits = ""
+      root.pinBusy = false
     }
     root.lastPending = pending
     if (Model.askBlocked(statusJson)) root.askGroup = ""
@@ -121,12 +123,17 @@ Item {
 
   function submitPin() {
     if (!Model.validPin(root.pinDigits) || root.pendingAskId === "") return
+    if (!Model.overlayGiveTimeOn(root.pinBusy)) return
     var body = Model.pinApprovePayload(root.pinDigits, root.pendingAskId)
     if (!hostWidget || typeof hostWidget.kidPost !== "function") return
+    root.pinBusy = true
     hostWidget.kidPost("/v1/pin/approve", body, String(setting("askToken", "")), function(status, text) {
+      root.pinBusy = false
       if (status !== 200) {
-        root.pinWrong = true
-        root.pinFailText = Model.pinFailLabel(status, text)
+        var next = Model.pinFailState(status, text)
+        root.pinDigits = next.pinDigits
+        root.pinWrong = next.pinWrong
+        root.pinFailText = next.pinFailText
         return
       }
       root.pinOpen = false
@@ -347,18 +354,21 @@ Item {
             text: "Cancel"
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
+            enabled: Model.overlayGiveTimeOn(root.pinBusy)
             onClicked: {
+              if (!Model.overlayGiveTimeOn(root.pinBusy)) return
               root.pinOpen = false
               root.pinDigits = ""
               root.pinWrong = false
               root.pinFailText = "wrong pin"
+              root.pinBusy = false
             }
           }
           LookBtn {
             anchors.right: parent.right
             text: "OK"
             primary: true
-            enabled: Model.validPin(root.pinDigits)
+            enabled: Model.validPin(root.pinDigits) && Model.overlayGiveTimeOn(root.pinBusy)
             accent: root.accent
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
@@ -521,6 +531,7 @@ Item {
           root.pinWrong = false
           root.pinFailText = "wrong pin"
           root.pinDigits = ""
+          root.pinBusy = false
         }
       }
     }

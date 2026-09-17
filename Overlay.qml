@@ -20,6 +20,7 @@ Item {
   property bool submapOn: false
   property bool pinWrong: false
   property string pinFailText: "wrong pin"
+  property bool pinBusy: false
   property bool askWrong: false
   property string askFailText: "try again"
   property bool askQueued: false
@@ -73,6 +74,7 @@ Item {
         pinDigits = ""
         pinWrong = false
         pinFailText = "wrong pin"
+        pinBusy = false
         askQueued = false
         askWrong = false
         askFailText = "try again"
@@ -93,14 +95,20 @@ Item {
 
   function grant() {
     if (!Model.validPin(pinDigits)) return
+    if (!Model.overlayGiveTimeOn(root.pinBusy)) return
+    root.pinBusy = true
     var body = Model.pinGrantPayload(pinDigits, chosenMinutes * 60)
     overlayHTTP("POST", bankUrl() + "/v1/pin/grant", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
       if (status !== 200) {
-        pinWrong = true
-        pinFailText = Model.pinFailLabel(status, text)
-        step = "pin"
+        var next = Model.overlayPinFail(status, text)
+        root.pinBusy = next.pinBusy
+        root.pinDigits = next.pinDigits
+        root.pinWrong = next.pinWrong
+        root.pinFailText = next.pinFailText
+        root.step = next.step
         return
       }
+      root.pinBusy = false
       pinDigits = ""
       pinWrong = false
       pinFailText = "wrong pin"
@@ -110,11 +118,13 @@ Item {
   }
 
   function cancelPin() {
+    if (!Model.overlayGiveTimeOn(root.pinBusy)) return
     var next = Model.overlayCancel()
     root.step = next.step
     root.pinDigits = next.pinDigits
     root.pinWrong = next.pinWrong
     root.chosenMinutes = next.chosenMinutes
+    root.pinBusy = false
   }
 
   function submitAsk() {
@@ -538,7 +548,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
-            opacity: Model.overlayPinMinusOn(root.chosenMinutes) ? 1 : 0.55
+            opacity: (Model.overlayPinMinusOn(root.chosenMinutes) && Model.overlayGiveTimeOn(root.pinBusy)) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -549,7 +559,7 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
-              enabled: Model.overlayPinMinusOn(root.chosenMinutes)
+              enabled: Model.overlayPinMinusOn(root.chosenMinutes) && Model.overlayGiveTimeOn(root.pinBusy)
               cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, -5)
             }
@@ -581,7 +591,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
-            opacity: Model.overlayPinPlusOn(root.chosenMinutes) ? 1 : 0.55
+            opacity: (Model.overlayPinPlusOn(root.chosenMinutes) && Model.overlayGiveTimeOn(root.pinBusy)) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -592,7 +602,7 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
-              enabled: Model.overlayPinPlusOn(root.chosenMinutes)
+              enabled: Model.overlayPinPlusOn(root.chosenMinutes) && Model.overlayGiveTimeOn(root.pinBusy)
               cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: root.chosenMinutes = Model.nudgeAskMinutes(root.chosenMinutes, 5)
             }
@@ -610,6 +620,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
+            opacity: Model.overlayGiveTimeOn(root.pinBusy) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -621,7 +632,8 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
+              enabled: Model.overlayGiveTimeOn(root.pinBusy)
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: root.cancelPin()
             }
           }
@@ -632,6 +644,7 @@ Item {
             color: "transparent"
             border.width: 1
             border.color: root.ink
+            opacity: Model.overlayGiveTimeOn(root.pinBusy) ? 1 : 0.55
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent
@@ -643,7 +656,8 @@ Item {
             }
             MouseArea {
               anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
+              enabled: Model.overlayGiveTimeOn(root.pinBusy)
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: root.grant()
             }
           }
