@@ -405,8 +405,31 @@ function pinFailLabel(status, text) {
   } catch (e) {
     raw = String(text || "")
   }
-  if (String(raw).toLowerCase().indexOf("too many") >= 0) return "wait 30 seconds"
-  return "wrong pin"
+  var msg = String(raw).toLowerCase()
+  if (msg.indexOf("too many") >= 0) return "wait 30 seconds"
+  if (msg.indexOf("invalid pin") >= 0) return "wrong pin"
+  var code = Number(status)
+  if (code === 401 || code === 403) return "wrong pin"
+  return "try again"
+}
+
+function pinFailState(status, text) {
+  return {
+    pinDigits: "",
+    pinWrong: true,
+    pinFailText: pinFailLabel(status, text),
+    pinBusy: false
+  }
+}
+
+function overlayPinFail(status, text) {
+  var next = pinFailState(status, text)
+  next.step = "pin"
+  return next
+}
+
+function overlayGiveTimeOn(busy) {
+  return !busy
 }
 
 function overlayPinAdvance(digits) {

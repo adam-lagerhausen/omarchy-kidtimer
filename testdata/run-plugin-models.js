@@ -761,7 +761,23 @@ assertEqual(kid.validPin("123"), false, "pin short")
 assertEqual(kid.pinFailLabel(403, '{"error":"forbidden: invalid pin"}'), "wrong pin", "wrong pin copy")
 assertEqual(kid.pinFailLabel(403, '{"error":"forbidden: too many pin attempts"}'), "wait 30 seconds", "cooldown copy")
 assertEqual(kid.pinFailLabel(429, "too many pin attempts"), "wait 30 seconds", "cooldown raw")
-assertEqual(kid.pinFailLabel(500, "nope"), "wrong pin", "other pin fail")
+assertEqual(kid.pinFailLabel(500, "nope"), "try again", "other pin fail")
+assertEqual(kid.pinFailLabel(0, ""), "try again", "missing pin reply")
+assertEqual(kid.pinFailState(500, "nope"), {
+  pinDigits: "",
+  pinWrong: true,
+  pinFailText: "try again",
+  pinBusy: false
+}, "pin fail clears digits")
+assertEqual(kid.overlayPinFail(403, '{"error":"forbidden: invalid pin"}'), {
+  pinDigits: "",
+  pinWrong: true,
+  pinFailText: "wrong pin",
+  pinBusy: false,
+  step: "pin"
+}, "overlay pin fail goes back to pin")
+assertEqual(kid.overlayGiveTimeOn(false), true, "give time on")
+assertEqual(kid.overlayGiveTimeOn(true), false, "give time off while sending")
 assertEqual(kid.overlayPinAdvance("12"), { ok: false, step: "pin", chosenMinutes: 30 }, "short pin stays")
 assertEqual(kid.overlayPinAdvance("12a4"), { ok: false, step: "pin", chosenMinutes: 30 }, "bad pin stays")
 assertEqual(kid.overlayPinAdvance("1234"), { ok: true, step: "minutes", chosenMinutes: 30 }, "ok pin continues")
