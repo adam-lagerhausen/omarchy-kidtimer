@@ -329,6 +329,76 @@ function askCardText(kidName, seconds, locked) {
   return kidName + " asked for " + m + " more minutes"
 }
 
+function pingCard(ask, kid, kidIndex) {
+  if (!ask) return null
+  var id = askId(ask)
+  if (!id) return null
+  var name = hostSafe((kid && kid.name) || "kid", 40)
+  var locked = !!snapshotStatus(kid).parentLocked
+  var seconds = askSeconds(ask)
+  var text = askCardText(name, seconds, locked)
+  var index = kidIndex
+  if (index === undefined || index === null) {
+    if (ask.kidIndex !== undefined && ask.kidIndex !== null) index = ask.kidIndex
+  }
+  return {
+    id: id,
+    kidIndex: index,
+    kidName: name,
+    seconds: seconds,
+    head: name,
+    body: text,
+    text: text
+  }
+}
+
+function pingKey(card) {
+  if (!card || !card.id) return ""
+  if (card.kidIndex === undefined || card.kidIndex === null) return String(card.id)
+  return String(card.kidIndex) + "/" + String(card.id)
+}
+
+function enqueuePing(queue, card) {
+  if (!card || !card.id) return queue || []
+  var out = (queue || []).slice()
+  var key = pingKey(card)
+  for (var i = 0; i < out.length; i++) {
+    if (pingKey(out[i]) === key) return out
+  }
+  out.push(card)
+  return out
+}
+
+function dismissPing(queue, card) {
+  var key = pingKey(card)
+  var list = queue || []
+  if (!key) return list.slice()
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    if (pingKey(list[i]) === key) continue
+    out.push(list[i])
+  }
+  return out
+}
+
+function prunePings(queue, snapshots) {
+  var pending = {}
+  var asks = householdAsks(snapshots)
+  for (var i = 0; i < asks.length; i++) pending[pingKey(asks[i])] = true
+  var out = []
+  var list = queue || []
+  for (var j = 0; j < list.length; j++) {
+    if (pending[pingKey(list[j])]) out.push(list[j])
+  }
+  return out
+}
+
+function pingDecide(card, decision) {
+  if (!card || !card.id) return null
+  if (decision !== "approve" && decision !== "deny") return null
+  return { id: card.id, kidIndex: card.kidIndex, decision: decision }
+}
+
 function lockLabel(name, locked) {
   return (locked ? "Unlock " : "Lock ") + (name || "kid")
 }
