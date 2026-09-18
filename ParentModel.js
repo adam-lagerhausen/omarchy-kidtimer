@@ -329,21 +329,18 @@ function askCardText(kidName, seconds, locked) {
   return kidName + " asked for " + m + " more minutes"
 }
 
-function pingCard(ask, kid, kidIndex) {
+function pingCard(ask, kid) {
   if (!ask) return null
   var id = askId(ask)
-  if (!id) return null
+  var kidId = (kid && kid.id) ? String(kid.id) : ""
+  if (!id || !kidId) return null
   var name = hostSafe((kid && kid.name) || "kid", 40)
   var locked = !!snapshotStatus(kid).parentLocked
   var seconds = askSeconds(ask)
   var text = askCardText(name, seconds, locked)
-  var index = kidIndex
-  if (index === undefined || index === null) {
-    if (ask.kidIndex !== undefined && ask.kidIndex !== null) index = ask.kidIndex
-  }
   return {
     id: id,
-    kidIndex: index,
+    kidId: kidId,
     kidName: name,
     seconds: seconds,
     head: name,
@@ -352,30 +349,24 @@ function pingCard(ask, kid, kidIndex) {
   }
 }
 
-function pingKey(card) {
-  if (!card || !card.id) return ""
-  if (card.kidIndex === undefined || card.kidIndex === null) return String(card.id)
-  return String(card.kidIndex) + "/" + String(card.id)
-}
-
 function enqueuePing(queue, card) {
   if (!card || !card.id) return queue || []
   var out = (queue || []).slice()
-  var key = pingKey(card)
+  var key = askId(card)
   for (var i = 0; i < out.length; i++) {
-    if (pingKey(out[i]) === key) return out
+    if (askId(out[i]) === key) return out
   }
   out.push(card)
   return out
 }
 
 function dismissPing(queue, card) {
-  var key = pingKey(card)
+  var key = askId(card)
   var list = queue || []
   if (!key) return list.slice()
   var out = []
   for (var i = 0; i < list.length; i++) {
-    if (pingKey(list[i]) === key) continue
+    if (askId(list[i]) === key) continue
     out.push(list[i])
   }
   return out
@@ -384,19 +375,29 @@ function dismissPing(queue, card) {
 function prunePings(queue, snapshots) {
   var pending = {}
   var asks = householdAsks(snapshots)
-  for (var i = 0; i < asks.length; i++) pending[pingKey(asks[i])] = true
+  for (var i = 0; i < asks.length; i++) pending[askId(asks[i])] = true
   var out = []
   var list = queue || []
   for (var j = 0; j < list.length; j++) {
-    if (pending[pingKey(list[j])]) out.push(list[j])
+    if (pending[askId(list[j])]) out.push(list[j])
   }
   return out
 }
 
 function pingDecide(card, decision) {
-  if (!card || !card.id) return null
+  if (!card || !card.id || !card.kidId) return null
   if (decision !== "approve" && decision !== "deny") return null
-  return { id: card.id, kidIndex: card.kidIndex, decision: decision }
+  return { id: card.id, kidId: card.kidId, decision: decision }
+}
+
+function snapshotById(snapshots, kidId) {
+  var id = String(kidId || "")
+  if (!id) return null
+  var list = snapshots || []
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && String(list[i].id || "") === id) return list[i]
+  }
+  return null
 }
 
 function lockLabel(name, locked) {

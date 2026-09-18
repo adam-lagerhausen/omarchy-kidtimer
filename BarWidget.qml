@@ -230,12 +230,12 @@ BarWidget {
     snapshots = next
     if (root.role === "parent") statusText = Model.householdBarLabel(next)
     syncPanel()
-    for (var a = 0; a < next.length; a++) noteHouseholdAsks(next[a], a)
+    for (var a = 0; a < next.length; a++) noteHouseholdAsks(next[a])
     pingQueue = Model.prunePings(pingQueue, next)
     root.pushHour12()
   }
 
-  function noteHouseholdAsks(row, kidIndex) {
+  function noteHouseholdAsks(row) {
     if (!row || row.claimed) return
     var key = row.id || row.name || ""
     if (!key) return
@@ -256,7 +256,7 @@ BarWidget {
     nextSeen[key] = Model.pendingIds(payload)
     seenAskIds = nextSeen
     for (var i = 0; i < fresh.length; i++) {
-      notifyAsk(Model.findAsk(payload, fresh[i]), row, kidIndex)
+      notifyAsk(Model.findAsk(payload, fresh[i]), row)
     }
   }
 
@@ -303,9 +303,9 @@ BarWidget {
     })
   }
 
-  function notifyAsk(ask, kid, kidIndex) {
+  function notifyAsk(ask, kid) {
     // Omarchy's notification card has no DENY / APPROVE. This ping is that card.
-    var card = Model.pingCard(ask, kid, kidIndex)
+    var card = Model.pingCard(ask, kid)
     if (!card) return
     pingQueue = Model.enqueuePing(pingQueue, card)
   }
@@ -313,8 +313,7 @@ BarWidget {
   function decidePing(card, decision) {
     var act = Model.pingDecide(card, decision)
     if (!act) return
-    pingQueue = Model.dismissPing(pingQueue, card)
-    decide(act.id, act.decision, act.kidIndex)
+    sendKid(Model.snapshotById(snapshots, act.kidId), "POST", "/v1/asks/" + act.id + "/decide", { decision: act.decision })
   }
 
   function deskSend(method, path, body, thenFn, idem) {

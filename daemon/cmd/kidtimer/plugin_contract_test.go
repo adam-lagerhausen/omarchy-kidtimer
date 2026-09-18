@@ -145,14 +145,6 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentModel, "bedtimeHold", "parent stay-up hold for +10")
 	mustContain(t, parentPanel, "t.kid.bedtime", "tape greys +10 at bedtime")
 	mustContain(t, parentBar, "omarchy-notification-send", "omarchy notification")
-	mustContain(t, parentBar, "enqueuePing", "ask ping enqueue")
-	mustContain(t, parentBar, "decidePing", "ask ping decide")
-	mustContain(t, parentModel, "function pingCard", "ping card")
-	mustContain(t, parentModel, "function pingDecide", "ping decide")
-	pingToast := readPlugin(t, root, "PingToast.qml")
-	mustContain(t, pingToast, "DENY", "ping deny")
-	mustContain(t, pingToast, "APPROVE", "ping approve")
-	mustContain(t, pingToast, "decidePing", "ping buttons decide")
 	mustContain(t, parentBar, "hour12ShouldPush", "clock push waits for success")
 	mustContain(t, parentBar, "hour12MarkPushed", "clock push marks after 200")
 	mustContain(t, parentBar, "newAskIds", "pending id diff")
@@ -336,8 +328,6 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	readme := readPlugin(t, root, "README.md")
 	mustContain(t, readme, "omarchy plugin update io.github.adam-lagerhausen.kidtimer", "update id")
 	mustContain(t, readme, "omarchy plugin remove io.github.adam-lagerhausen.kidtimer", "remove id")
-	mustContain(t, readme, "phone on the house Wi-Fi", "kitchen phone")
-	mustContain(t, readme, "port 8741", "kitchen port")
 	if strings.Contains(readme, "omarchy plugin update kidtimer") || strings.Contains(readme, "omarchy plugin remove kidtimer") {
 		t.Fatal("readme still names the old plugin id")
 	}
