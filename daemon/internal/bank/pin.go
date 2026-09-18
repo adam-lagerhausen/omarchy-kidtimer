@@ -93,11 +93,19 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 	return g, nil
 }
 
-
 func (b *Bank) OverlayActive() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.overlayActiveLocked()
+}
+
+func (b *Bank) SyncSaveCover() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.prepareLocked(); err != nil {
+		return err
+	}
+	return b.syncSaveCoverLocked()
 }
 
 func (b *Bank) overlayActiveLocked() bool {
@@ -117,6 +125,57 @@ func (b *Bank) overlayActiveLocked() bool {
 		}
 	}
 	return false
+}
+
+func (b *Bank) saveCoverEligibleLocked() bool {
+	if !b.overlayActiveLocked() {
+		return false
+	}
+	if b.cfg.RemoteLock && b.ov.parentLock {
+		return false
+	}
+	return true
+}
+
+func (b *Bank) syncSaveCoverLocked() error {
+	if !b.overlayActiveLocked() {
+		return b.clearSaveCoverLocked()
+	}
+	if !b.saveCoverEligibleLocked() {
+		return nil
+	}
+	if !b.ov.saveUntil.IsZero() {
+		return nil
+	}
+	until := b.now().Add(saveCoverDuration)
+	b.ov.saveUntil = until
+	return b.metaSet(metaSaveCoverUntil, until.UTC().Format(time.RFC3339))
+}
+
+func (b *Bank) clearSaveCoverLocked() error {
+	if b.ov.saveUntil.IsZero() {
+		return nil
+	}
+	b.ov.saveUntil = time.Time{}
+	return b.metaSet(metaSaveCoverUntil, "")
+}
+
+func (b *Bank) saveSecondsLocked() int {
+	if !b.saveCoverEligibleLocked() {
+		return 0
+	}
+	if b.ov.saveUntil.IsZero() {
+		return 0
+	}
+	d := b.ov.saveUntil.Sub(b.now())
+	if d <= 0 {
+		return 0
+	}
+	n := int((d + time.Second - 1) / time.Second)
+	if n > int(saveCoverDuration/time.Second) {
+		n = int(saveCoverDuration / time.Second)
+	}
+	return n
 }
 
 func (b *Bank) holdActiveLocked() bool {

@@ -1,6 +1,6 @@
 # Kidtimer
 
-Kidtimer puts a daily time limit and a bedtime on a kid's Omarchy computer. You get a control panel on yours. When time runs out, bedtime begins, or you hit Lock from your desk, a full-screen overlay covers their session. Super and Escape will not get them out.
+Kidtimer puts a daily time limit and a bedtime on a kid's Omarchy computer. You get a control panel on yours. When time runs out or bedtime begins, they get 60 seconds to save. Super still works. Dismiss hides the cover so they can save. At 0 the overlay slams and Super is blocked. Lock from your desk slams right away.
 
 This is unofficial and not affiliated with Omarchy.
 
@@ -66,7 +66,7 @@ The clock is already running: 1 hour Monday through Friday, 2 hours Saturday and
 
 ### When time runs out
 
-Time at zero, bedtime, and Lock from your desk all raise that overlay. It says 0m LEFT, bedtime, or locked.
+Time at zero and bedtime start with a 60-second save cover. It says save now. Super still works. Dismiss hides it so they can save. The minute still counts. At 0 the overlay slams: 0m LEFT or bedtime. Super and Escape will not get them out. Lock from your desk slams right away. It says locked.
 
 ![Time's up](docs/screenshots/overlay.png)
 

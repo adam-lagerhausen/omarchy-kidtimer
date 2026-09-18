@@ -144,6 +144,9 @@ func (e *Enforcer) Tick() error {
 	if e.SessionUID != nil {
 		_ = e.SessionUID()
 	}
+	if err := e.Bank.SyncSaveCover(); err != nil {
+		return err
+	}
 	if e.Bank.OverlayActive() {
 		e.Bank.SetFocus("", "")
 		return nil

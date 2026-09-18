@@ -432,6 +432,70 @@ func TestAnyWindowSpendsAndGrantKeepsSpent(t *testing.T) {
 	}
 }
 
+func TestEmptyLockSaveCoverStillFreezes(t *testing.T) {
+	cfg, err := config.ParseFile(packagingPath(t, "config.kid.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.EmptyLock || cfg.Lab.Enabled {
+		t.Fatal("kid empty_lock must be on and lab off")
+	}
+	clk := &struct{ t time.Time }{t: afternoon()}
+	now := func() time.Time { return clk.t }
+	b := openBank(t, cfg, now)
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	putClassicLook(t, b, parent)
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	rec := &Rec{}
+	e := &Enforcer{
+		Bank:    b,
+		Focus:   &StaticFocus{W: Window{Class: "google-chrome", PID: 3}, OK: true},
+		Session: StaticSession{},
+		Signals: &Recorder{Rec: rec},
+		Locker:  &CountingLocker{Rec: rec},
+	}
+	spendN(t, e, "fun", remaining(t, e, "fun"))
+	before := remaining(t, e, "fun")
+	if err := e.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 60 {
+		t.Fatalf("save cover: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+	if remaining(t, e, "fun") != before {
+		t.Fatal("spent during save cover")
+	}
+	if rec.Locks != 0 || len(rec.Stops) != 0 {
+		t.Fatalf("save cover must overlay, not pause: locks=%d stops=%v", rec.Locks, rec.Stops)
+	}
+	clk.t = clk.t.Add(60 * time.Second)
+	if err := e.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 0 {
+		t.Fatalf("slam: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+	if remaining(t, e, "fun") != before {
+		t.Fatal("spent after slam")
+	}
+	if rec.Locks != 0 || len(rec.Stops) != 0 {
+		t.Fatalf("slam still overlays, not pause: locks=%d stops=%v", rec.Locks, rec.Stops)
+	}
+}
+
 func TestEmptyLockFreezesWhenRemainingZero(t *testing.T) {
 	cfg, err := config.ParseFile(packagingPath(t, "config.kid.toml"))
 	if err != nil {

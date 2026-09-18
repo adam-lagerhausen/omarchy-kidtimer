@@ -89,6 +89,9 @@ func TestGrantStatusAsksDecideMint(t *testing.T) {
 	if status["overlay"] != false {
 		t.Fatalf("overlay: %v", status["overlay"])
 	}
+	if int(status["save_seconds"].(float64)) != 0 {
+		t.Fatalf("save_seconds: %v", status["save_seconds"])
+	}
 	today, _ := status["today"].([]any)
 	if today == nil {
 		t.Fatal("today missing")

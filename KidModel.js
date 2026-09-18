@@ -99,6 +99,7 @@ function parseStatus(raw) {
   out.path_remaining = copyGroups(src.path_remaining)
   out.parent_pin_set = !!src.parent_pin_set
   out.overlay = !!src.overlay
+  out.save_seconds = saveSeconds(src)
   out.bedtime_hold = !!src.bedtime_hold
   out.hour12 = src.hour12 !== false
   return out
@@ -129,11 +130,16 @@ function panelKind(status) {
   return "home"
 }
 
+function headerSeconds(status) {
+  if (overlaySaveCover(status)) return saveSeconds(status)
+  return remainingFor(status && status.groups, "fun")
+}
+
 function barLabel(status) {
   if (!status) return "kidtimer"
   if (status.parent_locked) return "locked"
   if (status.bedtime_active && !stayingUp(status)) return "bedtime"
-  return formatMinutes(remainingFor(status.groups, "fun")) + " left"
+  return formatMinutes(headerSeconds(status)) + " left"
 }
 
 function barUrgent(status) {
@@ -314,7 +320,7 @@ function clockFill(status) {
 }
 
 function clockFace(status, waiting) {
-  var left = remainingFor(status && status.groups, "fun")
+  var left = headerSeconds(status)
   return {
     leftLabel: formatMinutes(left) + " LEFT",
     fill: clockFill(status),
@@ -447,9 +453,32 @@ function overlayVisible(status) {
   return !!(status && status.overlay)
 }
 
+function saveSeconds(status) {
+  var n = Number(status && status.save_seconds)
+  if (!isFinite(n) || n < 0) return 0
+  return Math.floor(n)
+}
+
+function overlaySaveCover(status) {
+  if (!overlayVisible(status)) return false
+  if (status.parent_locked) return false
+  return saveSeconds(status) > 0
+}
+
+function overlayBlocksSuper(status) {
+  return overlayVisible(status) && !overlaySaveCover(status)
+}
+
+function overlayWindowOn(status, dismissed) {
+  if (!overlayVisible(status)) return false
+  if (overlaySaveCover(status) && dismissed) return false
+  return true
+}
+
 function overlayFace(status) {
   if (!overlayVisible(status)) return ""
   if (status.parent_locked) return "locked"
+  if (overlaySaveCover(status)) return "save"
   if (status.bedtime_active) return "bedtime"
   if (remainingFor(status.groups, "fun") <= 0) return "empty"
   return "locked"
