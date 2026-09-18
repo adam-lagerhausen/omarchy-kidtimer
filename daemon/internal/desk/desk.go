@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	DefaultHTTP    = "127.0.0.1:8741"
+	DefaultHTTP    = "0.0.0.0:8741"
 	DefaultSession = "0.0.0.0:8743"
 )
 
@@ -370,7 +370,7 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.OnListen(boundLoopback(httpLn), boundLoopback(sessLn))
 	}
 
-	srv := &http.Server{Handler: loopbackOnly(http.HandlerFunc(r.serveHTTP))}
+	srv := &http.Server{Handler: r.Handler()}
 	errCh := make(chan error, 2)
 	go func() { errCh <- srv.Serve(httpLn) }()
 	go func() { errCh <- serveSession(ctx, sessLn, r) }()
@@ -413,16 +413,6 @@ func boundLoopback(ln net.Listener) string {
 		host = "127.0.0.1"
 	}
 	return net.JoinHostPort(host, port)
-}
-
-func loopbackOnly(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if netaddr.Classify(netaddr.PeerIP(r.RemoteAddr)) != netaddr.ClassLoopback {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "loopback only"})
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func serveSession(ctx context.Context, ln net.Listener, r *Registry) error {

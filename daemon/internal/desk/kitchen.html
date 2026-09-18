@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kidtimer</title>
+  <style>
+    @font-face {
+      font-family: "JetBrains Mono";
+      src: url("/font.ttf") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000000;
+      color: #f0f1e2;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .page {
+      max-width: 340px;
+      margin: 0 auto;
+      padding: 14px 18px 18px;
+    }
+    .note {
+      color: #8f9087;
+      font-size: 12px;
+      line-height: 1.45;
+      margin: 0 0 16px;
+    }
+    .ask {
+      border: 1px solid #fd9494;
+      padding: 10px;
+      margin: 0 0 8px;
+    }
+    .ask .who {
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .ask .acts {
+      display: flex;
+      gap: 8px;
+    }
+    button {
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+      color: inherit;
+      background: transparent;
+      border: 1px solid #f0f1e2;
+      border-radius: 0;
+      padding: 0;
+      height: 28px;
+      flex: 1 1 0;
+      cursor: pointer;
+      appearance: none;
+    }
+    button:hover:not(:disabled) { background: rgba(240, 241, 226, 0.08); }
+    button:disabled { opacity: 0.35; cursor: default; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <p class="note">Same card as the panel. No account. Only while this phone is on the house network.</p>
+    <div id="asks"></div>
+  </div>
+  <script>
+    var root = document.getElementById("asks");
+    var busy = {};
+
+    function load() {
+      return fetch("/v1/kitchen/asks", { cache: "no-store" }).then(function (r) {
+        if (!r.ok) throw new Error("asks");
+        return r.json();
+      }).then(function (doc) {
+        paint(doc && doc.asks ? doc.asks : []);
+      }).catch(function () {});
+    }
+
+    function paint(asks) {
+      root.textContent = "";
+      for (var i = 0; i < asks.length; i++) {
+        root.appendChild(card(asks[i]));
+      }
+    }
+
+    function card(ask) {
+      var wrap = document.createElement("div");
+      wrap.className = "ask";
+      var who = document.createElement("div");
+      who.className = "who";
+      who.textContent = ask.text || "";
+      var acts = document.createElement("div");
+      acts.className = "acts";
+      acts.appendChild(actBtn(ask, "deny", "DENY"));
+      acts.appendChild(actBtn(ask, "approve", "APPROVE"));
+      wrap.appendChild(who);
+      wrap.appendChild(acts);
+      return wrap;
+    }
+
+    function actBtn(ask, decision, label) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      var key = ask.kid + "/" + ask.id;
+      b.disabled = !!busy[key];
+      b.addEventListener("click", function () { decide(ask, decision); });
+      return b;
+    }
+
+    function decide(ask, decision) {
+      var key = ask.kid + "/" + ask.id;
+      if (busy[key]) return;
+      busy[key] = true;
+      fetch("/v1/kitchen/asks/" + encodeURIComponent(ask.kid) + "/" + encodeURIComponent(ask.id) + "/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: decision })
+      }).then(function () {
+        delete busy[key];
+        return load();
+      }).catch(function () {
+        delete busy[key];
+        return load();
+      });
+    }
+
+    load();
+    setInterval(load, 5000);
+  </script>
+</body>
+</html>
