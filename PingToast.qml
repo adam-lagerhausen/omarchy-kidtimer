@@ -16,6 +16,7 @@ Item {
 
   function decide(card, decision) {
     if (!hostWidget || !hostWidget.decidePing) return
+    if (card && card.busy) return
     hostWidget.decidePing(card, decision)
   }
 
@@ -43,6 +44,7 @@ Item {
         Rectangle {
           id: pingCard
           required property var modelData
+          readonly property bool busy: !!(modelData && modelData.busy)
           width: 320
           implicitHeight: pingInner.implicitHeight + 24
           height: implicitHeight
@@ -99,6 +101,7 @@ Item {
                   readonly property string decision: String(modelData.decision || "")
                   width: (pingInner.width - 8) / 2
                   height: 28
+                  opacity: pingCard.busy ? 0.35 : 1
                   color: actMouse.containsMouse ? root.hover : "transparent"
                   border.width: 1
                   border.color: root.ink
@@ -115,8 +118,9 @@ Item {
                   MouseArea {
                     id: actMouse
                     anchors.fill: parent
+                    enabled: !pingCard.busy
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.decide(pingCard.modelData, decision)
                   }
                 }

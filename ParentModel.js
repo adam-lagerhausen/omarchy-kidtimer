@@ -390,6 +390,38 @@ function pingDecide(card, decision) {
   return { id: card.id, kidId: card.kidId, decision: decision }
 }
 
+function setPingBusy(queue, card, on) {
+  var key = askId(card)
+  var out = []
+  var list = queue || []
+  for (var i = 0; i < list.length; i++) {
+    var c = list[i]
+    if (!key || askId(c) !== key) {
+      out.push(c)
+      continue
+    }
+    var next = {}
+    for (var k in c) next[k] = c[k]
+    next.busy = !!on
+    out.push(next)
+  }
+  return out
+}
+
+function startPingDecide(queue, card, decision) {
+  var act = pingDecide(card, decision)
+  if (!act) return null
+  var list = queue || []
+  var found = false
+  for (var i = 0; i < list.length; i++) {
+    if (askId(list[i]) !== act.id) continue
+    if (list[i].busy) return null
+    found = true
+  }
+  if (!found) return null
+  return { act: act, queue: setPingBusy(list, card, true) }
+}
+
 function snapshotById(snapshots, kidId) {
   var id = String(kidId || "")
   if (!id) return null
