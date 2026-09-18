@@ -130,11 +130,16 @@ function panelKind(status) {
   return "home"
 }
 
+function headerSeconds(status) {
+  if (overlaySaveCover(status)) return saveSeconds(status)
+  return remainingFor(status && status.groups, "fun")
+}
+
 function barLabel(status) {
   if (!status) return "kidtimer"
   if (status.parent_locked) return "locked"
   if (status.bedtime_active && !stayingUp(status)) return "bedtime"
-  return formatMinutes(remainingFor(status.groups, "fun")) + " left"
+  return formatMinutes(headerSeconds(status)) + " left"
 }
 
 function barUrgent(status) {
@@ -315,7 +320,7 @@ function clockFill(status) {
 }
 
 function clockFace(status, waiting) {
-  var left = remainingFor(status && status.groups, "fun")
+  var left = headerSeconds(status)
   return {
     leftLabel: formatMinutes(left) + " LEFT",
     fill: clockFill(status),
