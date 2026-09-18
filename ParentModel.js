@@ -1079,8 +1079,8 @@ function adoptPrompt(kid) {
   return {
     index: kid && kid.index,
     name: (kid && kid.name) || "",
-    title: "Take over " + name + "?",
-    body: "Another parent already claimed this computer. Yes makes it yours."
+    title: "Share " + name + "?",
+    body: "Another parent already claimed this computer. Yes lets this desk control it too."
   }
 }
 

@@ -76,8 +76,9 @@ type Household struct {
 }
 
 type Offer struct {
-	ID   KidID   `json:"id"`
-	Name KidName `json:"name"`
+	ID     KidID   `json:"id"`
+	Name   KidName `json:"name"`
+	Paired bool    `json:"paired,omitempty"`
 }
 
 type Resume struct {

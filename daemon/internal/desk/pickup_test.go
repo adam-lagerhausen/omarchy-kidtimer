@@ -179,6 +179,85 @@ func TestDeskDialAskShowsOnHousehold(t *testing.T) {
 	t.Fatalf("household missing pending ask from testMax: %+v", last)
 }
 
+func TestDeskShareSecondParentGrant(t *testing.T) {
+	parentA := t.TempDir()
+	parentB := t.TempDir()
+	kidHome := t.TempDir()
+	b := openPickupBank(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	httpA, sessA := startDesk(t, ctx, parentA)
+	httpB, sessB := startDesk(t, ctx, parentB)
+	go func() {
+		_ = dial.Run(ctx, dial.Config{
+			Home:      kidHome,
+			Name:      "testMax",
+			Bank:      b,
+			Endpoints: []reverse.Endpoint{reverse.Endpoint(sessA), reverse.Endpoint(sessB)},
+		})
+	}()
+	var first reverse.Member
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpA)
+		if len(doc.Kids) == 1 && doc.Kids[0].Name == "testMax" && doc.Kids[0].Live {
+			first = doc.Kids[0]
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if first.ID == "" || !first.Live {
+		t.Fatalf("first desk: %+v", getHousehold(t, httpA))
+	}
+	var seen reverse.Seen
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpB)
+		if len(doc.Kids) == 0 && len(doc.Seen) == 1 && doc.Seen[0].Claimed && doc.Seen[0].ID == first.ID {
+			seen = doc.Seen[0]
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if seen.ID == "" {
+		t.Fatalf("second desk claimed: %+v", getHousehold(t, httpB))
+	}
+	before := groupRemaining(t, first.Status, "fun")
+	adopt := postJSONKey(t, "http://"+httpB+"/v1/adopt", map[string]any{"id": string(seen.ID)}, "share-adopt")
+	if adopt["kids"] == nil {
+		t.Fatalf("adopt: %v", adopt)
+	}
+	var shared reverse.Member
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpB)
+		if len(doc.Kids) == 1 && doc.Kids[0].ID == first.ID && doc.Kids[0].Live && len(doc.Seen) == 0 {
+			shared = doc.Kids[0]
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !shared.Live {
+		t.Fatalf("second desk live: %+v", getHousehold(t, httpB))
+	}
+	grantB := postJSONKey(t, "http://"+httpB+"/v1/kids/"+string(shared.ID)+"/grants", map[string]any{
+		"group": "fun", "seconds": 600, "reason": "+10",
+	}, "share-b")
+	afterB := int(grantB["remaining"].(float64))
+	if afterB <= before {
+		t.Fatalf("second grant %d -> %d", before, afterB)
+	}
+	still := getHousehold(t, httpA)
+	if len(still.Kids) != 1 || !still.Kids[0].Live || still.Kids[0].ID != first.ID {
+		t.Fatalf("first desk lost the box: %+v", still)
+	}
+	grantA := postJSONKey(t, "http://"+httpA+"/v1/kids/"+string(first.ID)+"/grants", map[string]any{
+		"group": "fun", "seconds": 600, "reason": "+10",
+	}, "share-a")
+	afterA := int(grantA["remaining"].(float64))
+	if afterA <= afterB {
+		t.Fatalf("first grant %d -> %d", afterB, afterA)
+	}
+}
+
 func TestDialParentRoleDoesNotOffer(t *testing.T) {
 	home := t.TempDir()
 	if err := household.WriteRole(home, reverse.RoleParent); err != nil {
@@ -255,13 +334,20 @@ func getHousehold(t *testing.T, httpAddr string) reverse.Household {
 
 func postJSON(t *testing.T, url string, body map[string]any) map[string]any {
 	t.Helper()
+	return postJSONKey(t, url, body, "test-grant")
+}
+
+func postJSONKey(t *testing.T, url string, body map[string]any, key string) map[string]any {
+	t.Helper()
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", "test-grant")
+	if key != "" {
+		req.Header.Set("Idempotency-Key", key)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

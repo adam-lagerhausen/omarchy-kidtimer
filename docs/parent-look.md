@@ -64,7 +64,7 @@ A circle sits to the left of the name. Accent means they are on the computer. Ur
 
 Picking a computer you already own aims remaining, lock, the day log, and settings at that kid. It does not close the bell and it does not hide other kids' asks.
 
-A computer another parent already claimed stays in the list. Clicking it asks to adopt: “Take over NAME? Another parent already claimed this computer. Yes makes it yours.” Yes takeovers. No closes the prompt only. The row stays. There is no blacklist. +10, lock, and asks stay off until Yes.
+A computer another parent already claimed stays in the list. Clicking it asks to share: “Share NAME? Another parent already claimed this computer. Yes lets this desk control it too.” Yes shares. The first desk keeps the computer. This desk gets +10, lock, and asks too. No closes the prompt only. The row stays. There is no blacklist. +10, lock, and asks stay off until Yes.
 
 “No computers found” / “Install Kidtimer on the kid computer” only when scan found nobody. Claimed-only still opens the dropdown.
 

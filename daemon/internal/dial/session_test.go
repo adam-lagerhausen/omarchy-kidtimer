@@ -37,3 +37,27 @@ func TestSaveSessionDoesNotFollowPredictableTmp(t *testing.T) {
 		t.Fatalf("%+v %v %v", s, ok, err)
 	}
 }
+
+func TestUpsertSessionKeepsFirstParent(t *testing.T) {
+	dir := t.TempDir()
+	if err := UpsertSession(dir, reverse.SessionFile{Parent: "127.0.0.1:1", Ticket: "a", ID: "kid-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpsertSession(dir, reverse.SessionFile{Parent: "127.0.0.1:2", Ticket: "b", ID: "kid-1"}); err != nil {
+		t.Fatal(err)
+	}
+	ss, err := LoadSessions(dir)
+	if err != nil || len(ss) != 2 {
+		t.Fatalf("%+v %v", ss, err)
+	}
+	if ss[0].Ticket != "a" || ss[1].Ticket != "b" {
+		t.Fatalf("both desks %+v", ss)
+	}
+	if err := DropSession(dir, "127.0.0.1:2"); err != nil {
+		t.Fatal(err)
+	}
+	ss, err = LoadSessions(dir)
+	if err != nil || len(ss) != 1 || ss[0].Ticket != "a" {
+		t.Fatalf("first remains %+v %v", ss, err)
+	}
+}

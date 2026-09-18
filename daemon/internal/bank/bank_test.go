@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -863,8 +864,11 @@ func TestPairFirstWins(t *testing.T) {
 	}
 }
 
-func TestReclaimRemintsParentPair(t *testing.T) {
+func TestShareKeepsParentPair(t *testing.T) {
 	b, parent := openTest(t, afternoon)
+	if _, _, err := b.Share(); err != ErrConflict {
+		t.Fatalf("unclaimed share: %v", err)
+	}
 	if _, _, err := b.Reclaim(); err != ErrConflict {
 		t.Fatalf("unclaimed reclaim: %v", err)
 	}
@@ -872,15 +876,22 @@ func TestReclaimRemintsParentPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, tok, err := b.Reclaim()
-	if err != nil || next == "" || next == secret || tok == nil || tok.Name != "parent-pair" {
-		t.Fatalf("reclaim: %v %s %+v", err, next, tok)
+	next, tok, err := b.Share()
+	if err != nil || next == "" || next == secret || tok == nil || tok.Kind != KindParent || !strings.HasPrefix(tok.Name, "parent-share-") {
+		t.Fatalf("share: %v %s %+v", err, next, tok)
 	}
-	if _, err := b.LookupSecret(secret); err != ErrUnauthorized {
-		t.Fatalf("old pair: %v", err)
+	if _, err := b.LookupSecret(secret); err != nil {
+		t.Fatalf("first pair: %v", err)
 	}
 	if _, err := b.LookupSecret(next); err != nil {
 		t.Fatal(err)
+	}
+	again, _, err := b.Reclaim()
+	if err != nil || again == "" || again == next || again == secret {
+		t.Fatalf("reclaim shares too: %v %s", err, again)
+	}
+	if _, err := b.LookupSecret(secret); err != nil {
+		t.Fatalf("first pair after reclaim: %v", err)
 	}
 	if on, err := b.Paired(); err != nil || !on {
 		t.Fatal("still claimed")

@@ -39,12 +39,11 @@ type TestConfig = Config
 var errOffline = errors.New("offline")
 
 type Registry struct {
-	mu      sync.Mutex
-	path    string
-	links   map[reverse.KidID]*link
-	corr    atomic.Uint64
-	reclaim func(ctx context.Context, url string) (pairResult, error)
-	seen    []reverse.Seen
+	mu    sync.Mutex
+	path  string
+	links map[reverse.KidID]*link
+	corr  atomic.Uint64
+	seen  []reverse.Seen
 }
 
 type link struct {
@@ -244,8 +243,13 @@ func (r *Registry) acceptOffer(o reverse.Offer) (*reverse.Accept, *reverse.Rejec
 	if err != nil {
 		return nil, &reverse.Reject{Reason: reverse.RejectBadTicket}
 	}
-	if _, ok := household.Lookup(kids, o.ID); ok {
+	rec, exists := household.Lookup(kids, o.ID)
+	if exists && rec.TicketHash != "" {
 		return nil, &reverse.Reject{Reason: reverse.RejectBadTicket}
+	}
+	if !exists && o.Paired {
+		r.noteSeen(o)
+		return nil, &reverse.Reject{Reason: reverse.RejectForeignParent}
 	}
 	ticket, err := reverse.NewTicket()
 	if err != nil {
@@ -254,12 +258,15 @@ func (r *Registry) acceptOffer(o reverse.Offer) (*reverse.Accept, *reverse.Rejec
 	row := reverse.Record{
 		ID:         o.ID,
 		Name:       o.Name,
+		URL:        rec.URL,
+		Token:      rec.Token,
 		TicketHash: reverse.HashTicket(ticket),
 		PairedAt:   time.Now().UTC(),
 	}
 	if err := household.Save(r.path, household.Upsert(kids, row)); err != nil {
 		return nil, &reverse.Reject{Reason: reverse.RejectBadTicket}
 	}
+	r.dropSeen(string(o.ID), rec.URL)
 	return &reverse.Accept{Ticket: ticket}, nil
 }
 

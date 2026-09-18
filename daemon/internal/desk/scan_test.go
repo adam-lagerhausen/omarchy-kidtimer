@@ -49,7 +49,7 @@ func TestAcceptOfferWritesHousehold(t *testing.T) {
 	}
 }
 
-func TestAdoptTakeover(t *testing.T) {
+func TestAdoptSharesWithoutStealing(t *testing.T) {
 	kid := newFakeKid(t, "kid-1", "testMax")
 	resp, err := http.Post(kid.URL+"/v1/pair", "application/json", strings.NewReader("{}"))
 	if err != nil {
@@ -59,24 +59,38 @@ func TestAdoptTakeover(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("pair %d", resp.StatusCode)
 	}
+	firstPath := household.Path(t.TempDir())
+	if err := household.Save(firstPath, []reverse.Record{{
+		ID: "kid-1", Name: "testMax", URL: kid.URL, Token: "secret", TicketHash: "first",
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	secondPath := household.Path(t.TempDir())
 	if err := household.Save(secondPath, nil); err != nil {
 		t.Fatal(err)
 	}
 	second := NewRegistry(secondPath)
 	second.replaceSeen([]reverse.Seen{{ID: "kid-1", Name: "testMax", URL: kid.URL, Claimed: true}})
-	if err := second.Adopt(context.Background(), "kid-1", kid.URL); err != nil {
+	if err := second.Adopt("kid-1", kid.URL); err != nil {
 		t.Fatal(err)
 	}
 	got, err := household.Load(secondPath)
-	if err != nil || len(got) != 1 || got[0].Token != "taken" {
+	if err != nil || len(got) != 1 || got[0].ID != "kid-1" || got[0].Name != "testMax" {
 		t.Fatalf("adopt %+v %v", got, err)
 	}
-	if statusOK(context.Background(), kid.URL, "secret") {
-		t.Fatal("old parent-pair")
+	if got[0].Token != "" {
+		t.Fatalf("share must not mint a stolen token: %+v", got)
 	}
-	if !statusOK(context.Background(), kid.URL, "taken") {
-		t.Fatal("new parent-pair")
+	first, err := household.Load(firstPath)
+	if err != nil || len(first) != 1 || first[0].Token != "secret" || first[0].TicketHash != "first" {
+		t.Fatalf("first desk %+v %v", first, err)
+	}
+	if !statusOK(context.Background(), kid.URL, "secret") {
+		t.Fatal("first parent-pair must still work")
+	}
+	hh := second.Household(got)
+	if len(hh.Kids) != 1 || hh.Kids[0].ID != "kid-1" || len(hh.Seen) != 0 {
+		t.Fatalf("shared household %+v", hh)
 	}
 }
 
@@ -97,28 +111,58 @@ func TestHouseholdUsesRecordNameWhenOffline(t *testing.T) {
 	}
 }
 
-func TestAdoptPrefersKidName(t *testing.T) {
-	kid := newFakeKid(t, "kid-1", "testMax")
-	resp, err := http.Post(kid.URL+"/v1/pair", "application/json", strings.NewReader("{}"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != 200 {
-		t.Fatalf("pair %d", resp.StatusCode)
-	}
+func TestAdoptKeepsSeenName(t *testing.T) {
 	path := household.Path(t.TempDir())
 	if err := household.Save(path, nil); err != nil {
 		t.Fatal(err)
 	}
 	r := NewRegistry(path)
-	r.replaceSeen([]reverse.Seen{{Name: "100.82.187.5", URL: kid.URL, Claimed: true}})
-	if err := r.Adopt(context.Background(), "", kid.URL); err != nil {
+	r.replaceSeen([]reverse.Seen{{ID: "kid-1", Name: "testMax", Claimed: true}})
+	if err := r.Adopt("kid-1", ""); err != nil {
 		t.Fatal(err)
 	}
 	got, err := household.Load(path)
-	if err != nil || len(got) != 1 || got[0].Name != "testMax" {
+	if err != nil || len(got) != 1 || got[0].Name != "testMax" || got[0].ID != "kid-1" {
 		t.Fatalf("adopt name %+v %v", got, err)
+	}
+}
+
+func TestPairedOfferStaysClaimedUntilAdopt(t *testing.T) {
+	path := household.Path(t.TempDir())
+	if err := household.Save(path, nil); err != nil {
+		t.Fatal(err)
+	}
+	r := NewRegistry(path)
+	acc, rej := r.acceptOffer(reverse.Offer{ID: "kid-1", Name: "testMax", Paired: true})
+	if acc != nil || rej == nil || rej.Reason != reverse.RejectForeignParent {
+		t.Fatalf("paired offer %+v %+v", acc, rej)
+	}
+	got, err := household.Load(path)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("must not steal %+v %v", got, err)
+	}
+	hh := r.Household(got)
+	if len(hh.Seen) != 1 || !hh.Seen[0].Claimed || hh.Seen[0].ID != "kid-1" || hh.Seen[0].Name != "testMax" {
+		t.Fatalf("claimed %+v", hh.Seen)
+	}
+	if err := r.Adopt("kid-1", ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err = household.Load(path)
+	if err != nil || len(got) != 1 || got[0].TicketHash != "" {
+		t.Fatalf("pending share %+v %v", got, err)
+	}
+	acc, rej = r.acceptOffer(reverse.Offer{ID: "kid-1", Name: "testMax", Paired: true})
+	if rej != nil || acc == nil || acc.Ticket == "" {
+		t.Fatalf("share accept %+v %+v", acc, rej)
+	}
+	got, err = household.Load(path)
+	if err != nil || len(got) != 1 || got[0].TicketHash == "" || got[0].Name != "testMax" {
+		t.Fatalf("shared %+v %v", got, err)
+	}
+	hh = r.Household(got)
+	if len(hh.Kids) != 1 || len(hh.Seen) != 0 {
+		t.Fatalf("ours after share %+v", hh)
 	}
 }
 

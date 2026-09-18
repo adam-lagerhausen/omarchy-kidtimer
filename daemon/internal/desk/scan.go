@@ -1,13 +1,10 @@
 package desk
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"kidtimer/daemon/internal/household"
@@ -15,13 +12,6 @@ import (
 )
 
 var errAdoptNotFound = errors.New("not found")
-
-type pairResult struct {
-	ID     string
-	Name   string
-	Token  string
-	Status int
-}
 
 func (r *Registry) replaceSeen(seen []reverse.Seen) {
 	r.mu.Lock()
@@ -43,6 +33,20 @@ func (r *Registry) lookupSeen(id, url string) (reverse.Seen, bool) {
 	return reverse.Seen{}, false
 }
 
+func (r *Registry) noteSeen(o reverse.Offer) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	s := reverse.Seen{ID: o.ID, Name: o.Name, Claimed: true}
+	for i, old := range r.seen {
+		if old.ID != "" && old.ID == o.ID {
+			s.URL = old.URL
+			r.seen[i] = s
+			return
+		}
+	}
+	r.seen = append(r.seen, s)
+}
+
 func (r *Registry) dropSeen(id, url string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -59,33 +63,19 @@ func (r *Registry) dropSeen(id, url string) {
 	r.seen = out
 }
 
-func (r *Registry) Adopt(ctx context.Context, id, url string) error {
+func (r *Registry) Adopt(id, url string) error {
 	seen, ok := r.lookupSeen(id, url)
 	if !ok {
 		return errAdoptNotFound
 	}
-	reclaim := r.reclaim
-	if reclaim == nil {
-		reclaim = reclaimKid
-	}
-	pr, err := reclaim(ctx, seen.URL)
-	if err != nil {
-		return err
-	}
 	kidID := string(seen.ID)
 	if kidID == "" {
-		kidID = pr.ID
-	}
-	if kidID == "" && id != "" {
 		kidID = id
 	}
-	name := pr.Name
-	if name == "" {
-		name = string(seen.Name)
+	if kidID == "" {
+		return errAdoptNotFound
 	}
-	if kidID == "" || pr.Token == "" {
-		return fmt.Errorf("reclaim: missing id or token")
-	}
+	name := string(seen.Name)
 	kids, err := household.Load(r.path)
 	if err != nil {
 		return err
@@ -94,7 +84,6 @@ func (r *Registry) Adopt(ctx context.Context, id, url string) error {
 		ID:       reverse.KidID(kidID),
 		Name:     reverse.KidName(name),
 		URL:      seen.URL,
-		Token:    pr.Token,
 		PairedAt: time.Now().UTC(),
 	}
 	if err := household.Save(r.path, household.Upsert(kids, row)); err != nil {
@@ -123,7 +112,7 @@ func (r *Registry) handleAdopt(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-	if err := r.Adopt(req.Context(), body.ID, body.URL); err != nil {
+	if err := r.Adopt(body.ID, body.URL); err != nil {
 		if errors.Is(err, errAdoptNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 			return
@@ -137,34 +126,4 @@ func (r *Registry) handleAdopt(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, r.Household(kids))
-}
-
-func reclaimKid(ctx context.Context, rawURL string) (pairResult, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(rawURL, "/")+"/v1/reclaim", strings.NewReader("{}"))
-	if err != nil {
-		return pairResult{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 1500 * time.Millisecond}).Do(req)
-	if err != nil {
-		return pairResult{}, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	out := pairResult{Status: resp.StatusCode}
-	if resp.StatusCode != http.StatusOK {
-		return out, fmt.Errorf("reclaim: %s", resp.Status)
-	}
-	var doc struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(body, &doc); err != nil {
-		return out, err
-	}
-	out.ID = doc.ID
-	out.Name = doc.Name
-	out.Token = doc.Token
-	return out, nil
 }
