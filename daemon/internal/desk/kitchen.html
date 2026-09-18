@@ -71,12 +71,15 @@
   <script>
     var root = document.getElementById("asks");
     var busy = {};
+    var loadSeq = 0;
 
     function load() {
+      var seq = ++loadSeq;
       return fetch("/v1/kitchen/asks", { cache: "no-store" }).then(function (r) {
         if (!r.ok) throw new Error("asks");
         return r.json();
       }).then(function (doc) {
+        if (seq !== loadSeq) return;
         paint(doc && doc.asks ? doc.asks : []);
       }).catch(function () {});
     }
