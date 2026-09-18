@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"kidtimer/daemon/internal/dial"
 	"kidtimer/daemon/internal/household"
 	"kidtimer/daemon/internal/httpapi"
+	"kidtimer/daemon/internal/pin"
 	"kidtimer/daemon/internal/reverse"
 )
 
@@ -258,6 +260,107 @@ func TestDeskShareSecondParentGrant(t *testing.T) {
 	}
 }
 
+func TestDeskShareKeepsFirstOverlayPIN(t *testing.T) {
+	parentA := t.TempDir()
+	parentB := t.TempDir()
+	kidHome := t.TempDir()
+	hashA, err := pin.Hash("1111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashB, err := pin.Hash("2222")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := household.WritePin(parentA, hashA); err != nil {
+		t.Fatal(err)
+	}
+	if err := household.WritePin(parentB, hashB); err != nil {
+		t.Fatal(err)
+	}
+	b, parentTok, askTok := openPickupBankWithAsk(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	httpA, sessA := startDesk(t, ctx, parentA)
+	httpB, sessB := startDesk(t, ctx, parentB)
+	go func() {
+		_ = dial.Run(ctx, dial.Config{
+			Home:      kidHome,
+			Name:      "testMax",
+			Bank:      b,
+			Endpoints: []reverse.Endpoint{reverse.Endpoint(sessA), reverse.Endpoint(sessB)},
+		})
+	}()
+	var first reverse.Member
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpA)
+		if len(doc.Kids) == 1 && doc.Kids[0].Name == "testMax" && doc.Kids[0].Live {
+			first = doc.Kids[0]
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if first.ID == "" || !first.Live {
+		t.Fatalf("first desk: %+v", getHousehold(t, httpA))
+	}
+	var pinSet bool
+	for time.Now().Before(deadline) {
+		st, err := b.Status(parentTok)
+		if err == nil && st.ParentPinSet {
+			pinSet = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !pinSet {
+		t.Fatal("first desk did not push overlay pin")
+	}
+	var seen reverse.Seen
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpB)
+		if len(doc.Kids) == 0 && len(doc.Seen) == 1 && doc.Seen[0].Claimed && doc.Seen[0].ID == first.ID {
+			seen = doc.Seen[0]
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if seen.ID == "" {
+		t.Fatalf("second desk claimed: %+v", getHousehold(t, httpB))
+	}
+	before := groupRemaining(t, first.Status, "fun")
+	adopt := postJSONKey(t, "http://"+httpB+"/v1/adopt", map[string]any{"id": string(seen.ID)}, "share-pin-adopt")
+	if adopt["kids"] == nil {
+		t.Fatalf("adopt: %v", adopt)
+	}
+	var shared reverse.Member
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpB)
+		if len(doc.Kids) == 1 && doc.Kids[0].ID == first.ID && doc.Kids[0].Live && len(doc.Seen) == 0 {
+			shared = doc.Kids[0]
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !shared.Live {
+		t.Fatalf("second desk live: %+v", getHousehold(t, httpB))
+	}
+	grantB := postJSONKey(t, "http://"+httpB+"/v1/kids/"+string(shared.ID)+"/grants", map[string]any{
+		"group": "fun", "seconds": 600, "reason": "+10",
+	}, "share-pin-b")
+	afterB := int(grantB["remaining"].(float64))
+	if afterB <= before {
+		t.Fatalf("second grant %d -> %d", before, afterB)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if _, err := b.PinGrant(askTok, "2222", 60); !errors.Is(err, bank.ErrForbidden) {
+		t.Fatalf("share overwrote overlay pin: %v", err)
+	}
+	if _, err := b.PinGrant(askTok, "1111", 60); err != nil {
+		t.Fatalf("first desk overlay pin: %v", err)
+	}
+}
+
 func TestDialParentRoleDoesNotOffer(t *testing.T) {
 	home := t.TempDir()
 	if err := household.WriteRole(home, reverse.RoleParent); err != nil {
@@ -377,6 +480,12 @@ func groupRemaining(t *testing.T, raw json.RawMessage, id string) int {
 
 func openPickupBank(t *testing.T) *bank.Bank {
 	t.Helper()
+	b, _, _ := openPickupBankWithAsk(t)
+	return b
+}
+
+func openPickupBankWithAsk(t *testing.T) (*bank.Bank, *bank.Token, *bank.Token) {
+	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("caller")
@@ -391,8 +500,13 @@ func openPickupBank(t *testing.T) *bank.Bank {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	if _, _, err := b.SeedParent("test"); err != nil {
+	_, parent, err := b.SeedParent("test")
+	if err != nil {
 		t.Fatal(err)
 	}
-	return b
+	_, askTok, err := b.Mint(parent, bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b, parent, askTok
 }

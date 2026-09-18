@@ -192,6 +192,15 @@ func (r *Registry) pushPin(id reverse.KidID) {
 	if err != nil || !ok {
 		return
 	}
+	res, err := r.Call(id, reverse.Op{Method: http.MethodGet, Path: "/v1/status"})
+	if err == nil && res.Status == http.StatusOK {
+		var st struct {
+			ParentPinSet bool `json:"parent_pin_set"`
+		}
+		if json.Unmarshal(res.Body, &st) == nil && st.ParentPinSet {
+			return
+		}
+	}
 	body, err := json.Marshal(map[string]string{"hash": hash})
 	if err != nil {
 		return
