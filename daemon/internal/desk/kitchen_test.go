@@ -6,6 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -145,6 +148,26 @@ func TestKitchenDecideRejectsBadDecision(t *testing.T) {
 	missing := doReq(t, r.Handler(), "POST", "/v1/kitchen/asks/kid-1/a1/decide", "192.168.1.20:9", []byte(`{"decision":"approve"}`))
 	if missing.Code != http.StatusNotFound {
 		t.Fatalf("missing ask %d %s", missing.Code, missing.Body.String())
+	}
+}
+
+func TestKitchenPageIgnoresStalePollAndInFlightTap(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("caller")
+	}
+	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "testdata", "run-kitchen-page.js")
+	cmd := exec.Command(node, script)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("kitchen page: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "ok" {
+		t.Fatalf("kitchen page: %s", out)
 	}
 }
 
