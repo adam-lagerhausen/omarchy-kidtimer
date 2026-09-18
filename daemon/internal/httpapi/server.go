@@ -644,6 +644,7 @@ func (s *Server) writeStatus(w http.ResponseWriter, tok *bank.Token) {
 		"remote_lock":       st.RemoteLock,
 		"parent_pin_set":    st.ParentPinSet,
 		"overlay":           st.Overlay,
+		"save_seconds":      st.SaveSeconds,
 		"bedtime_hold":      st.BedtimeHold,
 		"bedtime_start":     st.BedtimeStart,
 		"bedtime_end":       st.BedtimeEnd,

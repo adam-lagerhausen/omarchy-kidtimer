@@ -24,11 +24,13 @@ Item {
   property bool askWrong: false
   property string askFailText: "try again"
   property bool askQueued: false
+  property bool saveDismissed: false
   property var httpQueue: []
   property var httpJob: null
   property string httpBuf: ""
 
-  readonly property bool shown: root.role === "kid" && Model.overlayVisible(statusJson)
+  readonly property bool blocksSuper: Model.overlayBlocksSuper(statusJson)
+  readonly property bool shown: root.role === "kid" && Model.overlayWindowOn(statusJson, saveDismissed)
   readonly property bool waiting: askQueued || Model.overlayAskWaiting(statusJson)
   readonly property color ink: Color.foreground
   readonly property color paper: Color.background
@@ -69,8 +71,9 @@ Item {
         return
       }
       face = Model.overlayFace(statusJson)
-      if (!shown) {
+      if (!Model.overlayVisible(statusJson)) {
         step = "cover"
+        saveDismissed = false
         pinDigits = ""
         pinWrong = false
         pinFailText = "wrong pin"
@@ -79,6 +82,8 @@ Item {
         askWrong = false
         askFailText = "try again"
         chosenMinutes = Model.ASK_DEFAULT_MIN
+      } else if (Model.overlaySaveCover(statusJson)) {
+        if (step === "ask" || step === "pin" || step === "minutes") step = "cover"
       } else if (Model.overlayAskWaiting(statusJson)) {
         askQueued = false
         if (step === "ask") step = "cover"
@@ -204,8 +209,8 @@ Item {
     }
   }
 
-  onShownChanged: {
-    if (shown) enterKidProof()
+  onBlocksSuperChanged: {
+    if (blocksSuper) enterKidProof()
     else leaveKidProof()
   }
 
@@ -323,6 +328,64 @@ Item {
 
         Text {
           textFormat: Text.PlainText
+          visible: root.step === "cover" && root.face === "save"
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: "save now"
+          color: root.ink
+          font.family: root.plex
+          font.pixelSize: 28
+          font.bold: true
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          visible: root.step === "cover" && root.face === "save"
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: String(Model.saveSeconds(root.statusJson))
+          color: root.ink
+          font.family: root.plex
+          font.pixelSize: 72
+          font.bold: true
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          visible: root.step === "cover" && root.face === "save"
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: "Super still works"
+          color: root.ink
+          font.family: root.plex
+          font.pixelSize: 16
+        }
+
+        Rectangle {
+          visible: root.step === "cover" && root.face === "save"
+          width: parent.width
+          height: 36
+          color: "transparent"
+          border.width: 1
+          border.color: root.ink
+          Text {
+            textFormat: Text.PlainText
+            anchors.centerIn: parent
+            text: "Dismiss"
+            color: root.ink
+            font.family: root.plex
+            font.pixelSize: 14
+            font.bold: true
+          }
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.saveDismissed = true
+          }
+        }
+
+        Text {
+          textFormat: Text.PlainText
           visible: root.step === "cover" && root.face === "locked"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
@@ -398,7 +461,7 @@ Item {
         }
 
         Item {
-          visible: root.step === "cover"
+          visible: root.step === "cover" && root.face !== "save"
           width: parent.width
           height: 36
           Rectangle {

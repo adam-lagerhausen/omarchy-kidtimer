@@ -123,6 +123,7 @@ type Status struct {
 	RemoteLock      bool
 	ParentPinSet    bool
 	Overlay         bool
+	SaveSeconds     int
 	BedtimeHold     bool
 	BedtimeStart    string
 	BedtimeEnd      string
@@ -1002,6 +1003,9 @@ func (b *Bank) Status(actor *Token) (*Status, error) {
 		return nil, ErrForbidden
 	}
 	start, end := b.effectiveBedtimeLocked()
+	if err := b.syncSaveCoverLocked(); err != nil {
+		return nil, err
+	}
 	st := &Status{
 		KidName:       b.cfg.KidName,
 		PathRemaining: map[string]int{},
@@ -1014,6 +1018,7 @@ func (b *Bank) Status(actor *Token) (*Status, error) {
 		RemoteLock:    b.cfg.RemoteLock,
 		ParentPinSet:  b.ov.parentPin != "",
 		Overlay:       b.overlayActiveLocked(),
+		SaveSeconds:   b.saveSecondsLocked(),
 		BedtimeHold:   b.stayUpActiveLocked(),
 		BedtimeStart:  config.FormatClock(start),
 		BedtimeEnd:    config.FormatClock(end),

@@ -26,6 +26,8 @@ const (
 	metaBedtimeHold    = "bedtime_hold_until"
 	metaRefillDeferred = "refill_deferred"
 	metaHour12         = "hour12"
+	metaSaveCoverUntil = "save_cover_until"
+	saveCoverDuration  = 60 * time.Second
 )
 
 type overlay struct {
@@ -39,6 +41,7 @@ type overlay struct {
 	parentPin     string
 	holdUntil     time.Time
 	hour12        *bool
+	saveUntil     time.Time
 }
 
 func (b *Bank) loadOverlayLocked() error {
@@ -117,6 +120,17 @@ func (b *Bank) loadOverlayLocked() error {
 	if ok {
 		on := v == "true"
 		b.ov.hour12 = &on
+	}
+	v, ok, err = b.metaGet(metaSaveCoverUntil)
+	if err != nil {
+		return err
+	}
+	if ok && v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return fmt.Errorf("overlay save_cover_until: %w", err)
+		}
+		b.ov.saveUntil = t
 	}
 	return nil
 }

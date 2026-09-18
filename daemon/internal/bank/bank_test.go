@@ -975,6 +975,159 @@ func TestParentPinGrantApproveHoldAndRateLimit(t *testing.T) {
 	}
 }
 
+func TestSaveCoverBeforeEmptyOverlay(t *testing.T) {
+	cfg, err := config.ParseFile(packagingPath(t, "config.kid.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := &clock{t: afternoon()}
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, clk.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	spendN(t, b, "fun", remaining(t, b, "fun"))
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 60 {
+		t.Fatalf("save cover: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+	clk.t = clk.t.Add(59 * time.Second)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 1 {
+		t.Fatalf("minute still counts: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+	clk.t = clk.t.Add(time.Second)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 0 {
+		t.Fatalf("slam at 0: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+	if _, err := b.Grant(parent, "fun", 600, "+10", "after-save"); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.SaveSeconds != 0 {
+		t.Fatalf("grant lifts save: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+	spendN(t, b, "fun", remaining(t, b, "fun"))
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 60 {
+		t.Fatalf("next empty starts save: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+}
+
+func TestSaveCoverBeforeBedtimeOverlay(t *testing.T) {
+	clk := &clock{t: bedtime()}
+	b, parent := openTestClock(t, clk.now)
+	b.Config().BedtimeLock = true
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || !st.BedtimeActive || st.SaveSeconds != 60 {
+		t.Fatalf("bedtime save: overlay=%v bed=%v seconds=%d", st.Overlay, st.BedtimeActive, st.SaveSeconds)
+	}
+	clk.t = clk.t.Add(60 * time.Second)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 0 {
+		t.Fatalf("bedtime slam: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+}
+
+func TestParentLockSkipsSaveCover(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	b.Config().RemoteLock = true
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentLock(parent, true); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.SaveSeconds != 0 {
+		t.Fatalf("lock slams: overlay=%v seconds=%d", st.Overlay, st.SaveSeconds)
+	}
+}
+
+func TestParentLockDuringSaveCoverSlams(t *testing.T) {
+	cfg, err := config.ParseFile(packagingPath(t, "config.kid.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := &clock{t: afternoon()}
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, clk.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	spendN(t, b, "fun", remaining(t, b, "fun"))
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.SaveSeconds != 60 {
+		t.Fatalf("save started: %d", st.SaveSeconds)
+	}
+	clk.t = clk.t.Add(20 * time.Second)
+	if err := b.SetParentLock(parent, true); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || !st.ParentLocked || st.SaveSeconds != 0 {
+		t.Fatalf("lock during save slams: overlay=%v locked=%v seconds=%d", st.Overlay, st.ParentLocked, st.SaveSeconds)
+	}
+	if err := b.SetParentLock(parent, false); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.ParentLocked || st.SaveSeconds != 40 {
+		t.Fatalf("unlock resumes save: overlay=%v locked=%v seconds=%d", st.Overlay, st.ParentLocked, st.SaveSeconds)
+	}
+}
+
 func TestOverlayNeedsPinAndHoldSkipsBedtime(t *testing.T) {
 	b, parent := openTest(t, bedtime)
 	b.Config().BedtimeLock = true
