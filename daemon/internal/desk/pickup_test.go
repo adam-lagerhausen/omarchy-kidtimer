@@ -200,6 +200,7 @@ func TestDeskKitchenApproveCreditsMinutes(t *testing.T) {
 	if len(cards) != 1 || cards[0].ID != ask.ID || cards[0].Text != "Ada asked for 10 more minutes" {
 		t.Fatalf("kitchen card: %+v", cards)
 	}
+	t.Logf("kitchen card %q remaining=%d", cards[0].Text, before)
 	decided := postJSON(t, "http://"+httpAddr+"/v1/kitchen/asks/"+string(kid.ID)+"/"+ask.ID+"/decide", map[string]any{
 		"decision": "approve",
 	})
@@ -215,6 +216,7 @@ func TestDeskKitchenApproveCreditsMinutes(t *testing.T) {
 		}
 		after := groupRemaining(t, doc.Kids[0].Status, "fun")
 		if after > before && len(kitchenAsks(doc)) == 0 {
+			t.Logf("approve credited remaining %d -> %d without the panel", before, after)
 			return
 		}
 		time.Sleep(20 * time.Millisecond)

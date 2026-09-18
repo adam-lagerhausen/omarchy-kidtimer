@@ -112,6 +112,14 @@ func TestKitchenPeerGate(t *testing.T) {
 	if pub.Code != http.StatusForbidden || !strings.Contains(pub.Body.String(), "house network only") {
 		t.Fatalf("public page %d %s", pub.Code, pub.Body.String())
 	}
+	pubAsks := doReq(t, h, "GET", "/v1/kitchen/asks", "8.8.8.8:9", nil)
+	if pubAsks.Code != http.StatusForbidden || !strings.Contains(pubAsks.Body.String(), "house network only") {
+		t.Fatalf("public asks %d %s", pubAsks.Code, pubAsks.Body.String())
+	}
+	pubDecide := doReq(t, h, "POST", "/v1/kitchen/asks/kid-1/a1/decide", "8.8.8.8:9", []byte(`{"decision":"approve"}`))
+	if pubDecide.Code != http.StatusForbidden || !strings.Contains(pubDecide.Body.String(), "house network only") {
+		t.Fatalf("public decide %d %s", pubDecide.Code, pubDecide.Body.String())
+	}
 	cgnat := doReq(t, h, "GET", "/", "100.64.1.2:9", nil)
 	if cgnat.Code != http.StatusForbidden || !strings.Contains(cgnat.Body.String(), "house network only") {
 		t.Fatalf("cgnat page %d %s", cgnat.Code, cgnat.Body.String())
