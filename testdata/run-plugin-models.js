@@ -255,6 +255,13 @@ assertEqual(parent.hostFace({ reachable: true, status: {} }).doing, "", "doing a
 assertEqual(parent.hostFace({ reachable: false, status: {} }).doing, "", "doing offline")
 assertFace({ reachable: true, status: {} }, "active", "Active", "active")
 assertEqual(parent.hostFace({ error: true, reachable: false, status: {} }).coral, true, "error coral")
+const errHH = parent.parseHousehold({
+  kids: [{ id: "m1", name: "Ada", live: true, error: true, status: { groups: { fun: 960 } } }]
+})
+assertEqual(errHH[0].error, true, "household error flag")
+assertEqual(parent.hostFace(errHH[0]).caption, "Error", "error caption from household")
+assertEqual(parent.hostFace(errHH[0]).kind, "error", "error kind from household")
+assertEqual(parent.projectTape(errHH, 0, parent.chromeHome(), null, { pinSet: true }).kid.face.caption, "Error", "error tape caption")
 const errKid = parent.projectKid({
   name: "Ada",
   reachable: true,
@@ -815,6 +822,11 @@ assertEqual(kid.overlayWindowOn({ overlay: true, groups: { fun: 0 }, save_second
 assertEqual(kid.overlayWindowOn({ overlay: true, groups: { fun: 0 }, save_seconds: 60 }, true), false, "dismiss hides")
 assertEqual(kid.overlayWindowOn({ overlay: true, groups: { fun: 0 }, save_seconds: 0 }, true), true, "slam after dismiss")
 assertEqual(kid.overlayWindowOn({ overlay: false, save_seconds: 60 }, false), false, "no overlay window")
+assertEqual(kid.overlayResetDismiss({ overlay: true, groups: { fun: 0 }, save_seconds: 60 }), false, "save cover keeps dismiss")
+assertEqual(kid.overlayResetDismiss({ overlay: true, groups: { fun: 0 }, save_seconds: 0 }), true, "slam clears dismiss")
+assertEqual(kid.overlayResetDismiss({ overlay: true, parent_locked: true, save_seconds: 40 }), true, "lock clears dismiss")
+assertEqual(kid.overlayResetDismiss({ overlay: false, save_seconds: 60 }), true, "no overlay clears dismiss")
+assertEqual(kid.overlayWindowOn({ overlay: true, groups: { fun: 0 }, save_seconds: 40 }, false), true, "save cover after lock shows")
 assertEqual(kid.overlayStepperLabel(30), "30", "overlay stepper")
 assertEqual(kid.nudgeAskMinutes(30, -5), 25, "overlay nudge")
 assertEqual(kid.nudgeOverlayAskMinutes(30, 10), 40, "overlay ask nudge up")

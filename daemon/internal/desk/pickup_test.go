@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -309,4 +310,63 @@ func openPickupBank(t *testing.T) *bank.Bank {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestCallTimeoutDropsPending(t *testing.T) {
+	old := opWait
+	opWait = 30 * time.Millisecond
+	t.Cleanup(func() { opWait = old })
+
+	client, server := net.Pipe()
+	t.Cleanup(func() { _ = client.Close(); _ = server.Close() })
+	go drainPipe(server)
+	r := NewRegistry(household.Path(t.TempDir()))
+	id := reverse.KidID("kid-1")
+	r.attach(id, client)
+	_, err := r.Call(id, reverse.Op{Method: http.MethodGet, Path: "/v1/status"})
+	if err == nil || !strings.Contains(err.Error(), "timeout") {
+		t.Fatalf("want timeout, got %v", err)
+	}
+	r.mu.Lock()
+	l := r.links[id]
+	r.mu.Unlock()
+	l.mu.Lock()
+	n := len(l.pending)
+	l.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("pending after timeout: %d", n)
+	}
+}
+
+func TestHouseholdStatusTimeoutIsError(t *testing.T) {
+	old := opWait
+	opWait = 30 * time.Millisecond
+	t.Cleanup(func() { opWait = old })
+
+	client, server := net.Pipe()
+	t.Cleanup(func() { _ = client.Close(); _ = server.Close() })
+	go drainPipe(server)
+	r := NewRegistry(household.Path(t.TempDir()))
+	id := reverse.KidID("kid-1")
+	r.attach(id, client)
+	hh := r.Household([]reverse.Record{{ID: id, Name: "Ada"}})
+	if len(hh.Kids) != 1 {
+		t.Fatalf("kids: %+v", hh.Kids)
+	}
+	got := hh.Kids[0]
+	if !got.Live || !got.Error {
+		t.Fatalf("want live error, got live=%v error=%v", got.Live, got.Error)
+	}
+	if len(got.Status) != 0 || len(got.Asks) != 0 {
+		t.Fatalf("hung status should skip asks: %+v", got)
+	}
+}
+
+func drainPipe(c net.Conn) {
+	buf := make([]byte, 4096)
+	for {
+		if _, err := c.Read(buf); err != nil {
+			return
+		}
+	}
 }

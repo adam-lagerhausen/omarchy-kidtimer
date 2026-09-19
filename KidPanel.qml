@@ -73,7 +73,7 @@ Item {
       root.waitingGroup = ""
       root.pendingAskId = ""
       root.pinOpen = false
-      root.pinDigits = ""
+      applyPinDigits("")
       root.pinBusy = false
     }
     root.lastPending = pending
@@ -82,6 +82,12 @@ Item {
 
   function bankUrl() {
     return String(setting("url", "http://127.0.0.1:8742")).replace(/\/$/, "")
+  }
+
+  function applyPinDigits(s) {
+    var next = String(s || "")
+    root.pinDigits = next
+    if (panelPin && panelPin.text !== next) panelPin.text = next
   }
 
   function openAsk() {
@@ -131,13 +137,13 @@ Item {
       root.pinBusy = false
       if (status !== 200) {
         var next = Model.pinFailState(status, text)
-        root.pinDigits = next.pinDigits
+        applyPinDigits(next.pinDigits)
         root.pinWrong = next.pinWrong
         root.pinFailText = next.pinFailText
         return
       }
       root.pinOpen = false
-      root.pinDigits = ""
+      applyPinDigits("")
       root.pinWrong = false
       root.waitingGroup = ""
       root.pendingAskId = ""
@@ -358,7 +364,7 @@ Item {
             onClicked: {
               if (!Model.overlayGiveTimeOn(root.pinBusy)) return
               root.pinOpen = false
-              root.pinDigits = ""
+              applyPinDigits("")
               root.pinWrong = false
               root.pinFailText = "wrong pin"
               root.pinBusy = false
@@ -530,7 +536,7 @@ Item {
           root.pinOpen = true
           root.pinWrong = false
           root.pinFailText = "wrong pin"
-          root.pinDigits = ""
+          applyPinDigits("")
           root.pinBusy = false
         }
       }

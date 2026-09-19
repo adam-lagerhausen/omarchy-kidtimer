@@ -61,6 +61,12 @@ Item {
     root.role = next
   }
 
+  function applyPinDigits(s) {
+    var next = String(s || "")
+    root.pinDigits = next
+    if (pinField && pinField.text !== next) pinField.text = next
+  }
+
   function poll() {
     if (root.role !== "kid") return
     overlayHTTP("GET", bankUrl() + "/v1/status", String(bank.readToken || ""), "", function(status, text) {
@@ -71,10 +77,10 @@ Item {
         return
       }
       face = Model.overlayFace(statusJson)
+      if (Model.overlayResetDismiss(statusJson)) saveDismissed = false
       if (!Model.overlayVisible(statusJson)) {
         step = "cover"
-        saveDismissed = false
-        pinDigits = ""
+        applyPinDigits("")
         pinWrong = false
         pinFailText = "wrong pin"
         pinBusy = false
@@ -107,14 +113,14 @@ Item {
       if (status !== 200) {
         var next = Model.overlayPinFail(status, text)
         root.pinBusy = next.pinBusy
-        root.pinDigits = next.pinDigits
+        applyPinDigits(next.pinDigits)
         root.pinWrong = next.pinWrong
         root.pinFailText = next.pinFailText
         root.step = next.step
         return
       }
       root.pinBusy = false
-      pinDigits = ""
+      applyPinDigits("")
       pinWrong = false
       pinFailText = "wrong pin"
       step = "cover"
@@ -126,7 +132,7 @@ Item {
     if (!Model.overlayGiveTimeOn(root.pinBusy)) return
     var next = Model.overlayCancel()
     root.step = next.step
-    root.pinDigits = next.pinDigits
+    applyPinDigits(next.pinDigits)
     root.pinWrong = next.pinWrong
     root.chosenMinutes = next.chosenMinutes
     root.pinBusy = false
@@ -516,7 +522,7 @@ Item {
                 root.step = "pin"
                 root.pinWrong = false
                 root.pinFailText = "wrong pin"
-                root.pinDigits = "" 
+                applyPinDigits("")
                 pinField.forceActiveFocus()
               }
             }
