@@ -164,6 +164,7 @@ function parseHousehold(raw) {
       token: isClaimed ? "" : (row.token || ""),
       claimed: isClaimed,
       live: row.live === true,
+      error: row.error === true,
       status: row.status || {},
       asks: row.asks || [],
       look: row.look || null,

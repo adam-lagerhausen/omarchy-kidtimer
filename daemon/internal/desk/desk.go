@@ -36,7 +36,10 @@ type Config struct {
 
 type TestConfig = Config
 
-var errOffline = errors.New("offline")
+var (
+	errOffline = errors.New("offline")
+	opWait     = 5 * time.Second
+)
 
 type Registry struct {
 	mu      sync.Mutex
@@ -63,18 +66,27 @@ func (r *Registry) Household(records []reverse.Record) reverse.Household {
 	out := make([]reverse.Member, 0, len(records))
 	for _, rec := range records {
 		m := reverse.Member{ID: rec.ID, Name: rec.Name, Live: r.isLive(rec.ID)}
-		if res, _ := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/status"}); res.Status == 200 {
+		res, err := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/status"})
+		if err != nil {
+			if !errors.Is(err, errOffline) && m.Live {
+				m.Error = true
+			}
+		} else if res.Status == 200 {
 			m.Live = true
 			m.Status = res.Body
 			if n := statusKidName(res.Body); n != "" && nameIsFallback(rec.Name) {
 				m.Name = reverse.KidName(n)
 			}
+		} else if m.Live {
+			m.Error = true
 		}
-		if res, _ := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/asks"}); res.Status == 200 {
-			m.Asks = asksArray(res.Body)
-		}
-		if res, _ := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/look"}); res.Status == 200 {
-			m.Look = res.Body
+		if m.Live && !m.Error {
+			if res, _ := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/asks"}); res.Status == 200 {
+				m.Asks = asksArray(res.Body)
+			}
+			if res, _ := r.Call(rec.ID, reverse.Op{Method: http.MethodGet, Path: "/v1/look"}); res.Status == 200 {
+				m.Look = res.Body
+			}
 		}
 		out = append(out, m)
 	}
@@ -172,14 +184,25 @@ func (r *Registry) callSession(l *link, op reverse.Op) (reverse.OpResult, error)
 	err := reverse.WriteFrame(l.conn, reverse.Frame{Op: &op})
 	l.wmu.Unlock()
 	if err != nil {
+		r.dropPending(l, op.Corr)
 		return reverse.OpResult{}, err
 	}
 	select {
 	case res := <-ch:
 		return res, nil
-	case <-time.After(5 * time.Second):
+	case <-time.After(opWait):
+		r.dropPending(l, op.Corr)
 		return reverse.OpResult{}, fmt.Errorf("op timeout")
 	}
+}
+
+func (r *Registry) dropPending(l *link, corr uint64) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	delete(l.pending, corr)
+	l.mu.Unlock()
 }
 
 func (r *Registry) attach(id reverse.KidID, c net.Conn) {

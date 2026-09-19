@@ -58,6 +58,7 @@ type Member struct {
 	ID     KidID           `json:"id"`
 	Name   KidName         `json:"name"`
 	Live   bool            `json:"live"`
+	Error  bool            `json:"error,omitempty"`
 	Status json.RawMessage `json:"status,omitempty"`
 	Asks   json.RawMessage `json:"asks,omitempty"`
 	Look   json.RawMessage `json:"look,omitempty"`

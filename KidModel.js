@@ -475,6 +475,10 @@ function overlayWindowOn(status, dismissed) {
   return true
 }
 
+function overlayResetDismiss(status) {
+  return !overlayVisible(status) || !overlaySaveCover(status)
+}
+
 function overlayFace(status) {
   if (!overlayVisible(status)) return ""
   if (status.parent_locked) return "locked"

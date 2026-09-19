@@ -209,7 +209,7 @@ BarWidget {
           asks: row.asks ? Model.parseAsks(row.asks) : (cur.asks || []),
           look: row.look ? Model.parseLook(row.look) : cur.look,
           reachable: row.live === true,
-          error: false
+          error: row.error === true
         })
         continue
       }
