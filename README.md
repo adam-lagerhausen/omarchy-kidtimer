@@ -50,7 +50,7 @@ If you installed when the id was `kidtimer`, paste the install command again. Do
 
 ## How it works
 
-The panel shows time left, +10 and −10, Lock, and pending asks. Hours, bedtime, and CLOCK 12 or 24 live behind the gear. When they ask for more time, you get an Omarchy notification with their name. Approve or deny from the panel.
+The panel shows time left, +10 and −10, Lock, and pending asks. Hours, bedtime, and CLOCK 12 or 24 live behind the gear. When they ask for more time, a ping on your desk has DENY and APPROVE. APPROVE credits the minutes they asked for without opening the panel. The same card is on a phone on the house Wi-Fi.
 
 The log under the day is sittings: one stretch at the computer. Two apps in the same stretch share a row. `kidtimer parent export` prints every window.
 
@@ -66,9 +66,13 @@ The clock is already running: 1 hour Monday through Friday, 2 hours Saturday and
 
 ### When time runs out
 
-Time at zero and bedtime start with a 60-second save cover. It says save now. Super still works. Dismiss hides it so they can save. The minute still counts. At 0 the overlay slams: 0m LEFT or bedtime. Super and Escape will not get them out. Lock from your desk slams right away. It says locked.
+Time at zero and bedtime start with a 60-second save cover. It says save now. Super still works. Dismiss hides it so they can save. The minute still counts.
 
-![Time's up](docs/screenshots/overlay.png)
+![save now](docs/screenshots/save.png)
+
+At 0 the overlay slams: 0m LEFT or bedtime. Super and Escape will not get them out. Lock from your desk slams right away. It says locked.
+
+![0m LEFT](docs/screenshots/overlay.png)
 
 ![Bedtime](docs/screenshots/bedtime.png)
 
@@ -79,6 +83,14 @@ It sits over a session that is still running. You are not looking at the Omarchy
 ### Asking for more
 
 They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay and pick minutes with −10 / +10. They can ask during bedtime and a parent lock. Approve during the day adds the minutes they asked for. Approve during bedtime sets the timer to those minutes and lifts the bedtime overlay until they run out, then bedtime comes back. Approve during a parent lock unlocks them and adds the minutes they asked for.
+
+The ping on your desk has DENY and APPROVE. Approving there credits the minutes without opening the panel.
+
+![Ada asked for 10 more minutes](docs/screenshots/ping.png)
+
+On a phone that is only on the house network, open this computer's address, port 8741. No account.
+
+![Same card as the panel](docs/screenshots/kitchen.png)
 
 ![Pending asks](docs/screenshots/ask.png)
 

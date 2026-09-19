@@ -34,7 +34,9 @@ No mode buttons. No Free time / School time / Fun time keys. No Fun or School li
 
 Square, bell icon. Household inbox. The count is every pending ask from every kid. Switching computers does not change the badge.
 
-Asks hide until someone hits the bell. Then every pending ask is a card: who asked, what they asked for, Deny, Approve. Approve credits the minutes they asked for, on that kid, not whoever is selected. Deny drops it. Empty bell does nothing flashy.
+Asks hide in the panel until someone hits the bell. Then every pending ask is a card: who asked, what they asked for, Deny, Approve. Approve credits the minutes they asked for, on that kid, not whoever is selected. Deny drops it. Empty bell does nothing flashy.
+
+When they ask, a ping on the parent desk is the same card: KIDTIMER, their name, that sentence, DENY, APPROVE. You do not open the panel.
 
 ## Settings
 

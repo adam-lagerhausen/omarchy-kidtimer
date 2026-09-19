@@ -19,7 +19,7 @@ func runParent(args []string) error {
 	}
 	fs := flag.NewFlagSet("parent", flag.ContinueOnError)
 	home := fs.String("home", "", "household dir (default ~/.local/share/kidtimer)")
-	httpAddr := fs.String("http", "", "desk HTTP listen (default 127.0.0.1:8741)")
+	httpAddr := fs.String("http", "", "desk HTTP listen (default 0.0.0.0:8741)")
 	sessionAddr := fs.String("session", "", "session listen (default 0.0.0.0:8743)")
 	if err := fs.Parse(args); err != nil {
 		return err
