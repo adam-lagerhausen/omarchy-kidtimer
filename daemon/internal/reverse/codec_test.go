@@ -21,8 +21,16 @@ func TestParseEncodeOffer(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := ParseFrame(raw)
-	if err != nil || f.Kind != KindOffer || f.Offer == nil || f.Offer.Name != "testMax" {
+	if err != nil || f.Kind != KindOffer || f.Offer == nil || f.Offer.Name != "testMax" || f.Offer.Paired {
 		t.Fatalf("%+v %v", f, err)
+	}
+	raw, err = EncodeFrame(Frame{Offer: &Offer{ID: "a", Name: "testMax", Paired: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err = ParseFrame(raw)
+	if err != nil || f.Offer == nil || !f.Offer.Paired {
+		t.Fatalf("paired %+v %v", f, err)
 	}
 }
 

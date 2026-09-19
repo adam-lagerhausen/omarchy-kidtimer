@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"kidtimer/daemon/internal/advertise"
@@ -63,6 +65,32 @@ func Run(ctx context.Context, cfg Config) error {
 	kidID := reverse.KidID(id)
 	backoffs := []time.Duration{time.Second, 2 * time.Second, 5 * time.Second, 15 * time.Second, 15 * time.Second}
 	step := 0
+	var liveMu sync.Mutex
+	live := map[reverse.Endpoint]struct{}{}
+	var claiming atomic.Bool
+	connect := func(ep reverse.Endpoint) {
+		if ep == "" {
+			return
+		}
+		liveMu.Lock()
+		if _, ok := live[ep]; ok {
+			liveMu.Unlock()
+			return
+		}
+		live[ep] = struct{}{}
+		liveMu.Unlock()
+		defer func() {
+			liveMu.Lock()
+			delete(live, ep)
+			liveMu.Unlock()
+		}()
+		h := &kidHandler{home: cfg.Home, bank: b, bankHTTP: cfg.BankHTTP, id: kidID, name: cfg.Name, parent: ep}
+		hello, err := h.hello()
+		if err != nil {
+			return
+		}
+		_ = reverse.OpenConn(ctx, ep, hello, h)
+	}
 	for ctx.Err() == nil {
 		eps := cfg.Endpoints
 		if len(eps) == 0 {
@@ -71,24 +99,20 @@ func Run(ctx context.Context, cfg Config) error {
 				eps = found
 			}
 		}
-		var last error
-		for _, ep := range eps {
-			if ctx.Err() != nil {
-				return nil
+		if hasSession(cfg.Home) {
+			for _, ep := range eps {
+				go connect(ep)
 			}
-			h := &kidHandler{home: cfg.Home, bank: b, bankHTTP: cfg.BankHTTP, id: kidID, name: cfg.Name, parent: ep}
-			hello, err := h.hello()
-			if err != nil {
-				last = err
-				continue
-			}
-			last = reverse.OpenConn(ctx, ep, hello, h)
-			if ctx.Err() != nil {
-				return nil
-			}
-		}
-		if last == nil && len(eps) == 0 {
-			last = errors.New("no parent")
+		} else if claiming.CompareAndSwap(false, true) {
+			go func(eps []reverse.Endpoint) {
+				defer claiming.Store(false)
+				for _, ep := range eps {
+					if ctx.Err() != nil || hasSession(cfg.Home) {
+						return
+					}
+					connect(ep)
+				}
+			}(append([]reverse.Endpoint(nil), eps...))
 		}
 		d := backoffs[step]
 		if step < len(backoffs)-1 {
@@ -101,7 +125,6 @@ func Run(ctx context.Context, cfg Config) error {
 			return nil
 		case <-timer.C:
 		}
-		_ = last
 	}
 	return nil
 }
@@ -118,15 +141,23 @@ type kidHandler struct {
 }
 
 func (h *kidHandler) hello() (reverse.Frame, error) {
-	sess, ok, err := LoadSession(h.home)
+	sessions, err := LoadSessions(h.home)
 	if err != nil {
 		return reverse.Frame{}, err
 	}
-	if ok && sess.Ticket != "" && sess.ID != "" {
-		h.id = sess.ID
-		return reverse.Frame{Resume: &reverse.Resume{ID: sess.ID, Ticket: sess.Ticket}}, nil
+	for _, sess := range sessions {
+		if sess.Parent == h.parent && sess.Ticket != "" && sess.ID != "" {
+			h.id = sess.ID
+			return reverse.Frame{Resume: &reverse.Resume{ID: sess.ID, Ticket: sess.Ticket}}, nil
+		}
 	}
-	return reverse.Frame{Offer: &reverse.Offer{ID: h.id, Name: h.name}}, nil
+	paired := len(sessions) > 0
+	if !paired {
+		if _, err := os.Stat(pairPath(h.home)); err == nil {
+			paired = true
+		}
+	}
+	return reverse.Frame{Offer: &reverse.Offer{ID: h.id, Name: h.name, Paired: paired}}, nil
 }
 
 func (h *kidHandler) OnOffer(reverse.Offer) (*reverse.Accept, *reverse.Reject) {
@@ -137,7 +168,7 @@ func (h *kidHandler) OnResume(reverse.Resume) (*reverse.ResumeOK, *reverse.Rejec
 }
 
 func (h *kidHandler) OnAccept(a reverse.Accept) error {
-	if err := SaveSession(h.home, reverse.SessionFile{Parent: h.parent, Ticket: a.Ticket, ID: h.id}); err != nil {
+	if err := UpsertSession(h.home, reverse.SessionFile{Parent: h.parent, Ticket: a.Ticket, ID: h.id}); err != nil {
 		return err
 	}
 	return h.pairOnce()
@@ -149,7 +180,7 @@ func (h *kidHandler) OnResumeOK() error {
 
 func (h *kidHandler) OnReject(r reverse.Reject) error {
 	if r.Reason == reverse.RejectBadTicket {
-		_ = os.Remove(sessionPath(h.home))
+		_ = DropSession(h.home, h.parent)
 	}
 	return fmt.Errorf("rejected: %d", r.Reason)
 }
@@ -253,26 +284,118 @@ func pairPath(home string) string {
 	return filepath.Join(home, "parent-pair")
 }
 
+var sessionMu sync.Mutex
+
+func hasSession(home string) bool {
+	ss, err := LoadSessions(home)
+	return err == nil && len(ss) > 0
+}
+
 func LoadSession(home string) (reverse.SessionFile, bool, error) {
+	ss, err := LoadSessions(home)
+	if err != nil {
+		return reverse.SessionFile{}, false, err
+	}
+	if len(ss) == 0 {
+		return reverse.SessionFile{}, false, nil
+	}
+	return ss[0], true, nil
+}
+
+func LoadSessions(home string) ([]reverse.SessionFile, error) {
 	b, err := os.ReadFile(sessionPath(home))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return reverse.SessionFile{}, false, nil
+			return nil, nil
 		}
-		return reverse.SessionFile{}, false, err
+		return nil, err
+	}
+	var wrap struct {
+		Sessions []reverse.SessionFile `json:"sessions"`
+	}
+	if err := json.Unmarshal(b, &wrap); err == nil && wrap.Sessions != nil {
+		out := make([]reverse.SessionFile, 0, len(wrap.Sessions))
+		for _, s := range wrap.Sessions {
+			if s.Ticket != "" {
+				out = append(out, s)
+			}
+		}
+		return out, nil
 	}
 	var s reverse.SessionFile
 	if err := json.Unmarshal(b, &s); err != nil {
-		return reverse.SessionFile{}, false, err
+		return nil, err
 	}
-	return s, s.Ticket != "", nil
+	if s.Ticket == "" {
+		return nil, nil
+	}
+	return []reverse.SessionFile{s}, nil
+}
+
+func UpsertSession(home string, s reverse.SessionFile) error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	ss, err := LoadSessions(home)
+	if err != nil {
+		return err
+	}
+	found := false
+	for i, old := range ss {
+		if old.Parent == s.Parent || (s.Parent == "" && old.ID == s.ID) {
+			ss[i] = s
+			found = true
+			break
+		}
+	}
+	if !found {
+		ss = append(ss, s)
+	}
+	return saveSessionsLocked(home, ss)
+}
+
+func DropSession(home string, parent reverse.Endpoint) error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	ss, err := LoadSessions(home)
+	if err != nil {
+		return err
+	}
+	out := ss[:0]
+	for _, s := range ss {
+		if s.Parent == parent {
+			continue
+		}
+		out = append(out, s)
+	}
+	if len(out) == 0 {
+		err := os.Remove(sessionPath(home))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	return saveSessionsLocked(home, out)
 }
 
 func SaveSession(home string, s reverse.SessionFile) error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	return saveSessionsLocked(home, []reverse.SessionFile{s})
+}
+
+func saveSessionsLocked(home string, ss []reverse.SessionFile) error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return err
 	}
-	raw, err := json.MarshalIndent(s, "", "  ")
+	var raw []byte
+	var err error
+	if len(ss) == 1 {
+		raw, err = json.MarshalIndent(ss[0], "", "  ")
+	} else {
+		raw, err = json.MarshalIndent(struct {
+			Sessions []reverse.SessionFile `json:"sessions"`
+		}{Sessions: ss}, "", "  ")
+	}
 	if err != nil {
 		return err
 	}
@@ -307,10 +430,14 @@ func SaveSession(home string, s reverse.SessionFile) error {
 
 func Find(ctx context.Context, home string) ([]reverse.Endpoint, error) {
 	var out []reverse.Endpoint
-	if sess, ok, err := LoadSession(home); err != nil {
+	if ss, err := LoadSessions(home); err != nil {
 		return nil, err
-	} else if ok && sess.Parent != "" {
-		out = append(out, sess.Parent)
+	} else {
+		for _, sess := range ss {
+			if sess.Parent != "" {
+				out = append(out, sess.Parent)
+			}
+		}
 	}
 	out = append(out, loadHintEndpoints(home)...)
 	found := make(chan advertise.Found, 8)

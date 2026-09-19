@@ -92,9 +92,9 @@ If another parent already claimed a computer, it stays in the dropdown as Alread
 
 ![Computers](docs/screenshots/picker.png)
 
-Click it if you mean to take over. Yes makes it yours. No leaves it in the list.
+Click it if you mean to share. Yes lets this desk control it too. The first desk keeps it. No leaves it in the list.
 
-![Take over](docs/screenshots/adopt.png)
+![Share](docs/screenshots/adopt.png)
 
 If you reinstall on yours, the kid computers you already claimed come back. You should not see an empty how-to.
 
@@ -162,7 +162,7 @@ sudo systemctl stop kidtimer
 
 If they kill the shell, the overlay is gone and Super works again. A TTY, a reboot, or Windows on a dual-boot disk all get them out. Time only counts while Omarchy is running.
 
-The first desk the kid computer reaches is the one it talks to. Sit at yours first, then theirs. Keep guest laptops off Kidtimer until yours has claimed the box and the PIN is set.
+The first desk the kid computer reaches claims it. A second parent desk in the house can share it. Keep guest laptops off Kidtimer until yours has claimed the box and the PIN is set.
 
 Away from home the kid computer keeps counting, and the overlay still works. Your desk needs the home network to see them. SSH into that desk and use the [command line](#command-line) if you are away from the screen.
 

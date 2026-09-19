@@ -287,7 +287,7 @@ func TestPairPublicForbidden(t *testing.T) {
 	}
 }
 
-func TestReclaimPrivateRemints(t *testing.T) {
+func TestReclaimPrivateShares(t *testing.T) {
 	h, parent, _ := start(t)
 	first := post(t, h, "", "/v1/pair", map[string]any{}, "")
 	if first.StatusCode != 200 {
@@ -303,11 +303,11 @@ func TestReclaimPrivateRemints(t *testing.T) {
 	if next == "" || next == old {
 		t.Fatalf("token: %s", again.Body)
 	}
-	if get(t, h, old, "/v1/status").StatusCode != 401 {
-		t.Fatal("old pair")
+	if get(t, h, old, "/v1/status").StatusCode != 200 {
+		t.Fatal("old pair must still work")
 	}
 	if get(t, h, next, "/v1/status").StatusCode != 200 {
-		t.Fatal("new pair")
+		t.Fatal("shared pair")
 	}
 	if get(t, h, parent, "/v1/status").StatusCode != 200 {
 		t.Fatal("bootstrap")

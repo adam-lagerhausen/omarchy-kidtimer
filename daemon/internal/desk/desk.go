@@ -42,12 +42,11 @@ var (
 )
 
 type Registry struct {
-	mu      sync.Mutex
-	path    string
-	links   map[reverse.KidID]*link
-	corr    atomic.Uint64
-	reclaim func(ctx context.Context, url string) (pairResult, error)
-	seen    []reverse.Seen
+	mu    sync.Mutex
+	path  string
+	links map[reverse.KidID]*link
+	corr  atomic.Uint64
+	seen  []reverse.Seen
 }
 
 type link struct {
@@ -216,6 +215,15 @@ func (r *Registry) pushPin(id reverse.KidID) {
 	if err != nil || !ok {
 		return
 	}
+	res, err := r.Call(id, reverse.Op{Method: http.MethodGet, Path: "/v1/status"})
+	if err == nil && res.Status == http.StatusOK {
+		var st struct {
+			ParentPinSet bool `json:"parent_pin_set"`
+		}
+		if json.Unmarshal(res.Body, &st) == nil && st.ParentPinSet {
+			return
+		}
+	}
 	body, err := json.Marshal(map[string]string{"hash": hash})
 	if err != nil {
 		return
@@ -267,8 +275,13 @@ func (r *Registry) acceptOffer(o reverse.Offer) (*reverse.Accept, *reverse.Rejec
 	if err != nil {
 		return nil, &reverse.Reject{Reason: reverse.RejectBadTicket}
 	}
-	if _, ok := household.Lookup(kids, o.ID); ok {
+	rec, exists := household.Lookup(kids, o.ID)
+	if exists && rec.TicketHash != "" {
 		return nil, &reverse.Reject{Reason: reverse.RejectBadTicket}
+	}
+	if !exists && o.Paired {
+		r.noteSeen(o)
+		return nil, &reverse.Reject{Reason: reverse.RejectForeignParent}
 	}
 	ticket, err := reverse.NewTicket()
 	if err != nil {
@@ -277,12 +290,15 @@ func (r *Registry) acceptOffer(o reverse.Offer) (*reverse.Accept, *reverse.Rejec
 	row := reverse.Record{
 		ID:         o.ID,
 		Name:       o.Name,
+		URL:        rec.URL,
+		Token:      rec.Token,
 		TicketHash: reverse.HashTicket(ticket),
 		PairedAt:   time.Now().UTC(),
 	}
 	if err := household.Save(r.path, household.Upsert(kids, row)); err != nil {
 		return nil, &reverse.Reject{Reason: reverse.RejectBadTicket}
 	}
+	r.dropSeen(string(o.ID), rec.URL)
 	return &reverse.Accept{Ticket: ticket}, nil
 }
 

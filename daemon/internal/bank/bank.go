@@ -480,6 +480,10 @@ func (b *Bank) checkGroups(groups []string) ([]string, error) {
 }
 
 func (b *Bank) Reclaim() (string, *Token, error) {
+	return b.Share()
+}
+
+func (b *Bank) Share() (string, *Token, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := b.prepareLocked(); err != nil {
@@ -492,7 +496,7 @@ func (b *Bank) Reclaim() (string, *Token, error) {
 	if !ok || v != "true" {
 		return "", nil, ErrConflict
 	}
-	return b.replaceLocked(Token{Name: "parent-pair", Kind: KindParent})
+	return b.mintLocked(Token{Name: "parent-share-" + newID(), Kind: KindParent})
 }
 
 func (b *Bank) Pair() (string, *Token, error) {
