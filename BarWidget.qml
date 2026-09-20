@@ -32,6 +32,7 @@ BarWidget {
   property var httpQueue: []
   property var httpJob: null
   property string httpBuf: ""
+  property var pingQueue: []
 
   FontLoader { id: plexReg; source: Qt.resolvedUrl("fonts/JetBrainsMono-Regular.ttf") }
   FontLoader { id: plexMed; source: Qt.resolvedUrl("fonts/JetBrainsMono-Medium.ttf") }
@@ -234,6 +235,7 @@ BarWidget {
     if (root.role === "parent") statusText = Model.householdBarLabel(next)
     syncPanel()
     for (var a = 0; a < next.length; a++) noteHouseholdAsks(next[a])
+    pingQueue = Model.prunePings(pingQueue, next)
     root.pushHour12()
   }
 
@@ -306,21 +308,32 @@ BarWidget {
   }
 
   function notifyAsk(ask, kid) {
-    Quickshell.execDetached([
-      "omarchy-notification-send",
-      "--app-name", "Kidtimer",
-      Model.notifyHeadline(kid && kid.name),
-      Model.notifyBody(kid && kid.name, ask, kid && kid.look, kid && kid.status)
-    ])
+    // Omarchy's notification card has no DENY / APPROVE. This ping is that card.
+    var card = Model.pingCard(ask, kid)
+    if (!card) return
+    pingQueue = Model.enqueuePing(pingQueue, card)
   }
 
-  function deskSend(method, path, body, thenFn, idem) {
+  function decidePing(card, decision) {
+    var tap = Model.startPingDecide(pingQueue, card, decision)
+    if (!tap) return
+    var kid = Model.snapshotById(snapshots, tap.act.kidId)
+    if (!kid || !kid.id || kid.claimed) return
+    pingQueue = tap.queue
+    sendKid(kid, "POST", "/v1/asks/" + tap.act.id + "/decide", { decision: tap.act.decision }, null, function(status) {
+      if (status === 200) return
+      pingQueue = Model.setPingBusy(pingQueue, card, false)
+    })
+  }
+
+  function deskSend(method, path, body, thenFn, idem, doneFn) {
     var raw = body === undefined || body === null ? "" : JSON.stringify(body)
     loopbackHTTP(method, deskUrl() + path, "", raw, function(status, text) {
       if (status === 200) {
         poll()
         if (thenFn) thenFn(text)
       }
+      if (doneFn) doneFn(status, text)
     }, idem)
   }
 
@@ -328,13 +341,13 @@ BarWidget {
     deskSend("POST", path, body, thenFn)
   }
 
-  function sendKid(kid, method, path, body, thenFn) {
+  function sendKid(kid, method, path, body, thenFn, doneFn) {
     if (!kid || !kid.id || kid.claimed) return
     var rest = String(path || "")
     if (rest.indexOf("/v1/") === 0) rest = rest.slice(3)
     var idem = ""
     if (rest.indexOf("/grants") >= 0) idem = "parent-" + Date.now() + "-" + Math.floor(Math.random() * 1e9)
-    deskSend(method, "/v1/kids/" + kid.id + rest, body, thenFn, idem)
+    deskSend(method, "/v1/kids/" + kid.id + rest, body, thenFn, idem, doneFn)
   }
 
   function grantFun(seconds) {
@@ -863,6 +876,10 @@ BarWidget {
       root.injectPanel()
       Qt.callLater(root.injectPanel)
     }
+  }
+
+  PingToast {
+    hostWidget: root
   }
 
   WidgetButton {

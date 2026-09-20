@@ -180,6 +180,165 @@ func TestDeskDialAskShowsOnHousehold(t *testing.T) {
 	t.Fatalf("household missing pending ask from testMax: %+v", last)
 }
 
+func TestDeskKitchenApproveCreditsMinutes(t *testing.T) {
+	parentHome := t.TempDir()
+	kidHome := t.TempDir()
+	b, ask := seedPendingAsk(t, 600)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	httpAddr, sessAddr := startDesk(t, ctx, parentHome)
+	go func() {
+		_ = dial.Run(ctx, dial.Config{
+			Home:      kidHome,
+			Name:      "Ada",
+			Bank:      b,
+			Endpoints: []reverse.Endpoint{reverse.Endpoint(sessAddr)},
+		})
+	}()
+	kid := waitLiveAsk(t, httpAddr, "Ada", ask.ID)
+	before := groupRemaining(t, kid.Status, "fun")
+	cards := getKitchenAsks(t, httpAddr)
+	if len(cards) != 1 || cards[0].ID != ask.ID || cards[0].Text != "Ada asked for 10 more minutes" {
+		t.Fatalf("kitchen card: %+v", cards)
+	}
+	t.Logf("kitchen card %q remaining=%d", cards[0].Text, before)
+	decided := postJSON(t, "http://"+httpAddr+"/v1/kitchen/asks/"+string(kid.ID)+"/"+ask.ID+"/decide", map[string]any{
+		"decision": "approve",
+	})
+	if decided["error"] != nil {
+		t.Fatalf("decide: %v", decided)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpAddr)
+		if len(doc.Kids) != 1 {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		after := groupRemaining(t, doc.Kids[0].Status, "fun")
+		if after > before && len(kitchenAsks(doc)) == 0 {
+			t.Logf("approve credited remaining %d -> %d without the panel", before, after)
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("approve did not credit Ada without the panel")
+}
+
+func TestDeskKitchenDenyDropsAsk(t *testing.T) {
+	parentHome := t.TempDir()
+	kidHome := t.TempDir()
+	b, ask := seedPendingAsk(t, 600)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	httpAddr, sessAddr := startDesk(t, ctx, parentHome)
+	go func() {
+		_ = dial.Run(ctx, dial.Config{
+			Home:      kidHome,
+			Name:      "Ada",
+			Bank:      b,
+			Endpoints: []reverse.Endpoint{reverse.Endpoint(sessAddr)},
+		})
+	}()
+	kid := waitLiveAsk(t, httpAddr, "Ada", ask.ID)
+	before := groupRemaining(t, kid.Status, "fun")
+	_ = postJSON(t, "http://"+httpAddr+"/v1/kitchen/asks/"+string(kid.ID)+"/"+ask.ID+"/decide", map[string]any{
+		"decision": "deny",
+	})
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpAddr)
+		if len(doc.Kids) != 1 {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		after := groupRemaining(t, doc.Kids[0].Status, "fun")
+		if after != before {
+			t.Fatalf("deny credited remaining %d -> %d", before, after)
+		}
+		if len(kitchenAsks(doc)) == 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("deny left the ask")
+}
+
+func seedPendingAsk(t *testing.T, seconds int) (*bank.Bank, *bank.Ask) {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("caller")
+	}
+	root := filepath.Join(filepath.Dir(file), "..", "..", "..")
+	cfg, err := config.ParseFile(filepath.Join(root, "packaging", "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := bank.Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ask, err := b.CreateAsk(askTok, "fun", seconds, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b, ask
+}
+
+func waitLiveAsk(t *testing.T, httpAddr, name, askID string) reverse.Member {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpAddr)
+		if len(doc.Kids) != 1 || doc.Kids[0].Name != reverse.KidName(name) || !doc.Kids[0].Live {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		var asks []bank.Ask
+		if err := json.Unmarshal(doc.Kids[0].Asks, &asks); err != nil {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		if len(asks) == 1 && asks[0].ID == askID {
+			return doc.Kids[0]
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("live %s with pending ask %s", name, askID)
+	return reverse.Member{}
+}
+
+func getKitchenAsks(t *testing.T, httpAddr string) []kitchenAsk {
+	t.Helper()
+	resp, err := http.Get("http://" + httpAddr + "/v1/kitchen/asks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("kitchen asks %d %s", resp.StatusCode, body)
+	}
+	var doc kitchenDoc
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Asks == nil {
+		return []kitchenAsk{}
+	}
+	return doc.Asks
+}
+
 func TestDialParentRoleDoesNotOffer(t *testing.T) {
 	home := t.TempDir()
 	if err := household.WriteRole(home, reverse.RoleParent); err != nil {

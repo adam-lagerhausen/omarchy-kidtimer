@@ -17,6 +17,7 @@ paths=(
 	BarWidget.qml
 	Panel.qml
 	Overlay.qml
+	PingToast.qml
 	helpers
 	manifest.json
 )
