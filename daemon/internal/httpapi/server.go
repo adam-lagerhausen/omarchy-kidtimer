@@ -40,6 +40,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/parent-pin", s.handlePutPin)
 	mux.HandleFunc("POST /v1/pin/approve", s.handlePinApprove)
 	mux.HandleFunc("POST /v1/pin/grant", s.handlePinGrant)
+	mux.HandleFunc("POST /v1/pin/end-break", s.handlePinEndBreak)
 	mux.HandleFunc("POST /v1/mode", s.handleMode)
 	mux.HandleFunc("PATCH /v1/policy", s.handlePolicy)
 	mux.HandleFunc("GET /v1/look", s.handleGetLook)
@@ -300,6 +301,10 @@ type pinGrantBody struct {
 	Seconds int    `json:"seconds"`
 }
 
+type pinEndBreakBody struct {
+	Pin string `json:"pin"`
+}
+
 func (s *Server) handlePutPin(w http.ResponseWriter, r *http.Request) {
 	tok, ok := s.token(w, r)
 	if !ok {
@@ -375,6 +380,22 @@ func (s *Server) handlePinGrant(w http.ResponseWriter, r *http.Request) {
 		"reason":    g.Reason,
 		"remaining": g.Remaining,
 	})
+}
+
+func (s *Server) handlePinEndBreak(w http.ResponseWriter, r *http.Request) {
+	tok, ok := s.token(w, r)
+	if !ok {
+		return
+	}
+	var body pinEndBreakBody
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.Bank.PinEndBreak(tok, body.Pin); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ended": true})
 }
 
 func (s *Server) handleMode(w http.ResponseWriter, r *http.Request) {

@@ -109,10 +109,38 @@ Item {
   }
 
   function advancePin() {
+    if (root.face === "break") {
+      endBreak()
+      return
+    }
     var next = Model.overlayPinAdvance(pinDigits)
     if (!next.ok) return
     chosenMinutes = next.chosenMinutes
     step = next.step
+  }
+
+  function endBreak() {
+    if (!Model.validPin(pinDigits)) return
+    if (!Model.overlayGiveTimeOn(root.pinBusy)) return
+    root.pinBusy = true
+    var body = Model.pinEndBreakPayload(pinDigits)
+    overlayHTTP("POST", bankUrl() + "/v1/pin/end-break", String(bank.askToken || ""), JSON.stringify(body), function(status, text) {
+      if (status !== 200) {
+        var next = Model.overlayPinFail(status, text)
+        root.pinBusy = next.pinBusy
+        applyPinDigits(next.pinDigits)
+        root.pinWrong = next.pinWrong
+        root.pinFailText = next.pinFailText
+        root.step = next.step
+        return
+      }
+      root.pinBusy = false
+      applyPinDigits("")
+      pinWrong = false
+      pinFailText = "wrong pin"
+      step = "cover"
+      poll()
+    })
   }
 
   function grant() {
@@ -424,6 +452,35 @@ Item {
           font.family: root.plex
           font.pixelSize: 72
           font.bold: true
+        }
+
+        Rectangle {
+          visible: root.step === "cover" && root.face === "break"
+          width: parent.width
+          height: 36
+          color: "transparent"
+          border.width: 1
+          border.color: root.ink
+          Text {
+            textFormat: Text.PlainText
+            anchors.centerIn: parent
+            text: "Parent Pin"
+            color: root.ink
+            font.family: root.plex
+            font.pixelSize: 14
+            font.bold: true
+          }
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              root.step = "pin"
+              root.pinWrong = false
+              root.pinFailText = "wrong pin"
+              applyPinDigits("")
+              pinField.forceActiveFocus()
+            }
+          }
         }
 
         Text {

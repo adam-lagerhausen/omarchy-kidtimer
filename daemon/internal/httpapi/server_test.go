@@ -787,6 +787,74 @@ func TestLookGetPut(t *testing.T) {
 	}
 }
 
+func TestPinEndBreak(t *testing.T) {
+	h, parent, b := start(t)
+	tok := lookup(t, b, parent)
+	if err := b.SetParentPIN(tok, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(tok, doc); err != nil {
+		t.Fatal(err)
+	}
+	askSecret, _, err := b.Mint(tok, bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 15*60; i++ {
+		if err := b.NoteToday("minecraft"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st := asMap(t, get(t, h, parent, "/v1/status").Body)
+	if st["overlay"] != true || int(st["break_seconds"].(float64)) != 900 {
+		t.Fatalf("need break: overlay=%v break=%v", st["overlay"], st["break_seconds"])
+	}
+	fun := int(st["groups"].(map[string]any)["fun"].(float64))
+	bad := post(t, h, askSecret, "/v1/pin/end-break", map[string]any{"pin": "0000"}, "")
+	if bad.StatusCode != 403 {
+		t.Fatalf("wrong pin: %d %s", bad.StatusCode, bad.Body)
+	}
+	parentEnd := post(t, h, parent, "/v1/pin/end-break", map[string]any{"pin": "1234"}, "")
+	if parentEnd.StatusCode != 403 {
+		t.Fatalf("parent pin end-break: %d", parentEnd.StatusCode)
+	}
+	still := asMap(t, get(t, h, parent, "/v1/status").Body)
+	if still["overlay"] != true || int(still["break_seconds"].(float64)) != 900 {
+		t.Fatalf("denied pin ended break: overlay=%v break=%v", still["overlay"], still["break_seconds"])
+	}
+	ok := post(t, h, askSecret, "/v1/pin/end-break", map[string]any{"pin": "1234"}, "")
+	if ok.StatusCode != 200 {
+		t.Fatalf("end-break: %d %s", ok.StatusCode, ok.Body)
+	}
+	if asMap(t, ok.Body)["ended"] != true {
+		t.Fatalf("end-break body: %s", ok.Body)
+	}
+	after := asMap(t, get(t, h, parent, "/v1/status").Body)
+	if after["overlay"] == true || int(after["break_seconds"].(float64)) != 0 {
+		t.Fatalf("pin must end break: overlay=%v break=%v", after["overlay"], after["break_seconds"])
+	}
+	if int(after["groups"].(map[string]any)["fun"].(float64)) != fun {
+		t.Fatalf("pin must not grant time: %v", after)
+	}
+	readSecret, _, err := b.Mint(tok, bank.MintSpec{Name: "bar-read", Kind: bank.KindRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readOk := post(t, h, readSecret, "/v1/pin/end-break", map[string]any{"pin": "1234"}, "")
+	if readOk.StatusCode != 200 {
+		t.Fatalf("read pin end-break: %d %s", readOk.StatusCode, readOk.Body)
+	}
+	if asMap(t, readOk.Body)["ended"] != true {
+		t.Fatalf("read end-break body: %s", readOk.Body)
+	}
+}
+
 func TestSearchAndLookThings(t *testing.T) {
 	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
 	if err != nil {

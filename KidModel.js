@@ -599,6 +599,10 @@ function pinGrantPayload(pin, seconds) {
   return { pin: String(pin || ""), seconds: s }
 }
 
+function pinEndBreakPayload(pin) {
+  return { pin: String(pin || "") }
+}
+
 function overlayStepperLabel(minutes) {
   return String(clampAskMinutes(minutes))
 }

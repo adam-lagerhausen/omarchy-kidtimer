@@ -797,6 +797,104 @@ func TestPlayLimitStartsBreakOverlay(t *testing.T) {
 	}
 }
 
+func TestPinEndsBreakEarly(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "ledger.sqlite")
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	b, err := Open(path, cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 15*60; i++ {
+		if err := b.NoteToday("minecraft"); err != nil {
+			t.Fatal(err)
+		}
+		c.t = c.t.Add(time.Second)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds != 15*60 {
+		t.Fatalf("need break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	fun := remaining(t, b, "fun")
+	if err := b.PinEndBreak(parent, "1234"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("parent pin end-break: %v", err)
+	}
+	if err := b.PinEndBreak(askTok, "0000"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("wrong pin: %v", err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds != 15*60 {
+		t.Fatalf("wrong pin: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	if remaining(t, b, "fun") != fun {
+		t.Fatal("wrong pin changed remaining")
+	}
+	if err := b.PinEndBreak(askTok, "1234"); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("pin must end break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	if remaining(t, b, "fun") != fun {
+		t.Fatal("pin must not grant time")
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatal("ended break must not restart")
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("new sitting must not inherit old play: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
 func TestCreateAskDuringBedtimeAndLock(t *testing.T) {
 	b, parent := openTest(t, bedtime)
 	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})

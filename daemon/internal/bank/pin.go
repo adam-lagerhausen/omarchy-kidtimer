@@ -1,6 +1,8 @@
 package bank
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -92,6 +94,45 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 		return nil, err
 	}
 	return g, nil
+}
+
+func (b *Bank) PinEndBreak(actor *Token, digits string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.prepareLocked(); err != nil {
+		return err
+	}
+	if err := requirePinActor(actor); err != nil {
+		return err
+	}
+	if err := b.checkPinLocked(digits); err != nil {
+		return err
+	}
+	if err := b.clearBreakLocked(); err != nil {
+		return err
+	}
+	return b.closeSittingLocked()
+}
+
+func (b *Bank) closeSittingLocked() error {
+	var id int
+	var updated int64
+	err := b.db.QueryRow(
+		`SELECT id, updated_unix FROM today_spans WHERE day = ? ORDER BY id DESC LIMIT 1`,
+		b.day(),
+	).Scan(&id, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if b.now().Unix()-updated > todayGapSeconds {
+		return nil
+	}
+	stale := b.now().Unix() - int64(todayGapSeconds) - 1
+	_, err = b.db.Exec(`UPDATE today_spans SET updated_unix = ? WHERE id = ?`, stale, id)
+	return err
 }
 
 func (b *Bank) OverlayActive() bool {

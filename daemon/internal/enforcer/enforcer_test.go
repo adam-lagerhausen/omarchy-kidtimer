@@ -615,6 +615,74 @@ func TestPlayLimitOverlayFreezesUntilBreakEnds(t *testing.T) {
 	}
 }
 
+func TestPinEndsBreakOverlayResumesSpend(t *testing.T) {
+	cfg, err := config.ParseFile(packagingPath(t, "config.kid.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := &struct{ t time.Time }{t: afternoon()}
+	now := func() time.Time { return clk.t }
+	b := openBank(t, cfg, now)
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	putClassicLook(t, b, parent)
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &Rec{}
+	e := &Enforcer{
+		Bank:    b,
+		Focus:   &StaticFocus{W: Window{Class: "google-chrome", PID: 3}, OK: true},
+		Session: StaticSession{},
+		Signals: &Recorder{Rec: rec},
+		Locker:  &CountingLocker{Rec: rec},
+	}
+	for i := 0; i < 15*60; i++ {
+		if err := e.Tick(); err != nil {
+			t.Fatal(err)
+		}
+		clk.t = clk.t.Add(time.Second)
+	}
+	if err := e.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds <= 0 {
+		t.Fatalf("break overlay: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	left := remaining(t, e, "fun")
+	if err := b.PinEndBreak(askTok, "1234"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	if remaining(t, e, "fun") != left-1 {
+		t.Fatal("play resumes after pin")
+	}
+	if rec.Locks != 0 {
+		t.Fatalf("must not session-lock: %d", rec.Locks)
+	}
+}
+
 func TestEmptyLockOffDoesNotLock(t *testing.T) {
 	e, rec, _ := setup(t, false, afternoon)
 	if e.Bank.Config().EmptyLock {
