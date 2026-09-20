@@ -171,6 +171,7 @@ function parseStatus(raw) {
   out.hour12 = src.hour12 !== false
   out.play_minutes = playMinutesOf(src)
   out.break_minutes = breakMinutesOf(src)
+  out.break_seconds = breakSeconds(src)
   return out
 }
 
@@ -208,6 +209,7 @@ function barLabel(status) {
   if (!status) return "kidtimer"
   if (status.parent_locked) return "locked"
   if (status.bedtime_active && !stayingUp(status)) return "bedtime"
+  if (breakSeconds(status) > 0) return "break"
   return formatMinutes(headerSeconds(status)) + " left"
 }
 
@@ -567,8 +569,24 @@ function overlayFace(status) {
   if (status.parent_locked) return "locked"
   if (overlaySaveCover(status)) return "save"
   if (status.bedtime_active) return "bedtime"
+  if (breakSeconds(status) > 0) return "break"
   if (remainingFor(status.groups, "fun") <= 0) return "empty"
   return "locked"
+}
+
+function breakSeconds(status) {
+  var n = Number(status && status.break_seconds)
+  if (!isFinite(n) || n < 0) return 0
+  return Math.floor(n)
+}
+
+function breakCountdown(status) {
+  var n = breakSeconds(status)
+  var m = Math.floor(n / 60)
+  var s = n % 60
+  var ss = String(s)
+  if (ss.length < 2) ss = "0" + ss
+  return m + ":" + ss
 }
 
 function pinApprovePayload(pin, askId) {

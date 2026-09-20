@@ -753,6 +753,9 @@ func TestLookGetPut(t *testing.T) {
 	if int(stBody["play_minutes"].(float64)) != 60 || int(stBody["break_minutes"].(float64)) != 30 {
 		t.Fatalf("status play break: %s", stRead.Body)
 	}
+	if int(stBody["break_seconds"].(float64)) != 0 {
+		t.Fatalf("status break seconds: %s", stRead.Body)
+	}
 	askPut := doJSON(t, h, http.MethodPut, askSecret, "/v1/look", map[string]any{
 		"play_minutes":  90,
 		"break_minutes": 45,

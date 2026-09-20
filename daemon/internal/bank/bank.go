@@ -136,6 +136,7 @@ type Status struct {
 	Today           []TodaySpan
 	PlayMinutes     int
 	BreakMinutes    int
+	BreakSeconds    int
 }
 
 type TodaySpan struct {
@@ -1008,6 +1009,9 @@ func (b *Bank) Status(actor *Token) (*Status, error) {
 	if err := b.syncSaveCoverLocked(); err != nil {
 		return nil, err
 	}
+	if err := b.syncPlayBreakLocked(); err != nil {
+		return nil, err
+	}
 	st := &Status{
 		KidName:       b.cfg.KidName,
 		PathRemaining: map[string]int{},
@@ -1030,6 +1034,7 @@ func (b *Bank) Status(actor *Token) (*Status, error) {
 		OverrideUntil: b.ov.overrideUntil,
 		PlayMinutes:   b.look.PlayMinutes,
 		BreakMinutes:  b.look.BreakMinutes,
+		BreakSeconds:  b.breakSecondsLocked(),
 	}
 	if st.PlayMinutes <= 0 {
 		st.PlayMinutes = look.DefaultPlayMinutes

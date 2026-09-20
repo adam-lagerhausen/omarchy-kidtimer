@@ -27,6 +27,7 @@ const (
 	metaRefillDeferred = "refill_deferred"
 	metaHour12         = "hour12"
 	metaSaveCoverUntil = "save_cover_until"
+	metaBreakUntil     = "break_until"
 	saveCoverDuration  = 60 * time.Second
 )
 
@@ -42,6 +43,7 @@ type overlay struct {
 	holdUntil     time.Time
 	hour12        *bool
 	saveUntil     time.Time
+	breakUntil    time.Time
 }
 
 func (b *Bank) loadOverlayLocked() error {
@@ -131,6 +133,17 @@ func (b *Bank) loadOverlayLocked() error {
 			return fmt.Errorf("overlay save_cover_until: %w", err)
 		}
 		b.ov.saveUntil = t
+	}
+	v, ok, err = b.metaGet(metaBreakUntil)
+	if err != nil {
+		return err
+	}
+	if ok && v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return fmt.Errorf("overlay break_until: %w", err)
+		}
+		b.ov.breakUntil = t
 	}
 	return nil
 }

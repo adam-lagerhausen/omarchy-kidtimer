@@ -147,6 +147,9 @@ func (e *Enforcer) Tick() error {
 	if err := e.Bank.SyncSaveCover(); err != nil {
 		return err
 	}
+	if err := e.Bank.SyncPlayBreak(); err != nil {
+		return err
+	}
 	if e.Bank.OverlayActive() {
 		e.Bank.SetFocus("", "")
 		return nil

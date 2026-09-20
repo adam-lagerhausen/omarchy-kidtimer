@@ -404,6 +404,30 @@ Item {
 
         Text {
           textFormat: Text.PlainText
+          visible: root.step === "cover" && root.face === "break"
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: "break"
+          color: root.ink
+          font.family: root.plex
+          font.pixelSize: 28
+          font.bold: true
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          visible: root.step === "cover" && root.face === "break"
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: Model.breakCountdown(root.statusJson)
+          color: root.ink
+          font.family: root.plex
+          font.pixelSize: 72
+          font.bold: true
+        }
+
+        Text {
+          textFormat: Text.PlainText
           visible: root.step === "cover" && root.face === "locked"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
@@ -479,7 +503,7 @@ Item {
         }
 
         Item {
-          visible: root.step === "cover" && root.face !== "save"
+          visible: root.step === "cover" && root.face !== "save" && root.face !== "break"
           width: parent.width
           height: 36
           Rectangle {

@@ -246,6 +246,7 @@ func statusJSON(st *bank.Status) map[string]any {
 		"piles":             piles,
 		"spent":             st.Spent,
 		"today":             todaySpans(st),
+		"break_seconds":     st.BreakSeconds,
 	}
 	if st.Mode != "" {
 		out["mode"] = st.Mode

@@ -677,6 +677,7 @@ func (s *Server) writeStatus(w http.ResponseWriter, tok *bank.Token) {
 		"today":             todaySpans(st),
 		"play_minutes":      st.PlayMinutes,
 		"break_minutes":     st.BreakMinutes,
+		"break_seconds":     st.BreakSeconds,
 	}
 	if st.BedtimeIn != nil {
 		out["bedtime_in"] = *st.BedtimeIn

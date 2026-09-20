@@ -703,6 +703,100 @@ func TestAskPutsSessionMinutes(t *testing.T) {
 	}
 }
 
+func TestPlayLimitStartsBreakOverlay(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "ledger.sqlite")
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	b, err := Open(path, cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 15*60-1; i++ {
+		if err := b.NoteToday("minecraft"); err != nil {
+			t.Fatal(err)
+		}
+		c.t = c.t.Add(time.Second)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("before limit: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds != 15*60 {
+		t.Fatalf("at limit: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	if st.SaveSeconds != 0 {
+		t.Fatalf("break must not use save cover: %d", st.SaveSeconds)
+	}
+	c.t = c.t.Add(time.Second)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BreakSeconds != 15*60-1 {
+		t.Fatalf("countdown: %d", st.BreakSeconds)
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(path, cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = again.Close() })
+	_, parent, err = again.SeedParent("adam2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err = again.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds != 15*60-1 {
+		t.Fatalf("reopen break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	c.t = c.t.Add(15 * time.Minute)
+	st, err = again.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("after break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
 func TestCreateAskDuringBedtimeAndLock(t *testing.T) {
 	b, parent := openTest(t, bedtime)
 	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
