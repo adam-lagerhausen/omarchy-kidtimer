@@ -416,6 +416,8 @@ assertEqual(clock24.track.hours.join(" "), "0 6 12 18 24", "24h track")
 assertEqual(settings.kid.policy.funDayRows[0].dow, "MON", "mon")
 assertEqual(settings.kid.policy.funDayRows[0].label, "1h", "mon 1h")
 assertEqual(settings.kid.policy.funDayRows[5].label, "2h", "sat 2h")
+assertEqual(settings.kid.policy.playLabel, "45m", "ada play")
+assertEqual(settings.kid.policy.breakLabel, "15m", "ada break")
 assertEqual(settings.kid.policy.catalog.length, 0, "empty catalog")
 assertEqual(settings.kid.policy.fun.length, 0, "empty fun")
 assertEqual(settings.kid.policy.school.length, 0, "empty school")
@@ -499,6 +501,44 @@ assertEqual(wiredAdd.fun_hours.sat, 7200, "sat hours survive add")
 assertEqual(Object.prototype.hasOwnProperty.call(wiredAdd, "catalog"), false, "add has no catalog")
 assertEqual(wire.bedtime.lights_out, 21 * 60, "bed lights")
 assertEqual(wire.fun_hours.sat, 7200, "sat fun hours")
+assertEqual(wire.play_minutes, 45, "wire play")
+assertEqual(wire.break_minutes, 15, "wire break")
+
+const playPlus = parent.applyPolicy(adaSnap, { kind: "play", delta: 15 })
+assertEqual(playPlus.policy.playMin, 60, "step play +15")
+assertEqual(parent.lookToWire(playPlus).play_minutes, 60, "wired play step")
+const playFloor = parent.applyPolicy({ look: { policy: Object.assign({}, adaSnap.look.policy, { playMin: 15 }) } }, { kind: "play", delta: -15 })
+assertEqual(playFloor.policy.playMin, 15, "play floor")
+const playCeil = parent.applyPolicy({ look: { policy: Object.assign({}, adaSnap.look.policy, { playMin: 240 }) } }, { kind: "play", delta: 15 })
+assertEqual(playCeil.policy.playMin, 240, "play ceil")
+const breakPlus = parent.applyPolicy(adaSnap, { kind: "break", delta: 15 })
+assertEqual(breakPlus.policy.breakMin, 30, "step break +15")
+assertEqual(parent.lookToWire(breakPlus).break_minutes, 30, "wired break step")
+const breakFloor = parent.applyPolicy({ look: { policy: Object.assign({}, adaSnap.look.policy, { breakMin: 15 }) } }, { kind: "break", delta: -15 })
+assertEqual(breakFloor.policy.breakMin, 15, "break floor")
+const breakCeil = parent.applyPolicy({ look: { policy: Object.assign({}, adaSnap.look.policy, { breakMin: 120 }) } }, { kind: "break", delta: 15 })
+assertEqual(breakCeil.policy.breakMin, 120, "break ceil")
+const parsedLimits = parent.parseLook({
+  bedtime: { lights_out: 21 * 60, duration: 10 * 60 },
+  fun_hours: { mon: 3600, tue: 3600, wed: 3600, thu: 3600, fri: 3600, sat: 7200, sun: 7200 }
+})
+assertEqual(parsedLimits.policy.playMin, 45, "missing play defaults")
+assertEqual(parsedLimits.policy.breakMin, 15, "missing break defaults")
+const parsedSet = parent.parseLook({
+  bedtime: { lights_out: 21 * 60, duration: 10 * 60 },
+  fun_hours: { mon: 3600, tue: 3600, wed: 3600, thu: 3600, fri: 3600, sat: 7200, sun: 7200 },
+  play_minutes: 60,
+  break_minutes: 30
+})
+assertEqual(parsedSet.policy.playMin, 60, "parse play")
+assertEqual(parsedSet.policy.breakMin, 30, "parse break")
+const bedKeepsPlay = parent.projectKid({
+  look: playPlus,
+  status: Object.assign({}, adaSnap.status, { bedtimeStart: 20 * 60, bedtimeEnd: 7 * 60 })
+}, 0, null, null, true)
+assertEqual(bedKeepsPlay.policy.playMin, 60, "bed override keeps play")
+assertEqual(bedKeepsPlay.policy.breakMin, 15, "bed override keeps break")
+assertEqual(bedKeepsPlay.policy.playLabel, "1h", "play label after step")
 
 
 assertEqual(kid.barLabel({

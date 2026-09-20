@@ -3,6 +3,12 @@
 var DAY_MIN = 1440
 var MIN_BED = 60
 var MAX_FUN_MIN = 480
+var DEFAULT_PLAY_MIN = 45
+var DEFAULT_BREAK_MIN = 15
+var MIN_PLAY_MIN = 15
+var MAX_PLAY_MIN = 240
+var MIN_BREAK_MIN = 15
+var MAX_BREAK_MIN = 120
 var SIT_GAP_MIN = 10
 var DUST_MIN = 2
 var LOG_MAX = 6
@@ -358,6 +364,36 @@ function minutesLabel(n) {
   return n + "m"
 }
 
+function clampPlayMin(n) {
+  var v = Math.round(Number(n))
+  if (!isFinite(v)) return DEFAULT_PLAY_MIN
+  if (v < MIN_PLAY_MIN) return MIN_PLAY_MIN
+  if (v > MAX_PLAY_MIN) return MAX_PLAY_MIN
+  return v
+}
+
+function clampBreakMin(n) {
+  var v = Math.round(Number(n))
+  if (!isFinite(v)) return DEFAULT_BREAK_MIN
+  if (v < MIN_BREAK_MIN) return MIN_BREAK_MIN
+  if (v > MAX_BREAK_MIN) return MAX_BREAK_MIN
+  return v
+}
+
+function playMinutesOf(raw) {
+  if (!raw || raw.play_minutes === undefined || raw.play_minutes === null) return DEFAULT_PLAY_MIN
+  var v = Number(raw.play_minutes)
+  if (!isFinite(v) || v <= 0) return DEFAULT_PLAY_MIN
+  return clampPlayMin(v)
+}
+
+function breakMinutesOf(raw) {
+  if (!raw || raw.break_minutes === undefined || raw.break_minutes === null) return DEFAULT_BREAK_MIN
+  var v = Number(raw.break_minutes)
+  if (!isFinite(v) || v <= 0) return DEFAULT_BREAK_MIN
+  return clampBreakMin(v)
+}
+
 function minFromHHMM(hhmm) {
   var p = String(hhmm || "00:00").split(":")
   var h = Number(p[0]) || 0
@@ -448,7 +484,9 @@ function emptyLookRaw() {
     modes: [{ id: "freetime", name: "Freetime", kind: "freetime", hours: {} }],
     sticky_freetime: false,
     schedule: { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] },
-    bedtime: { lights_out: 21 * 60, duration: 10 * 60 }
+    bedtime: { lights_out: 21 * 60, duration: 10 * 60 },
+    play_minutes: DEFAULT_PLAY_MIN,
+    break_minutes: DEFAULT_BREAK_MIN
   }
 }
 
@@ -471,6 +509,8 @@ function defaultPolicy() {
     bed: 21 * 60,
     up: 7 * 60,
     funDay: WEEK_DEFAULT.slice(),
+    playMin: DEFAULT_PLAY_MIN,
+    breakMin: DEFAULT_BREAK_MIN,
     catalog: [],
     fun: [],
     school: []
@@ -611,6 +651,8 @@ function parseLook(raw) {
       bed: lights,
       up: (lights + dur) % DAY_MIN,
       funDay: funDay,
+      playMin: playMinutesOf(raw),
+      breakMin: breakMinutesOf(raw),
       catalog: [],
       fun: listedThings(raw, "fun"),
       school: listedThings(raw, "school")
@@ -980,6 +1022,8 @@ function projectKid(snap, index, now, allotOverride, hour12) {
     bed: status.bedtimeStart,
     up: status.bedtimeEnd != null ? status.bedtimeEnd : policy.up,
     funDay: policy.funDay,
+    playMin: clampPlayMin(Number(policy.playMin) || DEFAULT_PLAY_MIN),
+    breakMin: clampBreakMin(Number(policy.breakMin) || DEFAULT_BREAK_MIN),
     catalog: policy.catalog || [],
     fun: policy.fun || [],
     school: policy.school || []
@@ -1006,6 +1050,10 @@ function projectKid(snap, index, now, allotOverride, hour12) {
       up: policy.up,
       bedLabel: clockLabel(policy.bed, hour12),
       upLabel: clockLabel(policy.up, hour12),
+      playMin: clampPlayMin(Number(policy.playMin) || DEFAULT_PLAY_MIN),
+      breakMin: clampBreakMin(Number(policy.breakMin) || DEFAULT_BREAK_MIN),
+      playLabel: minutesLabel(clampPlayMin(Number(policy.playMin) || DEFAULT_PLAY_MIN)),
+      breakLabel: minutesLabel(clampBreakMin(Number(policy.breakMin) || DEFAULT_BREAK_MIN)),
       funDay: policy.funDay.slice(),
       funDayRows: (function () {
         var rows = []
@@ -1093,7 +1141,7 @@ function blankKid() {
     bedtime: false,
     face: { live: false, caption: "", coral: false },
     fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
-    policy: { bedLabel: "", upLabel: "", funDayRows: [] }
+    policy: { bedLabel: "", upLabel: "", playLabel: "", breakLabel: "", funDayRows: [] }
   }
 }
 
@@ -1299,6 +1347,10 @@ function applyPolicy(snapshot, act) {
     var day = Number(act.day) || 0
     var next = Math.max(0, Math.min(MAX_FUN_MIN * 60, (Number(p.funDay[day]) || 0) + Number(act.delta) * 60))
     p.funDay[day] = next
+  } else if (kind === "play") {
+    p.playMin = clampPlayMin((Number(p.playMin) || DEFAULT_PLAY_MIN) + Number(act.delta))
+  } else if (kind === "break") {
+    p.breakMin = clampBreakMin((Number(p.breakMin) || DEFAULT_BREAK_MIN) + Number(act.delta))
   } else if (kind === "addThing") {
     var addList = act.list === "school" ? "school" : "fun"
     var other = addList === "fun" ? "school" : "fun"
@@ -1328,6 +1380,8 @@ function lookToWire(parsedLook) {
   raw.apps = {}
   var dur = nightLen(policy.bed, policy.up)
   raw.bedtime = { lights_out: policy.bed, duration: dur }
+  raw.play_minutes = clampPlayMin(Number(policy.playMin) || DEFAULT_PLAY_MIN)
+  raw.break_minutes = clampBreakMin(Number(policy.breakMin) || DEFAULT_BREAK_MIN)
   var keys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
   raw.fun_hours = {}
   for (var d = 0; d < 7; d++) raw.fun_hours[keys[d]] = Number(policy.funDay[d]) || 0
@@ -1366,6 +1420,8 @@ function fixtureKid(id) {
           bed: 20 * 60,
           up: 7 * 60,
           funDay: [3600, 3600, 3600, 3600, 3600, 5400, 5400],
+          playMin: DEFAULT_PLAY_MIN,
+          breakMin: DEFAULT_BREAK_MIN,
           catalog: [],
           fun: [],
           school: []
@@ -1399,6 +1455,8 @@ function fixtureKid(id) {
         bed: 21 * 60,
         up: 7 * 60,
         funDay: WEEK_DEFAULT.slice(),
+        playMin: DEFAULT_PLAY_MIN,
+        breakMin: DEFAULT_BREAK_MIN,
         catalog: [],
         fun: [],
         school: []

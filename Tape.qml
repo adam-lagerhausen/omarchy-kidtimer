@@ -22,7 +22,7 @@ Rectangle {
       face: { live: false, caption: "", coral: false },
       usedLabel: "0m",
       fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
-      policy: { bedLabel: "", upLabel: "", funDayRows: [] }
+      policy: { bedLabel: "", upLabel: "", playLabel: "", breakLabel: "", funDayRows: [] }
     },
     kids: [], asks: [], bellCount: 0,
     track: { beds: [], blocks: [], needle: null, log: [], hours: ["0", "6", "12", "18", "24"] },
@@ -1010,6 +1010,66 @@ Rectangle {
             width: 36
             height: 24
             onClicked: root.act({ kind: "funDay", day: modelData.day, delta: 15 })
+            Text {
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "+15"
+              color: parent.contentColor
+              font.family: root.plex
+              font.pixelSize: 11
+            }
+          }
+        }
+      }
+      DashedRule { width: parent.width }
+      Repeater {
+        model: [
+          { kind: "play", k: "PLAY", v: t.kid.policy.playLabel },
+          { kind: "break", k: "BREAK", v: t.kid.policy.breakLabel }
+        ]
+        Item {
+          required property var modelData
+          width: inner.width
+          height: 30
+          Text {
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            width: 42
+            text: modelData.k
+            color: quiet
+            font.family: root.plex
+            font.pixelSize: 13
+          }
+          SquareBtn {
+            x: 48
+            anchors.verticalCenter: parent.verticalCenter
+            width: 36
+            height: 24
+            onClicked: root.act({ kind: modelData.kind, delta: -15 })
+            Text {
+              textFormat: Text.PlainText
+              anchors.centerIn: parent
+              text: "−15"
+              color: parent.contentColor
+              font.family: root.plex
+              font.pixelSize: 11
+            }
+          }
+          Text {
+            textFormat: Text.PlainText
+            anchors.centerIn: parent
+            text: modelData.v
+            color: foreground
+            font.family: root.plex
+            font.pixelSize: 13
+            font.weight: Font.DemiBold
+          }
+          SquareBtn {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: 36
+            height: 24
+            onClicked: root.act({ kind: modelData.kind, delta: 15 })
             Text {
               textFormat: Text.PlainText
               anchors.centerIn: parent

@@ -14,6 +14,13 @@ const (
 	DayFri = "fri"
 	DaySat = "sat"
 	DaySun = "sun"
+
+	DefaultPlayMinutes  = 45
+	DefaultBreakMinutes = 15
+	MinPlayMinutes      = 15
+	MaxPlayMinutes      = 240
+	MinBreakMinutes     = 15
+	MaxBreakMinutes     = 120
 )
 
 var DayIDs = []string{DayMon, DayTue, DayWed, DayThu, DayFri, DaySat, DaySun}
@@ -61,6 +68,8 @@ type Document struct {
 	Matchers       map[string]Matcher `json:"matchers"`
 	PileHours      map[string]int     `json:"pile_hours"`
 	FunHours       map[string]int     `json:"fun_hours"`
+	PlayMinutes    int                `json:"play_minutes"`
+	BreakMinutes   int                `json:"break_minutes"`
 	Modes          []Mode             `json:"modes"`
 	Schedule       map[string][]Block `json:"schedule"`
 	Bedtime        Bedtime            `json:"bedtime"`
@@ -91,6 +100,12 @@ type Bedtime struct {
 func (d Document) Validate() error {
 	d.normalize()
 	if err := d.Bedtime.Validate(); err != nil {
+		return err
+	}
+	if err := validateSessionMinutes("play_minutes", d.PlayMinutes, MinPlayMinutes, MaxPlayMinutes); err != nil {
+		return err
+	}
+	if err := validateSessionMinutes("break_minutes", d.BreakMinutes, MinBreakMinutes, MaxBreakMinutes); err != nil {
 		return err
 	}
 	piles, err := PilesFrom(d.Piles, d.Apps)
@@ -156,6 +171,16 @@ func (d Document) Validate() error {
 		if !validDayID(dayID) {
 			return fmt.Errorf("schedule: unknown day %q", dayID)
 		}
+	}
+	return nil
+}
+
+func validateSessionMinutes(label string, n, min, max int) error {
+	if n == 0 {
+		return nil
+	}
+	if n < min || n > max {
+		return fmt.Errorf("%s must be %d..%d", label, min, max)
 	}
 	return nil
 }
@@ -373,6 +398,14 @@ func AdoptPersisted(d *Document) (changed bool) {
 		d.Apps = map[string]string{}
 		d.Matchers = map[string]Matcher{}
 		d.Version = 2
+		changed = true
+	}
+	if d.PlayMinutes <= 0 {
+		d.PlayMinutes = DefaultPlayMinutes
+		changed = true
+	}
+	if d.BreakMinutes <= 0 {
+		d.BreakMinutes = DefaultBreakMinutes
 		changed = true
 	}
 	return changed

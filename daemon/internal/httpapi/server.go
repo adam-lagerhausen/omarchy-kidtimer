@@ -538,6 +538,8 @@ func writeLook(w http.ResponseWriter, doc look.Document) {
 		"apps":            doc.Apps,
 		"pile_hours":      doc.PileHours,
 		"fun_hours":       doc.FunHours,
+		"play_minutes":    doc.PlayMinutes,
+		"break_minutes":   doc.BreakMinutes,
 		"modes":           doc.Modes,
 		"schedule":        doc.Schedule,
 		"bedtime":         doc.Bedtime,

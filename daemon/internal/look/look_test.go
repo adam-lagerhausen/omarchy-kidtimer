@@ -204,6 +204,9 @@ func TestSeedKeepsPileIdsAndDropsOverflow(t *testing.T) {
 	if doc.FunHours[DaySat] != 7200 || doc.FunHours[DayMon] != 3600 {
 		t.Fatalf("fun hours: %+v", doc.FunHours)
 	}
+	if doc.PlayMinutes != 45 || doc.BreakMinutes != 15 {
+		t.Fatalf("session limits: play=%d break=%d", doc.PlayMinutes, doc.BreakMinutes)
+	}
 	if doc.Bedtime.LightsOut != 21*60 || doc.Bedtime.Duration != 10*60 || doc.Bedtime.Wake() != 7*60 {
 		t.Fatalf("bedtime: %+v wake=%d", doc.Bedtime, doc.Bedtime.Wake())
 	}
@@ -223,6 +226,106 @@ func TestDocumentRejectsBedtimeTooShort(t *testing.T) {
 	doc.Bedtime.Duration = 30
 	if err := doc.Validate(); err == nil {
 		t.Fatal("short bedtime")
+	}
+}
+
+func TestDocumentAllowsUnsetPlayBreak(t *testing.T) {
+	doc := seedParentLab(t)
+	doc.PlayMinutes = 0
+	doc.BreakMinutes = 0
+	if err := doc.Validate(); err != nil {
+		t.Fatalf("unset play/break: %v", err)
+	}
+}
+
+func TestDocumentRejectsPlayBreakOutOfRange(t *testing.T) {
+	doc := seedParentLab(t)
+	doc.PlayMinutes = 14
+	if err := doc.Validate(); err == nil {
+		t.Fatal("short play")
+	}
+	doc = seedParentLab(t)
+	doc.PlayMinutes = 241
+	if err := doc.Validate(); err == nil {
+		t.Fatal("long play")
+	}
+	doc = seedParentLab(t)
+	doc.BreakMinutes = 14
+	if err := doc.Validate(); err == nil {
+		t.Fatal("short break")
+	}
+	doc = seedParentLab(t)
+	doc.BreakMinutes = 121
+	if err := doc.Validate(); err == nil {
+		t.Fatal("long break")
+	}
+}
+
+func TestNormalizeDoesNotDefaultPlayBreak(t *testing.T) {
+	doc := seedParentLab(t)
+	doc.PlayMinutes = 0
+	doc.BreakMinutes = 0
+	doc.normalize()
+	if doc.PlayMinutes != 0 || doc.BreakMinutes != 0 {
+		t.Fatalf("normalize clobbered: play=%d break=%d", doc.PlayMinutes, doc.BreakMinutes)
+	}
+}
+
+func TestAdoptFillsPlayBreakDefaults(t *testing.T) {
+	doc := seedParentLab(t)
+	doc.PlayMinutes = 0
+	doc.BreakMinutes = 0
+	if !AdoptPersisted(&doc) {
+		t.Fatal("expected adopt")
+	}
+	if doc.PlayMinutes != 45 || doc.BreakMinutes != 15 {
+		t.Fatalf("defaults: play=%d break=%d", doc.PlayMinutes, doc.BreakMinutes)
+	}
+}
+
+func TestApplyIncomingKeepsStoredPlayBreak(t *testing.T) {
+	stored := seedParentLab(t)
+	stored.PlayMinutes = 60
+	stored.BreakMinutes = 30
+	incoming := stored.Clone()
+	incoming.PlayMinutes = 0
+	incoming.BreakMinutes = 0
+	out, err := ApplyIncoming(stored, incoming, Fill{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.PlayMinutes != 60 || out.BreakMinutes != 30 {
+		t.Fatalf("kept: play=%d break=%d", out.PlayMinutes, out.BreakMinutes)
+	}
+}
+
+func TestApplyIncomingUsesIncomingPlayBreak(t *testing.T) {
+	stored := seedParentLab(t)
+	incoming := stored.Clone()
+	incoming.PlayMinutes = 90
+	incoming.BreakMinutes = 45
+	out, err := ApplyIncoming(stored, incoming, Fill{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.PlayMinutes != 90 || out.BreakMinutes != 45 {
+		t.Fatalf("incoming: play=%d break=%d", out.PlayMinutes, out.BreakMinutes)
+	}
+}
+
+func TestApplyIncomingDefaultsWhenStoredUnset(t *testing.T) {
+	stored := seedParentLab(t)
+	stored.PlayMinutes = 0
+	stored.BreakMinutes = 0
+	incoming := stored.Clone()
+	incoming.PlayMinutes = 0
+	incoming.BreakMinutes = 0
+	out, err := ApplyIncoming(stored, incoming, Fill{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.PlayMinutes != 45 || out.BreakMinutes != 15 {
+		t.Fatalf("defaults: play=%d break=%d", out.PlayMinutes, out.BreakMinutes)
 	}
 }
 
@@ -310,6 +413,9 @@ func TestAdoptEmptiesClassicMembership(t *testing.T) {
 	}
 	if doc.Bedtime.LightsOut != 1260 || doc.PileHours["fun"] != 3600 || doc.FunHours["sat"] != 7200 {
 		t.Fatalf("kept clocks: bedtime=%+v hours=%+v fun=%+v", doc.Bedtime, doc.PileHours, doc.FunHours)
+	}
+	if doc.PlayMinutes != DefaultPlayMinutes || doc.BreakMinutes != DefaultBreakMinutes {
+		t.Fatalf("adopted session limits: play=%d break=%d", doc.PlayMinutes, doc.BreakMinutes)
 	}
 }
 

@@ -50,7 +50,8 @@ Order on the settings tape:
 4. CLOCK 12 or 24. Filled square is the active choice. Bed, the day log, the track marks, and the kid overlay follow it.
 5. Bed and Up as two clocks. −  9:00 PM  + on one row, −  7:00 AM  + on the next. The hatched night under them.
 6. Time for each day of the week, each with −15 / +15
-7. Filled gear, bottom right
+7. PLAY and BREAK duration steppers, each with −15 / +15
+8. Filled gear, bottom right
 
 Bedtime is two clocks, not two more day rows. `9:00 PM` is bed, `7:00 AM` is up. − and + move 15 minutes. The hatch under them is the night: same marks as home, no sessions, no needle. Home's hatch uses those times.
 
@@ -107,6 +108,8 @@ Sound like a parent.
 - `CLOCK` / `12` / `24`
 - `9:00 PM` / `7:00 AM`
 - `MON` … `SUN`
+- `PLAY` / `BREAK`
+- `45m` / `15m`
 - `Ada asked for 10 more minutes`
 - `Ada asked to unlock`
 - `DENY` / `APPROVE`

@@ -526,6 +526,8 @@ func TestPutLookLeavesRemaining(t *testing.T) {
 		t.Fatalf("fun pile: %+v", doc.Piles)
 	}
 	doc.FunHours[look.DaySat] = 5400
+	doc.PlayMinutes = 60
+	doc.BreakMinutes = 30
 	if err := b.PutLook(parent, doc); err != nil {
 		t.Fatal(err)
 	}
@@ -605,6 +607,8 @@ func TestPolicyPersistsAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc.FunHours[look.DaySat] = 5400
+	doc.PlayMinutes = 60
+	doc.BreakMinutes = 30
 	if err := b.PutLook(parent, doc); err != nil {
 		t.Fatal(err)
 	}
@@ -639,6 +643,9 @@ func TestPolicyPersistsAcrossReopen(t *testing.T) {
 	}
 	if stored.FunHours[look.DaySat] != 5400 {
 		t.Fatalf("fun_hours after reopen: %+v", stored.FunHours)
+	}
+	if stored.PlayMinutes != 60 || stored.BreakMinutes != 30 {
+		t.Fatalf("play/break after reopen: play=%d break=%d", stored.PlayMinutes, stored.BreakMinutes)
 	}
 }
 

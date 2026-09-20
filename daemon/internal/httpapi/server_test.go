@@ -688,6 +688,12 @@ func TestLookGetPut(t *testing.T) {
 	if doc["fun_hours"].(map[string]any)["sat"].(float64) != 7200 {
 		t.Fatalf("sat hours: %s", got.Body)
 	}
+	if int(doc["play_minutes"].(float64)) != 45 {
+		t.Fatalf("play minutes: %s", got.Body)
+	}
+	if int(doc["break_minutes"].(float64)) != 15 {
+		t.Fatalf("break minutes: %s", got.Body)
+	}
 	if things, _ := doc["things"].([]any); len(things) != 0 {
 		t.Fatalf("seed things: %s", got.Body)
 	}
@@ -715,6 +721,21 @@ func TestLookGetPut(t *testing.T) {
 	st = get(t, h, parent, "/v1/status")
 	if int(asMap(t, st.Body)["groups"].(map[string]any)["fun"].(float64)) != 3690 {
 		t.Fatalf("same-bytes put look wrote remaining: %s", st.Body)
+	}
+	limits := asMap(t, put.Body)
+	limits["play_minutes"] = 60
+	limits["break_minutes"] = 30
+	changed := doJSON(t, h, http.MethodPut, parent, "/v1/look", limits, "")
+	if changed.StatusCode != 200 {
+		t.Fatalf("put play break: %d %s", changed.StatusCode, changed.Body)
+	}
+	outLimits := asMap(t, changed.Body)
+	if int(outLimits["play_minutes"].(float64)) != 60 || int(outLimits["break_minutes"].(float64)) != 30 {
+		t.Fatalf("put play break body: %s", changed.Body)
+	}
+	againLook := asMap(t, get(t, h, parent, "/v1/look").Body)
+	if int(againLook["play_minutes"].(float64)) != 60 || int(againLook["break_minutes"].(float64)) != 30 {
+		t.Fatalf("get play break: %v", againLook)
 	}
 }
 

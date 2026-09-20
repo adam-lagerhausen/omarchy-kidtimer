@@ -15,6 +15,18 @@ func ApplyIncoming(stored, incoming Document, fill Fill) (Document, error) {
 	if len(incoming.FunHours) == 0 {
 		out.FunHours = stored.Clone().FunHours
 	}
+	if incoming.PlayMinutes <= 0 {
+		out.PlayMinutes = stored.PlayMinutes
+	}
+	if incoming.BreakMinutes <= 0 {
+		out.BreakMinutes = stored.BreakMinutes
+	}
+	if out.PlayMinutes <= 0 {
+		out.PlayMinutes = DefaultPlayMinutes
+	}
+	if out.BreakMinutes <= 0 {
+		out.BreakMinutes = DefaultBreakMinutes
+	}
 	out.Matchers = map[string]Matcher{}
 	installed := map[string]InstalledApp{}
 	for _, app := range fill.Installed {
