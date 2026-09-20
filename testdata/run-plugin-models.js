@@ -613,6 +613,13 @@ assertEqual(kid.askWaiting({ pending_ask_count: 1 }, false), true, "chip waits o
 assertEqual(kid.askWaiting({ pending_ask_count: 0 }, true), true, "chip waits on local ask")
 assertEqual(kid.askWaiting({ pending_ask_count: 0 }, false), false, "chip ask open")
 assertEqual(kid.askWaiting({}, false), false, "chip ask open missing")
+assertEqual(kid.askWaitSeedPending(-1), 1, "seed pending after post")
+assertEqual(kid.askWaitSeedPending(0), 1, "seed pending when never seen")
+assertEqual(kid.askWaitSeedPending(2), 2, "seed keeps a real pending count")
+assertEqual(kid.askStillWaiting(true, 1, 0), false, "waiting clears after ask is gone")
+assertEqual(kid.askStillWaiting(true, 1, 1), true, "waiting stays while pending")
+assertEqual(kid.askStillWaiting(true, -1, 0), true, "waiting stays until a pending count is seen")
+assertEqual(kid.askStillWaiting(false, 1, 0), false, "not waiting stays clear")
 assertEqual(kid.clampOverlayAskMinutes(0), 10, "overlay ask clamp min")
 assertEqual(kid.clampOverlayAskMinutes(200), 120, "overlay ask clamp max")
 assertEqual(kid.nudgeOverlayAskMinutes(30, -10), 20, "overlay ask nudge down")
@@ -644,6 +651,42 @@ const householdAsk = parent.parseHousehold({
   kids: [{ id: "m1", name: "Ada", asks: [{ id: "a1", group: "fun", seconds: 1800, reason: "more time", status: "pending" }] }]
 })
 assertEqual(parent.parseAsks(householdAsk[0].asks)[0].seconds, 1800, "household asks keep seconds")
+assertEqual(householdAsk[0].asksFetched, true, "household ask was fetched")
+const offlineHH = parent.parseHousehold({
+  kids: [{ id: "m1", name: "Ada", live: false, error: true, status: { groups: { fun: 960 } } }]
+})
+assertEqual(offlineHH[0].asksFetched, false, "offline household did not fetch asks")
+assertEqual(parent.keepAsks([{ id: "a1", seconds: 600 }], offlineHH[0]), [{ id: "a1", seconds: 600 }], "offline keeps the last ask")
+assertEqual(parent.keepAsks([{ id: "a1", seconds: 600 }], householdAsk[0]), [{ id: "a1", seconds: 1800 }], "fetched asks replace the cache")
+assertEqual(parent.keepAsks([{ id: "old", seconds: 600 }], parent.parseHousehold({
+  kids: [{ id: "m1", name: "Ada", live: true, asks: [] }]
+})[0]), [], "empty fetched asks clear the bell")
+const heldLook = parent.parseLook(null)
+heldLook.policy.bed = 20 * 60
+heldLook.policy.up = 7 * 60
+const held = parent.holdPolicy({
+  hold: true,
+  look: heldLook,
+  status: { bedtimeStart: 20 * 60, bedtimeEnd: 7 * 60, funLeft: 1800 }
+}, parent.parseStatus({ groups: { fun: 1200 }, bedtime_start: "21:00", bedtime_end: "07:00" }), parent.parseLook(null))
+assertEqual(held.hold, true, "hold keeps the edit")
+assertEqual(held.status.bedtimeStart, 20 * 60, "hold keeps the bed on screen")
+assertEqual(held.status.funLeft, 1200, "hold still takes live remaining")
+assertEqual(held.look.policy.bed, 20 * 60, "hold keeps the look")
+const released = parent.holdPolicy({ hold: false, look: heldLook }, parent.parseStatus({
+  groups: { fun: 900 },
+  bedtime_start: "21:00",
+  bedtime_end: "07:00"
+}), parent.parseLook(null))
+assertEqual(released.hold, false, "no hold uses the poll")
+assertEqual(released.status.bedtimeStart, 21 * 60, "no hold takes polled bed")
+assertEqual(parent.pinRetryOn(true, true, false), true, "failed first pin can retry")
+assertEqual(parent.pinRetryOn(true, false, false), false, "empty first pin stays on set")
+assertEqual(parent.pinRetryOn(false, true, false), false, "change is not a first-run retry")
+assertEqual(parent.pinSetEnabled(true, true, false), true, "failed first pin enables set")
+assertEqual(parent.pinSetEnabled(true, false, false), false, "empty first pin disables set")
+assertEqual(parent.pinSetEnabled(true, false, true), true, "four digits enable set")
+assertEqual(parent.pinSetEnabled(false, true, false), true, "change stays enabled")
 assertEqual(parent.projectTape([{
   name: "Ada",
   id: "m1",

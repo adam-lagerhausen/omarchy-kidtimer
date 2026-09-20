@@ -199,15 +199,19 @@ BarWidget {
         continue
       }
       if (row.id && !row.url) {
+        var incomingStatus = row.status && row.status.groups ? Model.parseStatus(row.status) : (cur.status || {})
+        var incomingLook = row.look ? Model.parseLook(row.look) : cur.look
+        var held = Model.holdPolicy(cur, incomingStatus, incomingLook)
         next.push({
           id: row.id,
           name: row.name,
           url: "",
           token: "",
           claimed: false,
-          status: row.status && row.status.groups ? Model.parseStatus(row.status) : (cur.status || {}),
-          asks: row.asks ? Model.parseAsks(row.asks) : (cur.asks || []),
-          look: row.look ? Model.parseLook(row.look) : cur.look,
+          status: held.status,
+          asks: Model.keepAsks(cur.asks, row),
+          look: held.look,
+          hold: held.hold,
           reachable: row.live === true,
           error: row.error === true
         })

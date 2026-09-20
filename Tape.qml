@@ -712,10 +712,10 @@ Rectangle {
           width: Math.max(56, pinSetLabel.implicitWidth + 16)
           height: 28
           filled: root.pinReady
-          enabled: root.pinReady || (!needsPin && root.pinCommitted)
+          enabled: Model.pinSetEnabled(needsPin, root.pinCommitted, root.pinReady)
           z: 1
           onClicked: {
-            if (!needsPin && root.pinCommitted) root.startOverPin()
+            if (root.pinCommitted && !root.pinReady) root.startOverPin()
             else root.commitPin()
           }
           Text {

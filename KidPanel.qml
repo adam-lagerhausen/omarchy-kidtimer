@@ -69,7 +69,7 @@ Item {
 
   onStatusJsonChanged: {
     var pending = Number(statusJson && statusJson.pending_ask_count) || 0
-    if (root.waitingGroup !== "" && pending === 0 && root.lastPending > 0) {
+    if (root.waitingGroup !== "" && !Model.askStillWaiting(true, root.lastPending, pending)) {
       root.waitingGroup = ""
       root.pendingAskId = ""
       root.pinOpen = false
@@ -122,6 +122,7 @@ Item {
       }
       root.pendingAskId = id
       root.waitingGroup = root.askGroup
+      root.lastPending = Model.askWaitSeedPending(root.lastPending)
       root.askGroup = ""
       root.askWrong = false
     })

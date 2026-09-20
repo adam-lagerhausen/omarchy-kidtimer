@@ -24,6 +24,7 @@ Item {
   property bool askWrong: false
   property string askFailText: "try again"
   property bool askQueued: false
+  property int lastPending: -1
   property bool saveDismissed: false
   property var httpQueue: []
   property var httpJob: null
@@ -78,6 +79,7 @@ Item {
       }
       face = Model.overlayFace(statusJson)
       if (Model.overlayResetDismiss(statusJson)) saveDismissed = false
+      var pending = Number(statusJson.pending_ask_count) || 0
       if (!Model.overlayVisible(statusJson)) {
         step = "cover"
         applyPinDigits("")
@@ -85,14 +87,23 @@ Item {
         pinFailText = "wrong pin"
         pinBusy = false
         askQueued = false
+        lastPending = -1
         askWrong = false
         askFailText = "try again"
         chosenMinutes = Model.ASK_DEFAULT_MIN
       } else if (Model.overlaySaveCover(statusJson)) {
         if (step === "ask" || step === "pin" || step === "minutes") step = "cover"
+        if (!Model.askStillWaiting(askQueued, lastPending, pending)) askQueued = false
+        lastPending = pending
       } else if (Model.overlayAskWaiting(statusJson)) {
         askQueued = false
+        lastPending = pending
         if (step === "ask") step = "cover"
+      } else if (!Model.askStillWaiting(askQueued, lastPending, pending)) {
+        askQueued = false
+        lastPending = pending
+      } else {
+        lastPending = pending
       }
     })
   }
@@ -151,6 +162,7 @@ Item {
         return
       }
       askWrong = false
+      lastPending = Model.askWaitSeedPending(lastPending)
       step = "cover"
       poll()
     })
