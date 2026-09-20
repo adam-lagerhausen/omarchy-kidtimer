@@ -134,6 +134,8 @@ type Status struct {
 	OverrideUntil   time.Time
 	Spent           map[string]int
 	Today           []TodaySpan
+	PlayMinutes     int
+	BreakMinutes    int
 }
 
 type TodaySpan struct {
@@ -1026,6 +1028,14 @@ func (b *Bank) Status(actor *Token) (*Status, error) {
 		Modes:         b.effectiveModesLocked(),
 		Piles:         append([]look.Pile{}, b.look.Piles...),
 		OverrideUntil: b.ov.overrideUntil,
+		PlayMinutes:   b.look.PlayMinutes,
+		BreakMinutes:  b.look.BreakMinutes,
+	}
+	if st.PlayMinutes <= 0 {
+		st.PlayMinutes = look.DefaultPlayMinutes
+	}
+	if st.BreakMinutes <= 0 {
+		st.BreakMinutes = look.DefaultBreakMinutes
 	}
 	if b.effectiveBedtimeLockLocked() {
 		n := 0

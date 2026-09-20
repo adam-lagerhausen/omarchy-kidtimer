@@ -24,6 +24,12 @@ var ASK_STEP = 5
 var ASK_DEFAULT_MIN = 30
 var OVERLAY_ASK_MIN = 10
 var OVERLAY_ASK_STEP = 10
+var DEFAULT_PLAY_MIN = 45
+var DEFAULT_BREAK_MIN = 15
+var MIN_PLAY_MIN = 15
+var MAX_PLAY_MIN = 240
+var MIN_BREAK_MIN = 15
+var MAX_BREAK_MIN = 120
 
 function remainingFor(groups, id) {
   if (!groups || !id) return 0
@@ -38,6 +44,67 @@ function leftoverMinutes(seconds) {
   var n = Math.floor(sec / 60)
   if (n < 1) return 1
   return n
+}
+
+function minutesLabel(n) {
+  n = Math.max(0, Math.round(Number(n) || 0))
+  if (n >= 60) {
+    var h = Math.floor(n / 60)
+    var m = n % 60
+    return m ? h + "h " + m + "m" : h + "h"
+  }
+  return n + "m"
+}
+
+function clampPlayMin(n) {
+  var v = Math.round(Number(n))
+  if (!isFinite(v)) return DEFAULT_PLAY_MIN
+  if (v < MIN_PLAY_MIN) return MIN_PLAY_MIN
+  if (v > MAX_PLAY_MIN) return MAX_PLAY_MIN
+  return v
+}
+
+function clampBreakMin(n) {
+  var v = Math.round(Number(n))
+  if (!isFinite(v)) return DEFAULT_BREAK_MIN
+  if (v < MIN_BREAK_MIN) return MIN_BREAK_MIN
+  if (v > MAX_BREAK_MIN) return MAX_BREAK_MIN
+  return v
+}
+
+function playMinutesOf(raw) {
+  if (!raw || raw.play_minutes === undefined || raw.play_minutes === null) return DEFAULT_PLAY_MIN
+  var v = Number(raw.play_minutes)
+  if (!isFinite(v) || v <= 0) return DEFAULT_PLAY_MIN
+  return clampPlayMin(v)
+}
+
+function breakMinutesOf(raw) {
+  if (!raw || raw.break_minutes === undefined || raw.break_minutes === null) return DEFAULT_BREAK_MIN
+  var v = Number(raw.break_minutes)
+  if (!isFinite(v) || v <= 0) return DEFAULT_BREAK_MIN
+  return clampBreakMin(v)
+}
+
+function sessionFrom(status, hold) {
+  return {
+    playMin: hold && hold.playMin !== undefined ? clampPlayMin(hold.playMin) : playMinutesOf(status),
+    breakMin: hold && hold.breakMin !== undefined ? clampBreakMin(hold.breakMin) : breakMinutesOf(status)
+  }
+}
+
+function nudgeSession(status, hold, kind, delta) {
+  var row = sessionFrom(status, hold)
+  if (kind === "play") row.playMin = clampPlayMin(row.playMin + Number(delta))
+  else if (kind === "break") row.breakMin = clampBreakMin(row.breakMin + Number(delta))
+  return row
+}
+
+function sessionWire(row) {
+  return {
+    play_minutes: clampPlayMin(row && row.playMin),
+    break_minutes: clampBreakMin(row && row.breakMin)
+  }
 }
 
 function formatMinutes(seconds) {
@@ -102,6 +169,8 @@ function parseStatus(raw) {
   out.save_seconds = saveSeconds(src)
   out.bedtime_hold = !!src.bedtime_hold
   out.hour12 = src.hour12 !== false
+  out.play_minutes = playMinutesOf(src)
+  out.break_minutes = breakMinutesOf(src)
   return out
 }
 

@@ -503,6 +503,10 @@ func (s *Server) handlePutLook(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if tok.Kind == bank.KindAsk {
+		s.putAskSession(w, r, tok)
+		return
+	}
 	stored, err := s.Bank.Look(tok)
 	if err != nil {
 		writeErr(w, err)
@@ -523,6 +527,22 @@ func (s *Server) handlePutLook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := s.Bank.Look(tok)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeLook(w, out)
+}
+
+func (s *Server) putAskSession(w http.ResponseWriter, r *http.Request, tok *bank.Token) {
+	var body struct {
+		PlayMinutes  int `json:"play_minutes"`
+		BreakMinutes int `json:"break_minutes"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	out, err := s.Bank.PutSessionMinutes(tok, body.PlayMinutes, body.BreakMinutes)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -655,6 +675,8 @@ func (s *Server) writeStatus(w http.ResponseWriter, tok *bank.Token) {
 		"piles":             piles,
 		"spent":             st.Spent,
 		"today":             todaySpans(st),
+		"play_minutes":      st.PlayMinutes,
+		"break_minutes":     st.BreakMinutes,
 	}
 	if st.BedtimeIn != nil {
 		out["bedtime_in"] = *st.BedtimeIn

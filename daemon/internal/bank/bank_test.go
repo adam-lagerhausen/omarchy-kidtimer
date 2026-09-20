@@ -649,6 +649,60 @@ func TestPolicyPersistsAcrossReopen(t *testing.T) {
 	}
 }
 
+func TestAskPutsSessionMinutes(t *testing.T) {
+	b, parent := openTest(t, afternoon)
+	_, ask, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sat := before.FunHours[look.DaySat]
+	out, err := b.PutSessionMinutes(ask, 60, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.PlayMinutes != 60 || out.BreakMinutes != 30 {
+		t.Fatalf("ask session: play=%d break=%d", out.PlayMinutes, out.BreakMinutes)
+	}
+	stored, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PlayMinutes != 60 || stored.BreakMinutes != 30 {
+		t.Fatalf("parent look after ask: play=%d break=%d", stored.PlayMinutes, stored.BreakMinutes)
+	}
+	if stored.FunHours[look.DaySat] != sat {
+		t.Fatalf("ask clobbered hours: %+v", stored.FunHours)
+	}
+	kept, err := b.PutSessionMinutes(ask, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kept.PlayMinutes != 60 || kept.BreakMinutes != 30 {
+		t.Fatalf("zero keeps stored: play=%d break=%d", kept.PlayMinutes, kept.BreakMinutes)
+	}
+	_, readTok, err := b.Mint(parent, MintSpec{Name: "bar", Kind: KindRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.PutSessionMinutes(readTok, 90, 45); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("read put session: %v", err)
+	}
+	if err := b.PutLook(ask, stored); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("ask full put look: %v", err)
+	}
+	st, err := b.Status(readTok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.PlayMinutes != 60 || st.BreakMinutes != 30 {
+		t.Fatalf("status session: play=%d break=%d", st.PlayMinutes, st.BreakMinutes)
+	}
+}
+
 func TestCreateAskDuringBedtimeAndLock(t *testing.T) {
 	b, parent := openTest(t, bedtime)
 	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})

@@ -415,6 +415,42 @@ func (b *Bank) Look(actor *Token) (look.Document, error) {
 	return b.look.Clone(), nil
 }
 
+func (b *Bank) PutSessionMinutes(actor *Token, play, brk int) (look.Document, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if actor == nil {
+		return look.Document{}, ErrUnauthorized
+	}
+	if actor.Kind != KindParent && actor.Kind != KindAsk {
+		return look.Document{}, ErrForbidden
+	}
+	next := b.look.Clone()
+	if play > 0 {
+		next.PlayMinutes = play
+	}
+	if brk > 0 {
+		next.BreakMinutes = brk
+	}
+	if next.PlayMinutes <= 0 {
+		next.PlayMinutes = look.DefaultPlayMinutes
+	}
+	if next.BreakMinutes <= 0 {
+		next.BreakMinutes = look.DefaultBreakMinutes
+	}
+	if err := next.Validate(); err != nil {
+		return look.Document{}, fmt.Errorf("%w: %s", ErrInvalid, err)
+	}
+	if next.EqualPolicy(b.look) {
+		return b.look.Clone(), nil
+	}
+	next.Version = b.look.Version + 1
+	b.look = next
+	if err := b.persistLookLocked(); err != nil {
+		return look.Document{}, err
+	}
+	return b.look.Clone(), nil
+}
+
 func (b *Bank) PutLook(actor *Token, doc look.Document) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()

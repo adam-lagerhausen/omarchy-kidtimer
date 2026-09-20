@@ -625,7 +625,7 @@ func TestRouteAuthz(t *testing.T) {
 		{"parent pin", http.MethodPut, "/v1/parent-pin", map[string]any{"pin": "1234"}, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 		{"policy", http.MethodPatch, "/v1/policy", map[string]any{"bedtime_start": "21:00"}, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 		{"get look", http.MethodGet, "/v1/look", nil, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
-		{"put look", http.MethodPut, "/v1/look", lookDoc, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
+		{"put look", http.MethodPut, "/v1/look", lookDoc, "", map[string]int{"parent": 200, "ask": 200, "read": 403, "app": 403}},
 		{"search", http.MethodGet, "/v1/search?q=x&list=fun", nil, "", map[string]int{"parent": 200, "ask": 403, "read": 403, "app": 403}},
 	}
 	tokens := map[string]string{"parent": parent, "ask": askSecret, "read": readSecret, "app": appSecret}
@@ -736,6 +736,51 @@ func TestLookGetPut(t *testing.T) {
 	againLook := asMap(t, get(t, h, parent, "/v1/look").Body)
 	if int(againLook["play_minutes"].(float64)) != 60 || int(againLook["break_minutes"].(float64)) != 30 {
 		t.Fatalf("get play break: %v", againLook)
+	}
+	readSecret, _, err := b.Mint(lookup(t, b, parent), bank.MintSpec{Name: "reader", Kind: bank.KindRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	askSecret, _, err := b.Mint(lookup(t, b, parent), bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stRead := get(t, h, readSecret, "/v1/status")
+	if stRead.StatusCode != 200 {
+		t.Fatalf("read status: %d %s", stRead.StatusCode, stRead.Body)
+	}
+	stBody := asMap(t, stRead.Body)
+	if int(stBody["play_minutes"].(float64)) != 60 || int(stBody["break_minutes"].(float64)) != 30 {
+		t.Fatalf("status play break: %s", stRead.Body)
+	}
+	askPut := doJSON(t, h, http.MethodPut, askSecret, "/v1/look", map[string]any{
+		"play_minutes":  90,
+		"break_minutes": 45,
+		"fun_hours":     map[string]any{"sat": 1},
+	}, "")
+	if askPut.StatusCode != 200 {
+		t.Fatalf("ask put look: %d %s", askPut.StatusCode, askPut.Body)
+	}
+	askOut := asMap(t, askPut.Body)
+	if int(askOut["play_minutes"].(float64)) != 90 || int(askOut["break_minutes"].(float64)) != 45 {
+		t.Fatalf("ask put body: %s", askPut.Body)
+	}
+	if askOut["fun_hours"].(map[string]any)["sat"].(float64) != 7200 {
+		t.Fatalf("ask put clobbered hours: %s", askPut.Body)
+	}
+	parentLook := asMap(t, get(t, h, parent, "/v1/look").Body)
+	if int(parentLook["play_minutes"].(float64)) != 90 || int(parentLook["break_minutes"].(float64)) != 45 {
+		t.Fatalf("parent look after ask: %v", parentLook)
+	}
+	if parentLook["fun_hours"].(map[string]any)["sat"].(float64) != 7200 {
+		t.Fatalf("parent hours after ask: %v", parentLook)
+	}
+	stKid := asMap(t, get(t, h, readSecret, "/v1/status").Body)
+	if int(stKid["play_minutes"].(float64)) != 90 || int(stKid["break_minutes"].(float64)) != 45 {
+		t.Fatalf("kid status after ask put: %v", stKid)
+	}
+	if get(t, h, askSecret, "/v1/look").StatusCode != 403 {
+		t.Fatal("ask must not get look")
 	}
 }
 
