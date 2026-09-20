@@ -157,6 +157,7 @@ function parseHousehold(raw) {
     if (k && seenKey[k]) return
     if (k) seenKey[k] = true
     var isClaimed = claimed === true || row.claimed === true
+    var hasAsks = row.asks !== undefined && row.asks !== null
     out.push({
       id: row.id || "",
       name: row.name || "",
@@ -166,7 +167,8 @@ function parseHousehold(raw) {
       live: row.live === true,
       error: row.error === true,
       status: row.status || {},
-      asks: row.asks || [],
+      asks: hasAsks ? row.asks : [],
+      asksFetched: hasAsks,
       look: row.look || null,
       reachable: isClaimed || row.live === true || row.reachable === true
     })
@@ -936,6 +938,38 @@ function snapshotAsks(snap) {
     return a
   }
   return parseAsks(a)
+}
+
+function keepAsks(prevAsks, row) {
+  if (row && row.asksFetched) return parseAsks(row.asks)
+  return snapshotAsks({ asks: prevAsks })
+}
+
+function holdPolicy(cur, incomingStatus, incomingLook) {
+  var hold = !!(cur && cur.hold)
+  if (!hold) {
+    return { status: incomingStatus, look: incomingLook, hold: false }
+  }
+  var next = incomingStatus || {}
+  var old = snapshotStatus(cur)
+  if (old.bedtimeStart != null || old.bedtimeEnd != null) {
+    next = clone(next)
+    if (old.bedtimeStart != null) next.bedtimeStart = old.bedtimeStart
+    if (old.bedtimeEnd != null) next.bedtimeEnd = old.bedtimeEnd
+  }
+  return {
+    status: next,
+    look: cur.look || incomingLook,
+    hold: true
+  }
+}
+
+function pinRetryOn(needsPin, committed, ready) {
+  return !!needsPin && !!committed && !ready
+}
+
+function pinSetEnabled(needsPin, committed, ready) {
+  return !!ready || (!!committed && !needsPin) || pinRetryOn(needsPin, committed, ready)
 }
 
 function projectKid(snap, index, now, allotOverride, hour12) {

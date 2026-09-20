@@ -242,6 +242,20 @@ function askWaiting(status, localWaiting) {
   return !!localWaiting || overlayAskWaiting(status)
 }
 
+function askWaitSeedPending(lastPending) {
+  var n = Number(lastPending)
+  if (n > 0) return n
+  return 1
+}
+
+function askStillWaiting(localWaiting, lastPending, pending) {
+  if (!localWaiting) return false
+  var p = Number(pending) || 0
+  var prev = Number(lastPending)
+  if (p === 0 && prev > 0) return false
+  return true
+}
+
 function askPayload(group, seconds, reason) {
   var g = group || "fun"
   var s = Number(seconds)
