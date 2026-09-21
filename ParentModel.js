@@ -118,7 +118,7 @@ function breakTimeLabel() {
 }
 
 function breakTimeWhy() {
-  return "Set how long they can play before needing to take a break."
+  return "PLAY is how long they can sit. BREAK is how long they sit out."
 }
 
 function pinSlotKind(digits, index, caret, committed) {
@@ -294,6 +294,7 @@ function grantAllowed(snap) {
   if (!snap || snap.claimed) return false
   var status = snapshotStatus(snap)
   if (status.parentLocked) return false
+  if (breakSecondsOf(status) > 0) return false
   return !bedtimeOverlay(status)
 }
 
@@ -618,8 +619,16 @@ function parseStatus(raw) {
     funLeft: remainingFor(s.groups, "fun"),
     spentFun: pickSpent(s, "fun"),
     spentSchool: pickSpent(s, "school"),
-    today: parseSessions(s.today || s.sessions || [])
+    today: parseSessions(s.today || s.sessions || []),
+    breakSeconds: breakSecondsOf(s)
   }
+}
+
+function breakSecondsOf(raw) {
+  var v = raw && (raw.break_seconds !== undefined && raw.break_seconds !== null ? raw.break_seconds : raw.breakSeconds)
+  var n = Number(v)
+  if (!isFinite(n) || n < 0) return 0
+  return Math.floor(n)
 }
 
 function inFunOf(apps, id) {
@@ -1055,6 +1064,7 @@ function projectKid(snap, index, now, allotOverride, hour12) {
     face: face,
     locked: !!status.parentLocked,
     bedtime: bedtimeOverlay(status),
+    breaking: breakSecondsOf(status) > 0,
     schoolLabel: minutesLabel(schoolSec == null ? 0 : Math.floor(schoolSec / 60)),
     fun: projectFun(status, allot),
     policy: {
@@ -1151,6 +1161,7 @@ function blankKid() {
     nameUp: "",
     locked: false,
     bedtime: false,
+    breaking: false,
     face: { live: false, caption: "", coral: false },
     fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
     policy: { bedLabel: "", upLabel: "", playLabel: "", breakLabel: "", funDayRows: [] }

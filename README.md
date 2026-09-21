@@ -50,7 +50,7 @@ If you installed when the id was `kidtimer`, paste the install command again. Do
 
 ## How it works
 
-The panel shows time left, +10 and −10, Lock, and pending asks. Hours, bedtime, and CLOCK 12 or 24 live behind the gear. Screen time per day is how much they get each weekday and weekend. Break time is how long they can play before needing to take a break. PLAY and BREAK are parent-only. The kid panel has no Settings. When they ask for more time, you get an Omarchy notification with their name. Approve or deny from the panel.
+The panel shows time left, +10 and −10, Lock, and pending asks. Hours, bedtime, and CLOCK 12 or 24 live behind the gear. Screen time per day is how much they get each weekday and weekend. PLAY is how long they can sit. BREAK is how long they sit out. Both are parent-only. The kid panel has no Settings. When they ask for more time, you get an Omarchy notification with their name. Approve or deny from the panel.
 
 The log under the day is sittings: one stretch at the computer. Two apps in the same stretch share a row. `kidtimer parent export` prints every window.
 
