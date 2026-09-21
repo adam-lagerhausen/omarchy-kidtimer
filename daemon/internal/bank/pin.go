@@ -94,6 +94,9 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 	if err := b.clearParentLockLocked(); err != nil {
 		return nil, err
 	}
+	if err := b.liftBreakLocked(); err != nil {
+		return nil, err
+	}
 	return g, nil
 }
 
@@ -109,10 +112,7 @@ func (b *Bank) PinEndBreak(actor *Token, digits string) error {
 	if err := b.checkPinLocked(digits); err != nil {
 		return err
 	}
-	if err := b.clearBreakLocked(); err != nil {
-		return err
-	}
-	return b.closeSittingLocked()
+	return b.liftBreakLocked()
 }
 
 func (b *Bank) closeSittingLocked() error {
@@ -284,6 +284,16 @@ func (b *Bank) clearBreakLocked() error {
 	}
 	b.ov.breakUntil = time.Time{}
 	return b.metaSet(metaBreakUntil, "")
+}
+
+func (b *Bank) liftBreakLocked() error {
+	if !b.breakActiveLocked() {
+		return nil
+	}
+	if err := b.clearBreakLocked(); err != nil {
+		return err
+	}
+	return b.closeSittingLocked()
 }
 
 func (b *Bank) breakActiveLocked() bool {

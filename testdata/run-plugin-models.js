@@ -381,6 +381,14 @@ assertEqual(parent.grantAllowed({
   claimed: false,
   status: { bedtime_active: false, groups: { fun: 1800 } }
 }), true, "grant during the day")
+assertEqual(parent.grantAllowed({
+  claimed: false,
+  status: parent.parseStatus({
+    bedtime_active: false,
+    groups: { fun: 1800 },
+    break_seconds: 900
+  })
+}), false, "no grant during break")
 assertEqual(parent.grantAllowed({ claimed: true, status: { bedtime_active: false } }), false, "no grant claimed")
 assertEqual(parent.grantAllowed(null), false, "no grant missing kid")
 const bedtimeTape = parent.projectTape([bedtimeSnap], 0, parent.chromeHome(), null, { pinSet: true })
@@ -398,6 +406,20 @@ const stayGrant = parent.projectTape([{
   })
 }], 0, parent.chromeHome(), null, { pinSet: true })
 assertEqual(stayGrant.kid.bedtime, false, "stay-up keeps +10")
+const breakSnap = {
+  name: "Ada",
+  claimed: false,
+  reachable: true,
+  status: parent.parseStatus({
+    bedtime_active: false,
+    groups: { fun: 1800 },
+    spent: { fun: 600 },
+    break_seconds: 900
+  })
+}
+const breakTape = parent.projectTape([breakSnap], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(breakTape.kid.breaking, true, "break tape greys +10")
+assertEqual(parent.parseStatus({ break_seconds: 59 }).breakSeconds, 59, "parse break seconds")
 
 const settings = parent.fixtureTape("ada", parent.chromeSettings())
 assertEqual(settings.showLock, false, "settings hide lock")
@@ -952,7 +974,7 @@ assertEqual(parent.parentPinLabel(), "Parent Pin", "parent pin label")
 assertEqual(parent.parentPinWhy(), "Required for the controls. Use it to make changes on the kid's computer.", "parent pin why")
 assertEqual(parent.screenTimeLabel(), "Screen time per day", "screen time header")
 assertEqual(parent.breakTimeLabel(), "Break time", "break section title")
-assertEqual(parent.breakTimeWhy(), "Set how long they can play before needing to take a break.", "break section why")
+assertEqual(parent.breakTimeWhy(), "PLAY is how long they can sit. BREAK is how long they sit out.", "break section why")
 assertEqual(parent.pinSlotKind("", 0, 0, false), "caret", "empty caret")
 assertEqual(parent.pinSlotKind("", 1, 0, false), "empty", "empty other")
 assertEqual(parent.pinSlotKind("25", 0, 2, false), "digit", "typed digit")

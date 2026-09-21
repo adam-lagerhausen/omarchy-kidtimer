@@ -841,6 +841,174 @@ func TestPinEndsBreakEarly(t *testing.T) {
 	}
 }
 
+func TestApproveAskEndsBreak(t *testing.T) {
+	b, parent, askTok, _ := bankOnBreak(t, 15)
+	before := remaining(t, b, "fun")
+	ask, err := b.CreateAsk(askTok, "fun", 600, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Decide(parent, ask.ID, "approve"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("approve must end break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	if remaining(t, b, "fun") != before+600 {
+		t.Fatalf("approve still credits minutes: %d", remaining(t, b, "fun"))
+	}
+}
+
+func TestDenyAskLeavesBreak(t *testing.T) {
+	b, parent, askTok, _ := bankOnBreak(t, 15)
+	ask, err := b.CreateAsk(askTok, "fun", 600, "more time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Decide(parent, ask.ID, "deny"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds == 0 {
+		t.Fatalf("deny must leave break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
+func TestPinGrantEndsBreak(t *testing.T) {
+	b, parent, askTok, _ := bankOnBreak(t, 15)
+	before := remaining(t, b, "fun")
+	if _, err := b.PinGrant(askTok, "1234", 300); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("pin grant must end break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	if remaining(t, b, "fun") != before+300 {
+		t.Fatalf("pin grant still credits minutes: %d", remaining(t, b, "fun"))
+	}
+}
+
+func TestPinGrantDoesNotResetPlaySitting(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	c.t = c.t.Add(10*time.Minute)
+	if _, err := b.PinGrant(askTok, "1234", 60); err != nil {
+		t.Fatal(err)
+	}
+	c.t = c.t.Add(5*time.Minute - time.Second)
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("pin grant must not reset play: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	c.t = c.t.Add(time.Second)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds == 0 {
+		t.Fatalf("same sitting must still hit play: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
+func bankOnBreak(t *testing.T, playMin int) (*Bank, *Token, *Token, *clock) {
+	t.Helper()
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, askTok, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = playMin
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	c.t = c.t.Add(time.Duration(playMin)*time.Minute)
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds == 0 {
+		t.Fatalf("need break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	return b, parent, askTok, c
+}
+
 func TestPlaySittingCountsIdleTowardPlay(t *testing.T) {
 	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
