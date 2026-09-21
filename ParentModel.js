@@ -109,6 +109,18 @@ function parentPinWhy() {
   return "Required for the controls. Use it to make changes on the kid's computer."
 }
 
+function screenTimeLabel() {
+  return "Screen time per day"
+}
+
+function breakTimeLabel() {
+  return "Break time"
+}
+
+function breakTimeWhy() {
+  return "Set how long they can play before needing to take a break."
+}
+
 function pinSlotKind(digits, index, caret, committed) {
   if (committed) return "dot"
   var s = String(digits || "")

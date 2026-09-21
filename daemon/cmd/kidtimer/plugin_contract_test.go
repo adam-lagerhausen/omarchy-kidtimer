@@ -235,6 +235,15 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, "BREAK", "break length row")
 	mustContain(t, parentPanel, `kind: "play"`, "play stepper")
 	mustContain(t, parentPanel, `kind: "break"`, "break stepper")
+	mustContain(t, parentModel, "Screen time per day", "screen time header")
+	mustContain(t, parentModel, "Break time", "break section title")
+	mustContain(t, parentModel, "Set how long they can play before needing to take a break.", "break section why")
+	mustContain(t, parentPanel, "screenTimeLabel", "screen time header bind")
+	mustContain(t, parentPanel, "breakTimeLabel", "break section title bind")
+	mustContain(t, parentPanel, "breakTimeWhy", "break section why bind")
+	if strings.Contains(parentPanel, `text: "TIME"`) {
+		t.Fatal("settings header is Screen time per day, not TIME")
+	}
 	mustContain(t, parentPanel, "LOCKED", "locked stamp")
 	mustContain(t, parentPanel, "JetBrainsMono", "mono font")
 	mustContain(t, parentPanel, "Color.popups", "popup surface")

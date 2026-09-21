@@ -959,11 +959,12 @@ Rectangle {
       DashedRule { width: parent.width }
       Text {
         textFormat: Text.PlainText
-        text: "TIME"
-        color: quiet
+        text: Model.screenTimeLabel()
+        color: foreground
         font.family: root.plex
         font.pixelSize: 13
-        bottomPadding: 4
+        font.weight: Font.DemiBold
+        bottomPadding: 6
       }
       Repeater {
         model: t.kid.policy.funDayRows
@@ -1022,6 +1023,27 @@ Rectangle {
         }
       }
       DashedRule { width: parent.width }
+      Text {
+        textFormat: Text.PlainText
+        text: Model.breakTimeLabel()
+        color: foreground
+        font.family: root.plex
+        font.pixelSize: 13
+        font.weight: Font.DemiBold
+        bottomPadding: 6
+      }
+      Text {
+        textFormat: Text.PlainText
+        width: parent.width
+        wrapMode: Text.WordWrap
+        text: Model.breakTimeWhy()
+        color: quiet
+        font.family: root.plex
+        font.pixelSize: 11
+        lineHeight: 1.4
+        lineHeightMode: Text.ProportionalHeight
+        bottomPadding: 10
+      }
       Repeater {
         model: [
           { kind: "play", k: "PLAY", v: t.kid.policy.playLabel },
