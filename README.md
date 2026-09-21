@@ -1,6 +1,6 @@
 # Kidtimer
 
-Kidtimer puts a daily time limit and a bedtime on a kid's Omarchy computer. You get a control panel on yours. When time runs out or bedtime begins, they get 60 seconds to save. Super still works. Dismiss hides the cover so they can save. At 0 the overlay slams and Super is blocked. Lock from your desk slams right away.
+Kidtimer puts a daily time limit, a bedtime, and a break after a stretch of play on a kid's Omarchy computer. You get a control panel on yours. When time runs out or bedtime begins, they get 60 seconds to save. Super still works. Dismiss hides the cover so they can save. At 0 the overlay slams and Super is blocked. Lock from your desk slams right away. When a sitting hits PLAY, they get a break lock until BREAK is over.
 
 This is unofficial and not affiliated with Omarchy.
 
@@ -50,19 +50,21 @@ If you installed when the id was `kidtimer`, paste the install command again. Do
 
 ## How it works
 
-The panel shows time left, +10 and −10, Lock, and pending asks. Hours, bedtime, and CLOCK 12 or 24 live behind the gear. When they ask for more time, you get an Omarchy notification with their name. Approve or deny from the panel.
+The panel shows time left, +10 and −10, Lock, and pending asks. Hours, bedtime, and CLOCK 12 or 24 live behind the gear. Screen time per day is how much they get each weekday and weekend. Break time is how long they can play before needing to take a break. PLAY and BREAK are parent-only. The kid panel has no Settings. When they ask for more time, you get an Omarchy notification with their name. Approve or deny from the panel.
 
 The log under the day is sittings: one stretch at the computer. Two apps in the same stretch share a row. `kidtimer parent export` prints every window.
 
 ![Settings](docs/screenshots/settings.png)
 
-Games and apps spend the hour. The bar, the launcher, idle time, and the session lock do not. Idle is about a minute with no keyboard or mouse, even if a game is still on the screen.
+![Screen time per day and Break time](docs/proof/t001-parent-copy.png)
+
+Games and apps spend the hour. The bar, the launcher, idle time, and the session lock do not. Idle is about a minute with no keyboard or mouse, even if a game is still on the screen. A sitting still counts toward PLAY while they sit there idle.
 
 At midnight the clock refills from that day's hours. Extra time from yesterday does not stack.
 
 ### Defaults
 
-The clock is already running: 1 hour Monday through Friday, 2 hours Saturday and Sunday, bedtime 9:00 PM to 7:00 AM. Those times follow the timezone in `/etc/kidtimer/config.toml` on the kid box. The installer leaves that as America/New_York. Change it if that is not your house.
+The clock is already running: 1 hour Monday through Friday, 2 hours Saturday and Sunday, bedtime 9:00 PM to 7:00 AM. PLAY starts at 45 minutes. BREAK starts at 15 minutes. Those times follow the timezone in `/etc/kidtimer/config.toml` on the kid box. The installer leaves that as America/New_York. Change it if that is not your house.
 
 ### When time runs out
 
@@ -76,13 +78,23 @@ Time at zero and bedtime start with a 60-second save cover. It says save now. Su
 
 It sits over a session that is still running. You are not looking at the Omarchy lock screen or the login screen. They tap Ask on that screen, or you add time from your desk or type the parent PIN on theirs.
 
+### When they need a break
+
+When a sitting hits PLAY, the kid screen fills with a break lock. It says break and counts down until BREAK is over. Super and Escape will not get them out. Ask stays hidden. Sitting still at the computer still counts toward PLAY, so 15 minutes of PLAY is about 15 minutes of one sitting.
+
+![Break lock](docs/proof/t001-ticket3-break-lock-countdown.png)
+
+The parent PIN on that screen ends the break right then. Play can start again. The PIN does not add extra minutes.
+
+![PIN ends a break](docs/proof/t001-ticket4-pin-ends-break.png)
+
 ### Asking for more
 
 They tap Ask on their bar and pick minutes from 5 to 120, or Ask on the overlay and pick minutes with −10 / +10. They can ask during bedtime and a parent lock. Approve during the day adds the minutes they asked for. Approve during bedtime sets the timer to those minutes and lifts the bedtime overlay until they run out, then bedtime comes back. Approve during a parent lock unlocks them and adds the minutes they asked for.
 
 ![Pending asks](docs/screenshots/ask.png)
 
-The parent PIN on the overlay adds minutes and clears a parent lock. During bedtime it works like an approved ask: it sets the timer to those minutes so the bedtime overlay lifts. When those minutes hit zero, bedtime comes back. The PIN does not change the scheduled hours or bedtime.
+The parent PIN on the overlay adds minutes and clears a parent lock. During bedtime it works like an approved ask: it sets the timer to those minutes so the bedtime overlay lifts. When those minutes hit zero, bedtime comes back. The PIN does not change the scheduled hours or bedtime. On a break lock it only ends the break.
 
 Five wrong guesses start a 30-second cooldown.
 
