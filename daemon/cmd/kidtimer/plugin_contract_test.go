@@ -97,6 +97,12 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	if strings.Contains(kidPanel, "This is my computer") || strings.Contains(kidPanel, `pickRole("parent")`) {
 		t.Fatal("kid panel must not switch to parent")
 	}
+	if strings.Contains(kidPanel, "Settings") || strings.Contains(kidPanel, "persistKidSession") {
+		t.Fatal("kid panel must not have Settings")
+	}
+	if strings.Contains(kidBar, "persistKidSession") {
+		t.Fatal("kid bar must not put look")
+	}
 	kidOverlay := readPlugin(t, root, "Overlay.qml")
 	mustContain(t, kidOverlay, "Parent Pin", "overlay parent pin")
 	mustContain(t, kidOverlay, "overlayPinFail", "overlay cooldown copy")
@@ -120,6 +126,15 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidOverlay, "overlayGiveTimeOn", "overlay Give time greys while sending")
 	mustContain(t, kidOverlay, "overlayPinFail", "failed overlay pin clears digits")
 	mustContain(t, kidOverlay, "function applyPinDigits", "overlay pin boxes follow cleared digits")
+	mustContain(t, kidOverlay, `root.face === "break"`, "break lock face")
+	mustContain(t, kidOverlay, `text: "break"`, "break lock copy")
+	mustContain(t, kidOverlay, "breakCountdown", "break countdown")
+	mustContain(t, kidOverlay, `root.face !== "break"`, "break hides ask")
+	mustContain(t, kidOverlay, "/v1/pin/end-break", "pin ends break")
+	mustContain(t, kidOverlay, "function endBreak", "break pin submit")
+	mustContain(t, kidModel, "function pinEndBreakPayload", "break pin payload")
+	mustContain(t, kidModel, "function breakCountdown", "break countdown helper")
+	mustContain(t, kidModel, `return "break"`, "break overlay face")
 	mustContain(t, kidOverlay, "overlayResetDismiss", "overlay shows save again after lock")
 	mustContain(t, kidModel, "function overlayResetDismiss", "save dismiss resets after slam or lock")
 	mustContain(t, kidModel, "function overlayGiveTimeOn", "give time enable helper")
@@ -216,6 +231,19 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, "APPROVE", "approve")
 	mustContain(t, parentPanel, "DENY", "deny")
 	mustContain(t, parentPanel, "BED", "bed clock")
+	mustContain(t, parentPanel, "PLAY", "play limit row")
+	mustContain(t, parentPanel, "BREAK", "break length row")
+	mustContain(t, parentPanel, `kind: "play"`, "play stepper")
+	mustContain(t, parentPanel, `kind: "break"`, "break stepper")
+	mustContain(t, parentModel, "Screen time per day", "screen time header")
+	mustContain(t, parentModel, "Break time", "break section title")
+	mustContain(t, parentModel, "Set how long they can play before needing to take a break.", "break section why")
+	mustContain(t, parentPanel, "screenTimeLabel", "screen time header bind")
+	mustContain(t, parentPanel, "breakTimeLabel", "break section title bind")
+	mustContain(t, parentPanel, "breakTimeWhy", "break section why bind")
+	if strings.Contains(parentPanel, `text: "TIME"`) {
+		t.Fatal("settings header is Screen time per day, not TIME")
+	}
 	mustContain(t, parentPanel, "LOCKED", "locked stamp")
 	mustContain(t, parentPanel, "JetBrainsMono", "mono font")
 	mustContain(t, parentPanel, "Color.popups", "popup surface")

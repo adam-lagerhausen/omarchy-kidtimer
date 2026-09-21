@@ -688,6 +688,12 @@ func TestLookGetPut(t *testing.T) {
 	if doc["fun_hours"].(map[string]any)["sat"].(float64) != 7200 {
 		t.Fatalf("sat hours: %s", got.Body)
 	}
+	if int(doc["play_minutes"].(float64)) != 45 {
+		t.Fatalf("play minutes: %s", got.Body)
+	}
+	if int(doc["break_minutes"].(float64)) != 15 {
+		t.Fatalf("break minutes: %s", got.Body)
+	}
 	if things, _ := doc["things"].([]any); len(things) != 0 {
 		t.Fatalf("seed things: %s", got.Body)
 	}
@@ -715,6 +721,130 @@ func TestLookGetPut(t *testing.T) {
 	st = get(t, h, parent, "/v1/status")
 	if int(asMap(t, st.Body)["groups"].(map[string]any)["fun"].(float64)) != 3690 {
 		t.Fatalf("same-bytes put look wrote remaining: %s", st.Body)
+	}
+	limits := asMap(t, put.Body)
+	limits["play_minutes"] = 60
+	limits["break_minutes"] = 30
+	changed := doJSON(t, h, http.MethodPut, parent, "/v1/look", limits, "")
+	if changed.StatusCode != 200 {
+		t.Fatalf("put play break: %d %s", changed.StatusCode, changed.Body)
+	}
+	outLimits := asMap(t, changed.Body)
+	if int(outLimits["play_minutes"].(float64)) != 60 || int(outLimits["break_minutes"].(float64)) != 30 {
+		t.Fatalf("put play break body: %s", changed.Body)
+	}
+	againLook := asMap(t, get(t, h, parent, "/v1/look").Body)
+	if int(againLook["play_minutes"].(float64)) != 60 || int(againLook["break_minutes"].(float64)) != 30 {
+		t.Fatalf("get play break: %v", againLook)
+	}
+	readSecret, _, err := b.Mint(lookup(t, b, parent), bank.MintSpec{Name: "reader", Kind: bank.KindRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	askSecret, _, err := b.Mint(lookup(t, b, parent), bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stRead := get(t, h, readSecret, "/v1/status")
+	if stRead.StatusCode != 200 {
+		t.Fatalf("read status: %d %s", stRead.StatusCode, stRead.Body)
+	}
+	stBody := asMap(t, stRead.Body)
+	if int(stBody["play_minutes"].(float64)) != 60 || int(stBody["break_minutes"].(float64)) != 30 {
+		t.Fatalf("status play break: %s", stRead.Body)
+	}
+	if int(stBody["break_seconds"].(float64)) != 0 {
+		t.Fatalf("status break seconds: %s", stRead.Body)
+	}
+	askPut := doJSON(t, h, http.MethodPut, askSecret, "/v1/look", map[string]any{
+		"play_minutes":  90,
+		"break_minutes": 45,
+		"fun_hours":     map[string]any{"sat": 1},
+	}, "")
+	if askPut.StatusCode != 403 {
+		t.Fatalf("ask put look: %d %s", askPut.StatusCode, askPut.Body)
+	}
+	parentLook := asMap(t, get(t, h, parent, "/v1/look").Body)
+	if int(parentLook["play_minutes"].(float64)) != 60 || int(parentLook["break_minutes"].(float64)) != 30 {
+		t.Fatalf("parent look after ask: %v", parentLook)
+	}
+	if parentLook["fun_hours"].(map[string]any)["sat"].(float64) != 7200 {
+		t.Fatalf("parent hours after ask: %v", parentLook)
+	}
+	stKid := asMap(t, get(t, h, readSecret, "/v1/status").Body)
+	if int(stKid["play_minutes"].(float64)) != 60 || int(stKid["break_minutes"].(float64)) != 30 {
+		t.Fatalf("kid status after ask put: %v", stKid)
+	}
+	if get(t, h, askSecret, "/v1/look").StatusCode != 403 {
+		t.Fatal("ask must not get look")
+	}
+}
+
+func TestPinEndBreak(t *testing.T) {
+	h, parent, b := start(t)
+	tok := lookup(t, b, parent)
+	if err := b.SetParentPIN(tok, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(tok, doc); err != nil {
+		t.Fatal(err)
+	}
+	askSecret, _, err := b.Mint(tok, bank.MintSpec{Name: "kid-bar", Kind: bank.KindAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 15*60; i++ {
+		if err := b.NoteToday("minecraft"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st := asMap(t, get(t, h, parent, "/v1/status").Body)
+	if st["overlay"] != true || int(st["break_seconds"].(float64)) != 900 {
+		t.Fatalf("need break: overlay=%v break=%v", st["overlay"], st["break_seconds"])
+	}
+	fun := int(st["groups"].(map[string]any)["fun"].(float64))
+	bad := post(t, h, askSecret, "/v1/pin/end-break", map[string]any{"pin": "0000"}, "")
+	if bad.StatusCode != 403 {
+		t.Fatalf("wrong pin: %d %s", bad.StatusCode, bad.Body)
+	}
+	parentEnd := post(t, h, parent, "/v1/pin/end-break", map[string]any{"pin": "1234"}, "")
+	if parentEnd.StatusCode != 403 {
+		t.Fatalf("parent pin end-break: %d", parentEnd.StatusCode)
+	}
+	still := asMap(t, get(t, h, parent, "/v1/status").Body)
+	if still["overlay"] != true || int(still["break_seconds"].(float64)) != 900 {
+		t.Fatalf("denied pin ended break: overlay=%v break=%v", still["overlay"], still["break_seconds"])
+	}
+	ok := post(t, h, askSecret, "/v1/pin/end-break", map[string]any{"pin": "1234"}, "")
+	if ok.StatusCode != 200 {
+		t.Fatalf("end-break: %d %s", ok.StatusCode, ok.Body)
+	}
+	if asMap(t, ok.Body)["ended"] != true {
+		t.Fatalf("end-break body: %s", ok.Body)
+	}
+	after := asMap(t, get(t, h, parent, "/v1/status").Body)
+	if after["overlay"] == true || int(after["break_seconds"].(float64)) != 0 {
+		t.Fatalf("pin must end break: overlay=%v break=%v", after["overlay"], after["break_seconds"])
+	}
+	if int(after["groups"].(map[string]any)["fun"].(float64)) != fun {
+		t.Fatalf("pin must not grant time: %v", after)
+	}
+	readSecret, _, err := b.Mint(tok, bank.MintSpec{Name: "bar-read", Kind: bank.KindRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readOk := post(t, h, readSecret, "/v1/pin/end-break", map[string]any{"pin": "1234"}, "")
+	if readOk.StatusCode != 200 {
+		t.Fatalf("read pin end-break: %d %s", readOk.StatusCode, readOk.Body)
+	}
+	if asMap(t, readOk.Body)["ended"] != true {
+		t.Fatalf("read end-break body: %s", readOk.Body)
 	}
 }
 

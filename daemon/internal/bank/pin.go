@@ -1,10 +1,14 @@
 package bank
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"kidtimer/daemon/internal/config"
+	"kidtimer/daemon/internal/look"
 	"kidtimer/daemon/internal/pin"
 )
 
@@ -93,6 +97,51 @@ func (b *Bank) PinGrant(actor *Token, digits string, seconds int) (*Grant, error
 	return g, nil
 }
 
+func (b *Bank) PinEndBreak(actor *Token, digits string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.prepareLocked(); err != nil {
+		return err
+	}
+	if err := requirePinActor(actor); err != nil {
+		return err
+	}
+	if err := b.checkPinLocked(digits); err != nil {
+		return err
+	}
+	if err := b.clearBreakLocked(); err != nil {
+		return err
+	}
+	return b.closeSittingLocked()
+}
+
+func (b *Bank) closeSittingLocked() error {
+	var id int64
+	var updated int64
+	err := b.db.QueryRow(
+		`SELECT id, updated_unix FROM today_spans WHERE day = ? ORDER BY id DESC LIMIT 1`,
+		b.day(),
+	).Scan(&id, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if id > b.ov.playCut {
+		b.ov.playCut = id
+		if err := b.metaSet(metaPlaySittingCut, strconv.FormatInt(id, 10)); err != nil {
+			return err
+		}
+	}
+	if b.now().Unix()-updated > todayGapSeconds {
+		return nil
+	}
+	stale := b.now().Unix() - int64(todayGapSeconds) - 1
+	_, err = b.db.Exec(`UPDATE today_spans SET updated_unix = ? WHERE id = ?`, stale, id)
+	return err
+}
+
 func (b *Bank) OverlayActive() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -111,6 +160,9 @@ func (b *Bank) SyncSaveCover() error {
 func (b *Bank) overlayActiveLocked() bool {
 	if b.ov.parentPin == "" {
 		return false
+	}
+	if b.breakActiveLocked() {
+		return true
 	}
 	if b.effectiveBedtimeLockLocked() && b.bedtimeActiveLocked() && !b.stayUpActiveLocked() {
 		return true
@@ -132,6 +184,9 @@ func (b *Bank) saveCoverEligibleLocked() bool {
 		return false
 	}
 	if b.cfg.RemoteLock && b.ov.parentLock {
+		return false
+	}
+	if b.breakActiveLocked() {
 		return false
 	}
 	return true
@@ -176,6 +231,140 @@ func (b *Bank) saveSecondsLocked() int {
 		n = int(saveCoverDuration / time.Second)
 	}
 	return n
+}
+
+func (b *Bank) SyncPlayBreak() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.prepareLocked(); err != nil {
+		return err
+	}
+	return b.syncPlayBreakLocked()
+}
+
+func (b *Bank) syncPlayBreakLocked() error {
+	if b.ov.parentPin == "" {
+		return nil
+	}
+	now := b.now()
+	if !b.ov.breakUntil.IsZero() && !now.Before(b.ov.breakUntil) {
+		if err := b.clearBreakLocked(); err != nil {
+			return err
+		}
+	}
+	if b.breakActiveLocked() {
+		return nil
+	}
+	left, err := b.remainingLocked("fun")
+	if err == nil && left <= 0 {
+		return nil
+	}
+	play := b.look.PlayMinutes
+	if play <= 0 {
+		play = look.DefaultPlayMinutes
+	}
+	if b.sittingSecondsLocked() < play*60 {
+		return nil
+	}
+	brk := b.look.BreakMinutes
+	if brk <= 0 {
+		brk = look.DefaultBreakMinutes
+	}
+	until := now.Add(time.Duration(brk) * time.Minute)
+	b.ov.breakUntil = until
+	if err := b.metaSet(metaBreakUntil, until.UTC().Format(time.RFC3339)); err != nil {
+		return err
+	}
+	return b.closeSittingLocked()
+}
+
+func (b *Bank) clearBreakLocked() error {
+	if b.ov.breakUntil.IsZero() {
+		return nil
+	}
+	b.ov.breakUntil = time.Time{}
+	return b.metaSet(metaBreakUntil, "")
+}
+
+func (b *Bank) breakActiveLocked() bool {
+	if b.ov.breakUntil.IsZero() {
+		return false
+	}
+	return b.now().Before(b.ov.breakUntil)
+}
+
+func (b *Bank) breakSecondsLocked() int {
+	if !b.breakActiveLocked() {
+		return 0
+	}
+	d := b.ov.breakUntil.Sub(b.now())
+	if d <= 0 {
+		return 0
+	}
+	n := int((d + time.Second - 1) / time.Second)
+	max := b.look.BreakMinutes * 60
+	if max <= 0 {
+		max = look.DefaultBreakMinutes * 60
+	}
+	if n > max {
+		n = max
+	}
+	return n
+}
+
+type playSpan struct {
+	id      int64
+	start   int64
+	updated int64
+	seconds int
+}
+
+func (b *Bank) sittingSecondsLocked() int {
+	day := b.day()
+	rows, err := b.db.Query(
+		`SELECT id, start_unix, updated_unix, start_min, seconds FROM today_spans WHERE day = ? AND id > ? ORDER BY id`,
+		day, b.ov.playCut,
+	)
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+	var spans []playSpan
+	for rows.Next() {
+		var row playSpan
+		var startMin int
+		if err := rows.Scan(&row.id, &row.start, &row.updated, &startMin, &row.seconds); err != nil {
+			return 0
+		}
+		row.start = b.spanStartUnix(day, startMin, row.start)
+		spans = append(spans, row)
+	}
+	if err := rows.Err(); err != nil {
+		return 0
+	}
+	if len(spans) == 0 {
+		return 0
+	}
+	from := len(spans) - 1
+	for i := len(spans) - 1; i > 0; i-- {
+		if spans[i].start-spans[i-1].updated > playSittingAwaySeconds {
+			break
+		}
+		from = i - 1
+	}
+	chain := spans[from:]
+	wall := b.now().Unix() - chain[0].start
+	if wall < 0 {
+		wall = 0
+	}
+	ticks := 0
+	for _, row := range chain {
+		ticks += row.seconds
+	}
+	if int64(ticks) > wall {
+		return ticks
+	}
+	return int(wall)
 }
 
 func (b *Bank) holdActiveLocked() bool {

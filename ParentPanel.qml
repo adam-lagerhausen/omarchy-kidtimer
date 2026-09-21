@@ -54,7 +54,7 @@ Item {
       var adoptSnap = (root.snapshots || [])[r.adopt.index]
       if (adoptSnap && root.hostWidget && root.hostWidget.adoptKid) root.hostWidget.adoptKid(adoptSnap)
     }
-    if (ev.kind === "bed" || ev.kind === "up" || ev.kind === "funDay" || ev.kind === "addThing" || ev.kind === "removeThing") {
+    if (ev.kind === "bed" || ev.kind === "up" || ev.kind === "funDay" || ev.kind === "play" || ev.kind === "break" || ev.kind === "addThing" || ev.kind === "removeThing") {
       var snap = (root.snapshots || [])[root.selectedIndex]
       if (!snap) return
       var next = Model.applyPolicy(snap, ev)

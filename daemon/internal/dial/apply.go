@@ -246,6 +246,7 @@ func statusJSON(st *bank.Status) map[string]any {
 		"piles":             piles,
 		"spent":             st.Spent,
 		"today":             todaySpans(st),
+		"break_seconds":     st.BreakSeconds,
 	}
 	if st.Mode != "" {
 		out["mode"] = st.Mode
@@ -274,6 +275,8 @@ func lookJSON(doc look.Document) map[string]any {
 		"apps":            doc.Apps,
 		"pile_hours":      doc.PileHours,
 		"fun_hours":       doc.FunHours,
+		"play_minutes":    doc.PlayMinutes,
+		"break_minutes":   doc.BreakMinutes,
 		"modes":           doc.Modes,
 		"schedule":        doc.Schedule,
 		"bedtime":         doc.Bedtime,

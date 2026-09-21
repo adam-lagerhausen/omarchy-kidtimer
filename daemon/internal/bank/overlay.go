@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,21 +14,24 @@ import (
 )
 
 const (
-	metaParentLock     = "parent_lock"
-	metaActiveMode     = "active_mode"
-	metaOverrideUntil  = "mode_override_until"
-	metaBedtimeStart   = "bedtime_start"
-	metaBedtimeEnd     = "bedtime_end"
-	metaBedtimeLock    = "bedtime_lock"
-	metaModeMinutes    = "mode_minutes"
-	metaLook           = "look"
-	metaPaired         = "paired"
-	metaParentPin      = "parent_pin"
-	metaBedtimeHold    = "bedtime_hold_until"
-	metaRefillDeferred = "refill_deferred"
-	metaHour12         = "hour12"
-	metaSaveCoverUntil = "save_cover_until"
-	saveCoverDuration  = 60 * time.Second
+	metaParentLock         = "parent_lock"
+	metaActiveMode         = "active_mode"
+	metaOverrideUntil      = "mode_override_until"
+	metaBedtimeStart       = "bedtime_start"
+	metaBedtimeEnd         = "bedtime_end"
+	metaBedtimeLock        = "bedtime_lock"
+	metaModeMinutes        = "mode_minutes"
+	metaLook               = "look"
+	metaPaired             = "paired"
+	metaParentPin          = "parent_pin"
+	metaBedtimeHold        = "bedtime_hold_until"
+	metaRefillDeferred     = "refill_deferred"
+	metaHour12             = "hour12"
+	metaSaveCoverUntil     = "save_cover_until"
+	metaBreakUntil         = "break_until"
+	metaPlaySittingCut     = "play_sitting_cut"
+	saveCoverDuration      = 60 * time.Second
+	playSittingAwaySeconds = 10 * 60
 )
 
 type overlay struct {
@@ -42,6 +46,8 @@ type overlay struct {
 	holdUntil     time.Time
 	hour12        *bool
 	saveUntil     time.Time
+	breakUntil    time.Time
+	playCut       int64
 }
 
 func (b *Bank) loadOverlayLocked() error {
@@ -131,6 +137,28 @@ func (b *Bank) loadOverlayLocked() error {
 			return fmt.Errorf("overlay save_cover_until: %w", err)
 		}
 		b.ov.saveUntil = t
+	}
+	v, ok, err = b.metaGet(metaBreakUntil)
+	if err != nil {
+		return err
+	}
+	if ok && v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return fmt.Errorf("overlay break_until: %w", err)
+		}
+		b.ov.breakUntil = t
+	}
+	v, ok, err = b.metaGet(metaPlaySittingCut)
+	if err != nil {
+		return err
+	}
+	if ok && v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("overlay play_sitting_cut: %w", err)
+		}
+		b.ov.playCut = n
 	}
 	return nil
 }

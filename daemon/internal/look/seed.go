@@ -46,6 +46,8 @@ func Seed(cfg *config.Config) (Document, error) {
 			DaySat: 7200,
 			DaySun: 7200,
 		},
+		PlayMinutes:    DefaultPlayMinutes,
+		BreakMinutes:   DefaultBreakMinutes,
 		Modes:          modes,
 		Schedule:       schedule,
 		Bedtime:        bedtimeFromConfig(cfg),

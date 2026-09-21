@@ -24,6 +24,12 @@ var ASK_STEP = 5
 var ASK_DEFAULT_MIN = 30
 var OVERLAY_ASK_MIN = 10
 var OVERLAY_ASK_STEP = 10
+var DEFAULT_PLAY_MIN = 45
+var DEFAULT_BREAK_MIN = 15
+var MIN_PLAY_MIN = 15
+var MAX_PLAY_MIN = 240
+var MIN_BREAK_MIN = 15
+var MAX_BREAK_MIN = 120
 
 function remainingFor(groups, id) {
   if (!groups || !id) return 0
@@ -38,6 +44,36 @@ function leftoverMinutes(seconds) {
   var n = Math.floor(sec / 60)
   if (n < 1) return 1
   return n
+}
+
+function clampPlayMin(n) {
+  var v = Math.round(Number(n))
+  if (!isFinite(v)) return DEFAULT_PLAY_MIN
+  if (v < MIN_PLAY_MIN) return MIN_PLAY_MIN
+  if (v > MAX_PLAY_MIN) return MAX_PLAY_MIN
+  return v
+}
+
+function clampBreakMin(n) {
+  var v = Math.round(Number(n))
+  if (!isFinite(v)) return DEFAULT_BREAK_MIN
+  if (v < MIN_BREAK_MIN) return MIN_BREAK_MIN
+  if (v > MAX_BREAK_MIN) return MAX_BREAK_MIN
+  return v
+}
+
+function playMinutesOf(raw) {
+  if (!raw || raw.play_minutes === undefined || raw.play_minutes === null) return DEFAULT_PLAY_MIN
+  var v = Number(raw.play_minutes)
+  if (!isFinite(v) || v <= 0) return DEFAULT_PLAY_MIN
+  return clampPlayMin(v)
+}
+
+function breakMinutesOf(raw) {
+  if (!raw || raw.break_minutes === undefined || raw.break_minutes === null) return DEFAULT_BREAK_MIN
+  var v = Number(raw.break_minutes)
+  if (!isFinite(v) || v <= 0) return DEFAULT_BREAK_MIN
+  return clampBreakMin(v)
 }
 
 function formatMinutes(seconds) {
@@ -102,6 +138,9 @@ function parseStatus(raw) {
   out.save_seconds = saveSeconds(src)
   out.bedtime_hold = !!src.bedtime_hold
   out.hour12 = src.hour12 !== false
+  out.play_minutes = playMinutesOf(src)
+  out.break_minutes = breakMinutesOf(src)
+  out.break_seconds = breakSeconds(src)
   return out
 }
 
@@ -139,6 +178,7 @@ function barLabel(status) {
   if (!status) return "kidtimer"
   if (status.parent_locked) return "locked"
   if (status.bedtime_active && !stayingUp(status)) return "bedtime"
+  if (breakSeconds(status) > 0) return "break"
   return formatMinutes(headerSeconds(status)) + " left"
 }
 
@@ -498,8 +538,24 @@ function overlayFace(status) {
   if (status.parent_locked) return "locked"
   if (overlaySaveCover(status)) return "save"
   if (status.bedtime_active) return "bedtime"
+  if (breakSeconds(status) > 0) return "break"
   if (remainingFor(status.groups, "fun") <= 0) return "empty"
   return "locked"
+}
+
+function breakSeconds(status) {
+  var n = Number(status && status.break_seconds)
+  if (!isFinite(n) || n < 0) return 0
+  return Math.floor(n)
+}
+
+function breakCountdown(status) {
+  var n = breakSeconds(status)
+  var m = Math.floor(n / 60)
+  var s = n % 60
+  var ss = String(s)
+  if (ss.length < 2) ss = "0" + ss
+  return m + ":" + ss
 }
 
 function pinApprovePayload(pin, askId) {
@@ -510,6 +566,10 @@ function pinGrantPayload(pin, seconds) {
   var s = Number(seconds)
   if (!(s > 0)) s = ASK_DEFAULT_MIN * 60
   return { pin: String(pin || ""), seconds: s }
+}
+
+function pinEndBreakPayload(pin) {
+  return { pin: String(pin || "") }
 }
 
 function overlayStepperLabel(minutes) {
