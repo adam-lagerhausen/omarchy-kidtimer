@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,22 +14,24 @@ import (
 )
 
 const (
-	metaParentLock     = "parent_lock"
-	metaActiveMode     = "active_mode"
-	metaOverrideUntil  = "mode_override_until"
-	metaBedtimeStart   = "bedtime_start"
-	metaBedtimeEnd     = "bedtime_end"
-	metaBedtimeLock    = "bedtime_lock"
-	metaModeMinutes    = "mode_minutes"
-	metaLook           = "look"
-	metaPaired         = "paired"
-	metaParentPin      = "parent_pin"
-	metaBedtimeHold    = "bedtime_hold_until"
-	metaRefillDeferred = "refill_deferred"
-	metaHour12         = "hour12"
-	metaSaveCoverUntil = "save_cover_until"
-	metaBreakUntil     = "break_until"
-	saveCoverDuration  = 60 * time.Second
+	metaParentLock         = "parent_lock"
+	metaActiveMode         = "active_mode"
+	metaOverrideUntil      = "mode_override_until"
+	metaBedtimeStart       = "bedtime_start"
+	metaBedtimeEnd         = "bedtime_end"
+	metaBedtimeLock        = "bedtime_lock"
+	metaModeMinutes        = "mode_minutes"
+	metaLook               = "look"
+	metaPaired             = "paired"
+	metaParentPin          = "parent_pin"
+	metaBedtimeHold        = "bedtime_hold_until"
+	metaRefillDeferred     = "refill_deferred"
+	metaHour12             = "hour12"
+	metaSaveCoverUntil     = "save_cover_until"
+	metaBreakUntil         = "break_until"
+	metaPlaySittingCut     = "play_sitting_cut"
+	saveCoverDuration      = 60 * time.Second
+	playSittingAwaySeconds = 10 * 60
 )
 
 type overlay struct {
@@ -44,6 +47,7 @@ type overlay struct {
 	hour12        *bool
 	saveUntil     time.Time
 	breakUntil    time.Time
+	playCut       int64
 }
 
 func (b *Bank) loadOverlayLocked() error {
@@ -144,6 +148,17 @@ func (b *Bank) loadOverlayLocked() error {
 			return fmt.Errorf("overlay break_until: %w", err)
 		}
 		b.ov.breakUntil = t
+	}
+	v, ok, err = b.metaGet(metaPlaySittingCut)
+	if err != nil {
+		return err
+	}
+	if ok && v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("overlay play_sitting_cut: %w", err)
+		}
+		b.ov.playCut = n
 	}
 	return nil
 }
@@ -423,42 +438,6 @@ func (b *Bank) Look(actor *Token) (look.Document, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := requireParent(actor); err != nil {
-		return look.Document{}, err
-	}
-	return b.look.Clone(), nil
-}
-
-func (b *Bank) PutSessionMinutes(actor *Token, play, brk int) (look.Document, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if actor == nil {
-		return look.Document{}, ErrUnauthorized
-	}
-	if actor.Kind != KindParent && actor.Kind != KindAsk {
-		return look.Document{}, ErrForbidden
-	}
-	next := b.look.Clone()
-	if play > 0 {
-		next.PlayMinutes = play
-	}
-	if brk > 0 {
-		next.BreakMinutes = brk
-	}
-	if next.PlayMinutes <= 0 {
-		next.PlayMinutes = look.DefaultPlayMinutes
-	}
-	if next.BreakMinutes <= 0 {
-		next.BreakMinutes = look.DefaultBreakMinutes
-	}
-	if err := next.Validate(); err != nil {
-		return look.Document{}, fmt.Errorf("%w: %s", ErrInvalid, err)
-	}
-	if next.EqualPolicy(b.look) {
-		return b.look.Clone(), nil
-	}
-	next.Version = b.look.Version + 1
-	b.look = next
-	if err := b.persistLookLocked(); err != nil {
 		return look.Document{}, err
 	}
 	return b.look.Clone(), nil

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"kidtimer/daemon/internal/config"
@@ -115,7 +116,7 @@ func (b *Bank) PinEndBreak(actor *Token, digits string) error {
 }
 
 func (b *Bank) closeSittingLocked() error {
-	var id int
+	var id int64
 	var updated int64
 	err := b.db.QueryRow(
 		`SELECT id, updated_unix FROM today_spans WHERE day = ? ORDER BY id DESC LIMIT 1`,
@@ -126,6 +127,12 @@ func (b *Bank) closeSittingLocked() error {
 	}
 	if err != nil {
 		return err
+	}
+	if id > b.ov.playCut {
+		b.ov.playCut = id
+		if err := b.metaSet(metaPlaySittingCut, strconv.FormatInt(id, 10)); err != nil {
+			return err
+		}
 	}
 	if b.now().Unix()-updated > todayGapSeconds {
 		return nil
@@ -265,7 +272,10 @@ func (b *Bank) syncPlayBreakLocked() error {
 	}
 	until := now.Add(time.Duration(brk) * time.Minute)
 	b.ov.breakUntil = until
-	return b.metaSet(metaBreakUntil, until.UTC().Format(time.RFC3339))
+	if err := b.metaSet(metaBreakUntil, until.UTC().Format(time.RFC3339)); err != nil {
+		return err
+	}
+	return b.closeSittingLocked()
 }
 
 func (b *Bank) clearBreakLocked() error {
@@ -302,20 +312,59 @@ func (b *Bank) breakSecondsLocked() int {
 	return n
 }
 
+type playSpan struct {
+	id      int64
+	start   int64
+	updated int64
+	seconds int
+}
+
 func (b *Bank) sittingSecondsLocked() int {
-	var seconds int
-	var updated int64
-	err := b.db.QueryRow(
-		`SELECT seconds, updated_unix FROM today_spans WHERE day = ? ORDER BY id DESC LIMIT 1`,
-		b.day(),
-	).Scan(&seconds, &updated)
+	day := b.day()
+	rows, err := b.db.Query(
+		`SELECT id, start_unix, updated_unix, start_min, seconds FROM today_spans WHERE day = ? AND id > ? ORDER BY id`,
+		day, b.ov.playCut,
+	)
 	if err != nil {
 		return 0
 	}
-	if b.now().Unix()-updated > todayGapSeconds {
+	defer rows.Close()
+	var spans []playSpan
+	for rows.Next() {
+		var row playSpan
+		var startMin int
+		if err := rows.Scan(&row.id, &row.start, &row.updated, &startMin, &row.seconds); err != nil {
+			return 0
+		}
+		row.start = b.spanStartUnix(day, startMin, row.start)
+		spans = append(spans, row)
+	}
+	if err := rows.Err(); err != nil {
 		return 0
 	}
-	return seconds
+	if len(spans) == 0 {
+		return 0
+	}
+	from := len(spans) - 1
+	for i := len(spans) - 1; i > 0; i-- {
+		if spans[i].start-spans[i-1].updated > playSittingAwaySeconds {
+			break
+		}
+		from = i - 1
+	}
+	chain := spans[from:]
+	wall := b.now().Unix() - chain[0].start
+	if wall < 0 {
+		wall = 0
+	}
+	ticks := 0
+	for _, row := range chain {
+		ticks += row.seconds
+	}
+	if int64(ticks) > wall {
+		return ticks
+	}
+	return int(wall)
 }
 
 func (b *Bank) holdActiveLocked() bool {

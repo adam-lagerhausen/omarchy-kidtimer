@@ -649,60 +649,6 @@ func TestPolicyPersistsAcrossReopen(t *testing.T) {
 	}
 }
 
-func TestAskPutsSessionMinutes(t *testing.T) {
-	b, parent := openTest(t, afternoon)
-	_, ask, err := b.Mint(parent, MintSpec{Name: "kid-bar", Kind: KindAsk})
-	if err != nil {
-		t.Fatal(err)
-	}
-	before, err := b.Look(parent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sat := before.FunHours[look.DaySat]
-	out, err := b.PutSessionMinutes(ask, 60, 30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out.PlayMinutes != 60 || out.BreakMinutes != 30 {
-		t.Fatalf("ask session: play=%d break=%d", out.PlayMinutes, out.BreakMinutes)
-	}
-	stored, err := b.Look(parent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.PlayMinutes != 60 || stored.BreakMinutes != 30 {
-		t.Fatalf("parent look after ask: play=%d break=%d", stored.PlayMinutes, stored.BreakMinutes)
-	}
-	if stored.FunHours[look.DaySat] != sat {
-		t.Fatalf("ask clobbered hours: %+v", stored.FunHours)
-	}
-	kept, err := b.PutSessionMinutes(ask, 0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if kept.PlayMinutes != 60 || kept.BreakMinutes != 30 {
-		t.Fatalf("zero keeps stored: play=%d break=%d", kept.PlayMinutes, kept.BreakMinutes)
-	}
-	_, readTok, err := b.Mint(parent, MintSpec{Name: "bar", Kind: KindRead})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := b.PutSessionMinutes(readTok, 90, 45); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("read put session: %v", err)
-	}
-	if err := b.PutLook(ask, stored); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("ask full put look: %v", err)
-	}
-	st, err := b.Status(readTok)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.PlayMinutes != 60 || st.BreakMinutes != 30 {
-		t.Fatalf("status session: play=%d break=%d", st.PlayMinutes, st.BreakMinutes)
-	}
-}
-
 func TestPlayLimitStartsBreakOverlay(t *testing.T) {
 	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
@@ -892,6 +838,217 @@ func TestPinEndsBreakEarly(t *testing.T) {
 	}
 	if st.Overlay || st.BreakSeconds != 0 {
 		t.Fatalf("new sitting must not inherit old play: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
+func TestPlaySittingCountsIdleTowardPlay(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	c.t = c.t.Add(15*time.Minute - time.Second)
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("before play: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	c.t = c.t.Add(time.Second)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds != 15*60 {
+		t.Fatalf("idle sitting must hit play: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
+func TestPlaySittingBridgesIdleResume(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	start := c.t
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5*60; i++ {
+		if err := b.NoteToday("minecraft"); err != nil {
+			t.Fatal(err)
+		}
+		c.t = c.t.Add(time.Second)
+	}
+	c.t = c.t.Add(70 * time.Second)
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay {
+		t.Fatal("resume after idle must keep the same sitting, not trip early")
+	}
+	c.t = start.Add(15 * time.Minute)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds != 15*60 {
+		t.Fatalf("idle resume must still hit play: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
+func TestPlaySittingSplitAfterTenMinuteAway(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	start := c.t
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	c.t = c.t.Add(10*time.Minute + time.Second)
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	c.t = start.Add(15 * time.Minute)
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Overlay || st.BreakSeconds != 0 {
+		t.Fatalf("ten minute away is a new sitting: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+}
+
+func TestPlaySittingChainsAppSwitch(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	start := c.t
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 14*60; i++ {
+		if err := b.NoteToday("chrome"); err != nil {
+			t.Fatal(err)
+		}
+		c.t = c.t.Add(time.Second)
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	c.t = start.Add(15 * time.Minute)
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds != 15*60 {
+		t.Fatalf("app switch must stay one sitting: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
 	}
 }
 

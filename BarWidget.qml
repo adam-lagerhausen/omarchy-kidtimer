@@ -521,10 +521,6 @@ BarWidget {
     loopbackHTTP("POST", kidBankUrl() + path, token, JSON.stringify(body || {}), cb)
   }
 
-  function persistKidSession(body, cb) {
-    loopbackHTTP("PUT", kidBankUrl() + "/v1/look", String(kidBank.askToken || ""), JSON.stringify(body || {}), cb)
-  }
-
   function pollKid() {
     if (root.role !== "kid") return
     loopbackHTTP("GET", kidBankUrl() + "/v1/status", String(kidBank.readToken || ""), "", function(status, text) {

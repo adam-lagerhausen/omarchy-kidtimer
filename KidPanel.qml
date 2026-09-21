@@ -24,8 +24,6 @@ Item {
   property bool askWrong: false
   property string askFailText: "try again"
   property int lastPending: -1
-  property bool settingsOpen: false
-  property var sessionHold: null
 
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
@@ -43,14 +41,8 @@ Item {
   readonly property string view: {
     if (root.pinOpen) return "pin"
     if (root.askGroup !== "") return "sheet"
-    var kind = Model.panelKind(root.statusJson)
-    if (kind !== "home") return kind
-    if (root.settingsOpen) return "settings"
-    return "home"
+    return Model.panelKind(root.statusJson)
   }
-  readonly property var session: Model.sessionFrom(root.statusJson, root.sessionHold)
-  readonly property string playLabel: Model.minutesLabel(root.session.playMin)
-  readonly property string breakLabel: Model.minutesLabel(root.session.breakMin)
   readonly property var clock: Model.clockFace(root.statusJson, Model.askWaiting(root.statusJson, root.waitingGroup !== "" || root.askBusy))
   readonly property string soonBanner: Model.bedtimeBanner(root.statusJson)
   readonly property color panelLine: {
@@ -70,7 +62,6 @@ Item {
     if (root.view === "pin") return pinColumn.implicitHeight
     if (root.view === "locked") return lockColumn.implicitHeight
     if (root.view === "bedtime") return bedColumn.implicitHeight
-    if (root.view === "settings") return settingsColumn.implicitHeight
     return homeColumn.implicitHeight
   }
 
@@ -87,9 +78,6 @@ Item {
     }
     root.lastPending = pending
     if (Model.askBlocked(statusJson)) root.askGroup = ""
-    if (root.sessionHold && Model.playMinutesOf(statusJson) === root.sessionHold.playMin && Model.breakMinutesOf(statusJson) === root.sessionHold.breakMin) {
-      root.sessionHold = null
-    }
   }
 
   function bankUrl() {
@@ -163,15 +151,6 @@ Item {
     })
   }
 
-  function stepSession(kind, delta) {
-    var next = Model.nudgeSession(root.statusJson, root.sessionHold, kind, delta)
-    root.sessionHold = next
-    if (!hostWidget || typeof hostWidget.persistKidSession !== "function") return
-    hostWidget.persistKidSession(Model.sessionWire(next), function(status) {
-      if (status !== 200) root.sessionHold = null
-    })
-  }
-
   Item {
     id: panel
     anchors.fill: parent
@@ -238,14 +217,6 @@ Item {
 
         AskRow {
           width: parent.width
-        }
-
-        LookBtn {
-          width: parent.width
-          text: "Settings"
-          foreground: root.contentForeground
-          fontFamily: root.contentFontFamily
-          onClicked: root.settingsOpen = true
         }
 
       }
@@ -523,84 +494,6 @@ Item {
 
         AskRow {
           width: parent.width
-        }
-      }
-
-      Column {
-        id: settingsColumn
-        visible: root.view === "settings"
-        width: parent.width
-        spacing: Style.space(12)
-
-        Text {
-          textFormat: Text.PlainText
-          text: "Settings"
-          color: root.dim
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.caption
-          font.letterSpacing: 1
-          font.bold: true
-          font.capitalization: Font.AllUppercase
-        }
-
-        Repeater {
-          model: [
-            { kind: "play", k: "PLAY", v: root.playLabel },
-            { kind: "break", k: "BREAK", v: root.breakLabel }
-          ]
-          Item {
-            required property var modelData
-            width: settingsColumn.width
-            height: 40
-
-            Text {
-              textFormat: Text.PlainText
-              anchors.verticalCenter: parent.verticalCenter
-              width: 52
-              text: modelData.k
-              color: root.dim
-              font.family: root.contentFontFamily
-              font.pixelSize: 13
-            }
-
-            LookBtn {
-              width: 56
-              height: 40
-              x: 56
-              text: "−15"
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-              onClicked: root.stepSession(modelData.kind, -15)
-            }
-
-            Text {
-              textFormat: Text.PlainText
-              anchors.centerIn: parent
-              text: modelData.v
-              color: root.contentForeground
-              font.family: root.contentFontFamily
-              font.pixelSize: 16
-              font.bold: true
-            }
-
-            LookBtn {
-              width: 56
-              height: 40
-              anchors.right: parent.right
-              text: "+15"
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-              onClicked: root.stepSession(modelData.kind, 15)
-            }
-          }
-        }
-
-        LookBtn {
-          width: parent.width
-          text: "Done"
-          foreground: root.contentForeground
-          fontFamily: root.contentFontFamily
-          onClicked: root.settingsOpen = false
         }
       }
     }

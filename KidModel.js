@@ -46,16 +46,6 @@ function leftoverMinutes(seconds) {
   return n
 }
 
-function minutesLabel(n) {
-  n = Math.max(0, Math.round(Number(n) || 0))
-  if (n >= 60) {
-    var h = Math.floor(n / 60)
-    var m = n % 60
-    return m ? h + "h " + m + "m" : h + "h"
-  }
-  return n + "m"
-}
-
 function clampPlayMin(n) {
   var v = Math.round(Number(n))
   if (!isFinite(v)) return DEFAULT_PLAY_MIN
@@ -84,27 +74,6 @@ function breakMinutesOf(raw) {
   var v = Number(raw.break_minutes)
   if (!isFinite(v) || v <= 0) return DEFAULT_BREAK_MIN
   return clampBreakMin(v)
-}
-
-function sessionFrom(status, hold) {
-  return {
-    playMin: hold && hold.playMin !== undefined ? clampPlayMin(hold.playMin) : playMinutesOf(status),
-    breakMin: hold && hold.breakMin !== undefined ? clampBreakMin(hold.breakMin) : breakMinutesOf(status)
-  }
-}
-
-function nudgeSession(status, hold, kind, delta) {
-  var row = sessionFrom(status, hold)
-  if (kind === "play") row.playMin = clampPlayMin(row.playMin + Number(delta))
-  else if (kind === "break") row.breakMin = clampBreakMin(row.breakMin + Number(delta))
-  return row
-}
-
-function sessionWire(row) {
-  return {
-    play_minutes: clampPlayMin(row && row.playMin),
-    break_minutes: clampBreakMin(row && row.breakMin)
-  }
 }
 
 function formatMinutes(seconds) {

@@ -77,19 +77,6 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidPanel, "chipShowsParentPin", "hide dead parent pin")
 	mustContain(t, kidModel, "function chipShowsParentPin", "parent pin only with ask id")
 	mustContain(t, kidPanel, "askToken", "ask token")
-	mustContain(t, kidPanel, "PLAY", "play limit row")
-	mustContain(t, kidPanel, "BREAK", "break length row")
-	mustContain(t, kidPanel, "−15", "session nudge")
-	mustContain(t, kidPanel, `kind: "play"`, "play stepper")
-	mustContain(t, kidPanel, `kind: "break"`, "break stepper")
-	mustContain(t, kidPanel, "persistKidSession", "kid persist session")
-	mustContain(t, kidPanel, "Settings", "kid settings")
-	mustContain(t, kidBar, "persistKidSession", "kid look persist")
-	mustContain(t, kidBar, `"/v1/look"`, "kid put look")
-	mustContain(t, kidModel, "function playMinutesOf", "kid play minutes")
-	mustContain(t, kidModel, "function breakMinutesOf", "kid break minutes")
-	mustContain(t, kidModel, "function nudgeSession", "kid session stepper")
-	mustContain(t, kidModel, "function sessionWire", "kid session wire")
 	mustContain(t, kidPanel, "Ask", "Ask")
 	mustContain(t, kidPanel, "Ask for more", "ask sheet")
 	mustContain(t, kidPanel, "−5", "ask nudge")
@@ -109,6 +96,12 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidPanel, "+ 14 + 18", "kid panel top and bottom inset")
 	if strings.Contains(kidPanel, "This is my computer") || strings.Contains(kidPanel, `pickRole("parent")`) {
 		t.Fatal("kid panel must not switch to parent")
+	}
+	if strings.Contains(kidPanel, "Settings") || strings.Contains(kidPanel, "persistKidSession") {
+		t.Fatal("kid panel must not have Settings")
+	}
+	if strings.Contains(kidBar, "persistKidSession") {
+		t.Fatal("kid bar must not put look")
 	}
 	kidOverlay := readPlugin(t, root, "Overlay.qml")
 	mustContain(t, kidOverlay, "Parent Pin", "overlay parent pin")
