@@ -484,6 +484,12 @@ func (r *Registry) serveHTTP(w http.ResponseWriter, req *http.Request) {
 			op.Body = body
 		}
 	}
+	if req.Method == http.MethodPost && rest == "/v1/grants" {
+		if why, blocked := r.refuseGrant(reverse.KidID(id), op.Body); blocked {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": why})
+			return
+		}
+	}
 	res, err := r.Call(reverse.KidID(id), op)
 	if err != nil && !errors.Is(err, errOffline) {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})

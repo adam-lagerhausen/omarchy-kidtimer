@@ -248,6 +248,119 @@ func TestDeskGrantPath(t *testing.T) {
 	}
 }
 
+func TestDeskGrantRefusesWhenPanelWould(t *testing.T) {
+	clearLabEnv(t)
+	cases := []struct {
+		name   string
+		status string
+		args   []string
+		want   string
+		posts  int
+	}{
+		{
+			name:   "locked",
+			status: `{"parent_locked":true,"groups":{"fun":600}}`,
+			args:   []string{"-minutes", "10"},
+			want:   "Ada is locked",
+		},
+		{
+			name:   "break",
+			status: `{"break_seconds":40,"groups":{"fun":600}}`,
+			args:   []string{"-minutes", "10"},
+			want:   "Ada is on a break",
+		},
+		{
+			name:   "bedtime",
+			status: `{"bedtime_active":true,"groups":{"fun":600}}`,
+			args:   []string{"-minutes=-10"},
+			want:   "Ada is at bedtime",
+		},
+		{
+			name:   "empty",
+			status: `{"groups":{"fun":0}}`,
+			args:   []string{"-minutes=-10"},
+			want:   "Ada has no time left",
+		},
+		{
+			name:   "stay up",
+			status: `{"bedtime_active":true,"bedtime_hold":true,"groups":{"fun":600}}`,
+			args:   []string{"-minutes", "10"},
+			posts:  1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			posts := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/v1/household":
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprintf(w, `{"kids":[{"id":"kid-1","name":"Ada","live":true,"status":%s}]}`, tc.status)
+				case r.Method == http.MethodPost && r.URL.Path == "/v1/kids/kid-1/grants":
+					posts++
+					w.Header().Set("Content-Type", "application/json")
+					io.WriteString(w, `{"group":"fun","seconds":600}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(srv.Close)
+			args := append([]string{"-desk", srv.URL, "-kid", "Ada"}, tc.args...)
+			req, err := Parse("grant", args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := captureStdout(t, func() error { return Do(req) })
+			if tc.posts == 0 {
+				if err == nil || err.Error() != tc.want {
+					t.Fatalf("err %v want %s", err, tc.want)
+				}
+				if out != "" {
+					t.Fatalf("stdout %q", out)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if posts != tc.posts {
+				t.Fatalf("posts %d want %d", posts, tc.posts)
+			}
+		})
+	}
+}
+
+func TestDeskGrantConflictSaysWhy(t *testing.T) {
+	clearLabEnv(t)
+	posts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/household":
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"kids":[{"id":"kid-1","name":"Ada","live":true}]}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/kids/kid-1/grants":
+			posts++
+			w.WriteHeader(http.StatusConflict)
+			io.WriteString(w, `{"error":"on a break"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	req, err := Parse("grant", []string{"-desk", srv.URL, "-kid", "Ada", "-minutes", "10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := captureStdout(t, func() error { return Do(req) })
+	if err == nil || err.Error() != "Ada is on a break" {
+		t.Fatalf("err %v", err)
+	}
+	if out != "" {
+		t.Fatalf("stdout %q", out)
+	}
+	if posts != 1 {
+		t.Fatalf("posts %d", posts)
+	}
+}
+
 func clearLabEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("KIDTIMER_URL", "")
