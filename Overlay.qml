@@ -109,6 +109,7 @@ Item {
   }
 
   function advancePin() {
+    if (!Model.overlayGiveTimeOn(root.pinBusy)) return
     if (root.face === "break") {
       endBreak()
       return
@@ -658,7 +659,7 @@ Item {
           color: "transparent"
           border.width: 1
           border.color: root.ink
-          opacity: Model.validPin(root.pinDigits) ? 1 : 0.55
+          opacity: (Model.validPin(root.pinDigits) && Model.overlayGiveTimeOn(root.pinBusy)) ? 1 : 0.55
           Text {
             textFormat: Text.PlainText
             anchors.centerIn: parent
@@ -670,7 +671,7 @@ Item {
           }
           MouseArea {
             anchors.fill: parent
-            enabled: Model.validPin(root.pinDigits)
+            enabled: Model.validPin(root.pinDigits) && Model.overlayGiveTimeOn(root.pinBusy)
             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: root.advancePin()
           }
@@ -683,6 +684,7 @@ Item {
           color: "transparent"
           border.width: 1
           border.color: root.ink
+          opacity: Model.overlayGiveTimeOn(root.pinBusy) ? 1 : 0.55
           Text {
             textFormat: Text.PlainText
             anchors.centerIn: parent
@@ -694,7 +696,8 @@ Item {
           }
           MouseArea {
             anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
+            enabled: Model.overlayGiveTimeOn(root.pinBusy)
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: root.cancelPin()
           }
         }

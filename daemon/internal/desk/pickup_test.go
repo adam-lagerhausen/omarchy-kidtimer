@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -73,6 +74,58 @@ func TestDeskDialGrant(t *testing.T) {
 	after := int(grant["remaining"].(float64))
 	if after <= before {
 		t.Fatalf("remaining %d -> %d", before, after)
+	}
+}
+
+func TestDeskGrantRefusesWhileLocked(t *testing.T) {
+	parentHome := t.TempDir()
+	kidHome := t.TempDir()
+	b := openPickupBank(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	httpAddr, sessAddr := startDesk(t, ctx, parentHome)
+	go func() {
+		_ = dial.Run(ctx, dial.Config{
+			Home:      kidHome,
+			Name:      "testMax",
+			Bank:      b,
+			Endpoints: []reverse.Endpoint{reverse.Endpoint(sessAddr)},
+		})
+	}()
+	var kid reverse.Member
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		doc := getHousehold(t, httpAddr)
+		if len(doc.Kids) == 1 && doc.Kids[0].Name == "testMax" && doc.Kids[0].Live {
+			kid = doc.Kids[0]
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if kid.ID == "" || !kid.Live {
+		t.Fatalf("live: %+v", kid)
+	}
+	before := groupRemaining(t, kid.Status, "fun")
+	grantURL := "http://" + httpAddr + "/v1/kids/" + string(kid.ID) + "/grants"
+	lockURL := "http://" + httpAddr + "/v1/kids/" + string(kid.ID) + "/lock"
+	if locked := postJSON(t, lockURL, map[string]any{"locked": true}); locked["locked"] != true {
+		t.Fatalf("lock: %v", locked)
+	}
+	code, body := postCode(t, grantURL, map[string]any{"group": "fun", "seconds": 600, "reason": "+10"})
+	if code != http.StatusConflict || body["error"] != "locked" {
+		t.Fatalf("grant while locked: %d %v", code, body)
+	}
+	again := getHousehold(t, httpAddr)
+	if len(again.Kids) != 1 || groupRemaining(t, again.Kids[0].Status, "fun") != before {
+		t.Fatalf("remaining changed while locked: before %d now %+v", before, again.Kids)
+	}
+	if unlocked := postJSON(t, lockURL, map[string]any{"locked": false}); unlocked["locked"] != false {
+		t.Fatalf("unlock: %v", unlocked)
+	}
+	grant := postJSON(t, grantURL, map[string]any{"group": "fun", "seconds": 600, "reason": "+10"})
+	after, ok := grant["remaining"].(float64)
+	if !ok || int(after) <= before {
+		t.Fatalf("grant after unlock: %v", grant)
 	}
 }
 
@@ -256,27 +309,35 @@ func getHousehold(t *testing.T, httpAddr string) reverse.Household {
 
 func postJSON(t *testing.T, url string, body map[string]any) map[string]any {
 	t.Helper()
+	code, got := postCode(t, url, body)
+	if code != 200 {
+		t.Fatalf("post %d %v", code, got)
+	}
+	return got
+}
+
+func postCode(t *testing.T, url string, body map[string]any) (int, map[string]any) {
+	t.Helper()
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", "test-grant")
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("test-%d", time.Now().UnixNano()))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	out, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		t.Fatalf("post %d %s", resp.StatusCode, out)
-	}
 	var got map[string]any
-	if err := json.Unmarshal(out, &got); err != nil {
-		t.Fatal(err)
+	if len(out) > 0 {
+		if err := json.Unmarshal(out, &got); err != nil {
+			t.Fatalf("post %d %s", resp.StatusCode, out)
+		}
 	}
-	return got
+	return resp.StatusCode, got
 }
 
 func groupRemaining(t *testing.T, raw json.RawMessage, id string) int {
@@ -306,7 +367,14 @@ func openPickupBank(t *testing.T) *bank.Bank {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	if _, _, err := b.SeedParent("test"); err != nil {
+	_, parent, err := b.SeedParent("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep bedtime off "now" so a grant test does not depend on the clock.
+	start := time.Now().In(cfg.Location).Add(3 * time.Hour)
+	end := start.Add(2 * time.Hour)
+	if err := b.SetBedtime(parent, start.Format("15:04"), end.Format("15:04"), nil); err != nil {
 		t.Fatal(err)
 	}
 	return b

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"kidtimer/daemon/internal/desk"
 	"kidtimer/daemon/internal/household"
 	"kidtimer/daemon/internal/reverse"
 )
@@ -272,17 +273,20 @@ func Do(req Request) error {
 		return err
 	}
 	kidID := ""
+	kidName := ""
 	switch t := req.Target.(type) {
 	case Desk:
 		kids, err := fetchHousehold(t.URL)
 		if err != nil {
 			return err
 		}
-		kidID, err = resolveKid(kids, t.Kid)
+		member, err := resolveKid(kids, t.Kid)
 		if err != nil {
 			return err
 		}
-		switch req.Action.(type) {
+		kidID = string(member.ID)
+		kidName = string(member.Name)
+		switch a := req.Action.(type) {
 		case Lock, Unlock:
 			armed, err := deskLockArmed(t.Home, kids)
 			if err != nil {
@@ -290,6 +294,10 @@ func Do(req Request) error {
 			}
 			if !armed {
 				return fmt.Errorf("no PIN set. Run kidtimer pin set")
+			}
+		case Grant:
+			if why := desk.GrantBlockReason(member.Status, a.Seconds); why != "" {
+				return grantRefusal(kidName, why)
 			}
 		}
 	case Direct:
@@ -307,7 +315,54 @@ func Do(req Request) error {
 	if exp, ok := req.Action.(Export); ok {
 		return writeExport(resp, exp.JSON)
 	}
+	if _, ok := req.Action.(Grant); ok {
+		why, blocked, err := grantBlockBody(resp)
+		if err != nil {
+			return err
+		}
+		if blocked {
+			return grantRefusal(kidName, why)
+		}
+	}
 	return dump(resp, nil)
+}
+
+func grantRefusal(name, why string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "This computer"
+	}
+	switch why {
+	case "locked":
+		return fmt.Errorf("%s is locked", name)
+	case "bedtime":
+		return fmt.Errorf("%s is at bedtime", name)
+	case "on a break":
+		return fmt.Errorf("%s is on a break", name)
+	case "no time left":
+		return fmt.Errorf("%s has no time left", name)
+	default:
+		return fmt.Errorf("%s", why)
+	}
+}
+
+func grantBlockBody(resp *http.Response) (string, bool, error) {
+	if resp == nil || resp.StatusCode != http.StatusConflict {
+		return "", false, nil
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", false, err
+	}
+	_ = resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewReader(raw))
+	var doc struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(raw, &doc) != nil || !desk.KnownGrantBlock(doc.Error) {
+		return "", false, nil
+	}
+	return doc.Error, true, nil
 }
 
 func encodeAction(a Action) (method, rest string, body []byte, idem string, err error) {
@@ -372,7 +427,7 @@ func fetchHousehold(deskURL string) ([]reverse.Member, error) {
 	return hh.Kids, nil
 }
 
-func resolveKid(kids []reverse.Member, hint string) (string, error) {
+func resolveKid(kids []reverse.Member, hint string) (reverse.Member, error) {
 	hint = strings.TrimSpace(hint)
 	if hint == "" {
 		var live []reverse.Member
@@ -382,16 +437,16 @@ func resolveKid(kids []reverse.Member, hint string) (string, error) {
 			}
 		}
 		if len(live) == 1 {
-			return string(live[0].ID), nil
+			return live[0], nil
 		}
-		return "", fmt.Errorf("which kid? pass -kid")
+		return reverse.Member{}, fmt.Errorf("which kid? pass -kid")
 	}
 	for _, k := range kids {
 		if string(k.ID) == hint {
 			if !k.Live {
-				return "", notConnected(k, hint)
+				return reverse.Member{}, notConnected(k, hint)
 			}
-			return string(k.ID), nil
+			return k, nil
 		}
 	}
 	var named []reverse.Member
@@ -402,14 +457,14 @@ func resolveKid(kids []reverse.Member, hint string) (string, error) {
 	}
 	if len(named) == 1 {
 		if !named[0].Live {
-			return "", notConnected(named[0], hint)
+			return reverse.Member{}, notConnected(named[0], hint)
 		}
-		return string(named[0].ID), nil
+		return named[0], nil
 	}
 	if len(named) > 1 {
-		return "", fmt.Errorf("which kid? pass -kid")
+		return reverse.Member{}, fmt.Errorf("which kid? pass -kid")
 	}
-	return "", fmt.Errorf("unknown name")
+	return reverse.Member{}, fmt.Errorf("unknown name")
 }
 
 func notConnected(k reverse.Member, hint string) error {

@@ -109,6 +109,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, kidOverlay, "/v1/pin/grant", "pin grant")
 	mustContain(t, kidOverlay, "advancePin", "overlay pin OK")
 	mustContain(t, kidOverlay, `text: "OK"`, "overlay pin OK label")
+	mustContain(t, kidOverlay, "enabled: Model.validPin(root.pinDigits) && Model.overlayGiveTimeOn(root.pinBusy)", "overlay pin OK greys while sending")
 	mustContain(t, kidModel, "function overlayPinAdvance", "pin advance helper")
 	mustContain(t, kidOverlay, "Ask", "overlay ask")
 	mustContain(t, kidOverlay, "cancelPin", "leave parent pin")
