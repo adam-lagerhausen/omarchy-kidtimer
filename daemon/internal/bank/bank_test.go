@@ -899,6 +899,74 @@ func TestPinGrantEndsBreak(t *testing.T) {
 	}
 }
 
+func TestBreakCountdownKeepsCountingAfterShorterBreak(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.ParseFile(packagingPath(t, "config.parent-lab.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 8, 26, 15, 0, 0, 0, loc)}
+	b, err := Open(filepath.Join(t.TempDir(), "ledger.sqlite"), cfg, c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	_, parent, err := b.SeedParent("parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetParentPIN(parent, "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PlayMinutes = 15
+	doc.BreakMinutes = 30
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.NoteToday("minecraft"); err != nil {
+		t.Fatal(err)
+	}
+	c.t = c.t.Add(15 * time.Minute)
+	st, err := b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds < 29*60 {
+		t.Fatalf("30 minute break: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	doc, err = b.Look(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.BreakMinutes = 15
+	if err := b.PutLook(parent, doc); err != nil {
+		t.Fatal(err)
+	}
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds <= 15*60 {
+		t.Fatalf("shorter setting froze the countdown: overlay=%v break=%d", st.Overlay, st.BreakSeconds)
+	}
+	before := st.BreakSeconds
+	c.t = c.t.Add(time.Minute)
+	st, err = b.Status(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Overlay || st.BreakSeconds >= before || st.BreakSeconds <= 15*60 {
+		t.Fatalf("countdown must keep moving: before=%d now=%d overlay=%v", before, st.BreakSeconds, st.Overlay)
+	}
+}
+
 func TestPinGrantDoesNotResetPlaySitting(t *testing.T) {
 	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
@@ -937,7 +1005,7 @@ func TestPinGrantDoesNotResetPlaySitting(t *testing.T) {
 	if err := b.NoteToday("minecraft"); err != nil {
 		t.Fatal(err)
 	}
-	c.t = c.t.Add(10*time.Minute)
+	c.t = c.t.Add(10 * time.Minute)
 	if _, err := b.PinGrant(askTok, "1234", 60); err != nil {
 		t.Fatal(err)
 	}
@@ -998,7 +1066,7 @@ func bankOnBreak(t *testing.T, playMin int) (*Bank, *Token, *Token, *clock) {
 	if err := b.NoteToday("minecraft"); err != nil {
 		t.Fatal(err)
 	}
-	c.t = c.t.Add(time.Duration(playMin)*time.Minute)
+	c.t = c.t.Add(time.Duration(playMin) * time.Minute)
 	st, err := b.Status(parent)
 	if err != nil {
 		t.Fatal(err)

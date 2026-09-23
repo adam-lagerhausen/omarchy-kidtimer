@@ -312,10 +312,10 @@ func (b *Bank) breakSecondsLocked() int {
 		return 0
 	}
 	n := int((d + time.Second - 1) / time.Second)
-	max := b.look.BreakMinutes * 60
-	if max <= 0 {
-		max = look.DefaultBreakMinutes * 60
-	}
+	// Cap a clock jump at the longest break a parent can set. Using the
+	// current BREAK setting here freezes the countdown if they shorten it
+	// while this break is already running.
+	max := look.MaxBreakMinutes * 60
 	if n > max {
 		n = max
 	}

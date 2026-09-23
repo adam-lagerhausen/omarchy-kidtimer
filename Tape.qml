@@ -563,6 +563,7 @@ Rectangle {
           width: 36
           height: 36
           enabled: !t.kid.locked && !t.kid.bedtime && !t.kid.breaking && !t.kid.fun.empty
+          opacity: (t.kid.locked || t.kid.bedtime || t.kid.breaking || !t.kid.fun.empty) ? 1 : 0.35
           onClicked: root.act({ kind: "minus10" })
           Text {
             textFormat: Text.PlainText
@@ -986,6 +987,8 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
+            enabled: Model.funDayMinusOn(modelData.seconds)
+            opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: "funDay", day: modelData.day, delta: -15 })
             Text {
               textFormat: Text.PlainText
@@ -1010,6 +1013,8 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
+            enabled: Model.funDayPlusOn(modelData.seconds)
+            opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: "funDay", day: modelData.day, delta: 15 })
             Text {
               textFormat: Text.PlainText
@@ -1046,8 +1051,20 @@ Rectangle {
       }
       Repeater {
         model: [
-          { kind: "play", k: "PLAY", v: t.kid.policy.playLabel },
-          { kind: "break", k: "BREAK", v: t.kid.policy.breakLabel }
+          {
+            kind: "play",
+            k: "PLAY",
+            v: t.kid.policy.playLabel,
+            minusOn: Model.playMinusOn(t.kid.policy.playMin),
+            plusOn: Model.playPlusOn(t.kid.policy.playMin)
+          },
+          {
+            kind: "break",
+            k: "BREAK",
+            v: t.kid.policy.breakLabel,
+            minusOn: Model.breakMinusOn(t.kid.policy.breakMin),
+            plusOn: Model.breakPlusOn(t.kid.policy.breakMin)
+          }
         ]
         Item {
           required property var modelData
@@ -1067,6 +1084,8 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
+            enabled: modelData.minusOn
+            opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: modelData.kind, delta: -15 })
             Text {
               textFormat: Text.PlainText
@@ -1091,6 +1110,8 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
+            enabled: modelData.plusOn
+            opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: modelData.kind, delta: 15 })
             Text {
               textFormat: Text.PlainText

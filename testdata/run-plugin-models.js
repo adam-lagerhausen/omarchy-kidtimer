@@ -540,6 +540,19 @@ const breakFloor = parent.applyPolicy({ look: { policy: Object.assign({}, adaSna
 assertEqual(breakFloor.policy.breakMin, 15, "break floor")
 const breakCeil = parent.applyPolicy({ look: { policy: Object.assign({}, adaSnap.look.policy, { breakMin: 120 }) } }, { kind: "break", delta: 15 })
 assertEqual(breakCeil.policy.breakMin, 120, "break ceil")
+assertEqual(parent.playMinusOn(45), true, "play minus on")
+assertEqual(parent.playMinusOn(15), false, "play minus off at 15")
+assertEqual(parent.playPlusOn(45), true, "play plus on")
+assertEqual(parent.playPlusOn(240), false, "play plus off at 4h")
+assertEqual(parent.breakMinusOn(30), true, "break minus on")
+assertEqual(parent.breakMinusOn(15), false, "break minus off at 15")
+assertEqual(parent.breakPlusOn(15), true, "break plus on")
+assertEqual(parent.breakPlusOn(120), false, "break plus off at 2h")
+assertEqual(parent.funDayMinusOn(3600), true, "day minus on")
+assertEqual(parent.funDayMinusOn(0), false, "day minus off at zero")
+assertEqual(parent.funDayPlusOn(3600), true, "day plus on")
+assertEqual(parent.funDayPlusOn(8 * 60 * 60), false, "day plus off at 8h")
+assertEqual(settings.kid.policy.funDayRows[0].seconds, 3600, "mon seconds for the stepper")
 const parsedLimits = parent.parseLook({
   bedtime: { lights_out: 21 * 60, duration: 10 * 60 },
   fun_hours: { mon: 3600, tue: 3600, wed: 3600, thu: 3600, fri: 3600, sat: 7200, sun: 7200 }
