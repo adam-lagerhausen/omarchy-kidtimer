@@ -393,6 +393,30 @@ function clampBreakMin(n) {
   return v
 }
 
+function funDayMinusOn(seconds) {
+  return (Number(seconds) || 0) > 0
+}
+
+function funDayPlusOn(seconds) {
+  return (Number(seconds) || 0) < MAX_FUN_MIN * 60
+}
+
+function playMinusOn(minutes) {
+  return clampPlayMin(minutes) > MIN_PLAY_MIN
+}
+
+function playPlusOn(minutes) {
+  return clampPlayMin(minutes) < MAX_PLAY_MIN
+}
+
+function breakMinusOn(minutes) {
+  return clampBreakMin(minutes) > MIN_BREAK_MIN
+}
+
+function breakPlusOn(minutes) {
+  return clampBreakMin(minutes) < MAX_BREAK_MIN
+}
+
 function playMinutesOf(raw) {
   if (!raw || raw.play_minutes === undefined || raw.play_minutes === null) return DEFAULT_PLAY_MIN
   var v = Number(raw.play_minutes)
@@ -1083,6 +1107,7 @@ function projectKid(snap, index, now, allotOverride, hour12) {
           rows.push({
             day: r,
             dow: DAY[r],
+            seconds: Number(policy.funDay[r]) || 0,
             label: minutesLabel(Math.floor((Number(policy.funDay[r]) || 0) / 60))
           })
         }
