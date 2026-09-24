@@ -18,7 +18,7 @@ Rectangle {
     howTo: null,
     chrome: { face: "home", picker: false, bell: false },
     kid: {
-      name: "", nameUp: "", locked: false, bedtime: false, breaking: false,
+      name: "", nameUp: "", locked: false, bedtime: false, breaking: false, away: false,
       face: { live: false, caption: "", coral: false },
       usedLabel: "0m",
       fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
@@ -292,7 +292,8 @@ Rectangle {
         anchors.top: parent.top
         width: 36
         height: pickBox.height
-        opacity: t.lockArmed ? 1 : 0.35
+        enabled: !t.kid.away || !t.lockArmed
+        opacity: (t.lockArmed && !t.kid.away) ? 1 : 0.35
         filled: t.kid.locked
         danger: t.kid.locked
         onClicked: root.act({ kind: "lock" })
@@ -509,6 +510,8 @@ Rectangle {
                   required property var modelData
                   width: (askCol.width - 8) / 2
                   height: 24
+                  enabled: !(modelData.ask && modelData.ask.away)
+                  opacity: enabled ? 1 : 0.35
                   onClicked: root.act({ kind: modelData.kind, ask: modelData.ask })
                   Text {
                     textFormat: Text.PlainText
@@ -558,12 +561,12 @@ Rectangle {
       Item {
         width: parent.width
         height: 36
-        opacity: (t.kid.locked || t.kid.bedtime || t.kid.breaking) ? 0.35 : 1
+        opacity: (t.kid.locked || t.kid.bedtime || t.kid.breaking || t.kid.away) ? 0.35 : 1
         SquareBtn {
           width: 36
           height: 36
-          enabled: !t.kid.locked && !t.kid.bedtime && !t.kid.breaking && !t.kid.fun.empty
-          opacity: (t.kid.locked || t.kid.bedtime || t.kid.breaking || !t.kid.fun.empty) ? 1 : 0.35
+          enabled: !t.kid.locked && !t.kid.bedtime && !t.kid.breaking && !t.kid.away && !t.kid.fun.empty
+          opacity: (t.kid.locked || t.kid.bedtime || t.kid.breaking || t.kid.away || !t.kid.fun.empty) ? 1 : 0.35
           onClicked: root.act({ kind: "minus10" })
           Text {
             textFormat: Text.PlainText
@@ -587,7 +590,7 @@ Rectangle {
           anchors.right: parent.right
           width: 36
           height: 36
-          enabled: !t.kid.locked && !t.kid.bedtime && !t.kid.breaking
+          enabled: !t.kid.locked && !t.kid.bedtime && !t.kid.breaking && !t.kid.away
           onClicked: root.act({ kind: "plus10" })
           Text {
             textFormat: Text.PlainText
@@ -835,6 +838,8 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 28
             height: 28
+            enabled: !t.kid.away
+            opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: clockRow.index === 0 ? "bed" : "up", delta: -15 })
             Text {
               textFormat: Text.PlainText
@@ -861,6 +866,8 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 28
             height: 28
+            enabled: !t.kid.away
+            opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: clockRow.index === 0 ? "bed" : "up", delta: 15 })
             Text {
               textFormat: Text.PlainText
@@ -987,7 +994,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
-            enabled: Model.funDayMinusOn(modelData.seconds)
+            enabled: Model.funDayMinusOn(modelData.seconds) && !t.kid.away
             opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: "funDay", day: modelData.day, delta: -15 })
             Text {
@@ -1013,7 +1020,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
-            enabled: Model.funDayPlusOn(modelData.seconds)
+            enabled: Model.funDayPlusOn(modelData.seconds) && !t.kid.away
             opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: "funDay", day: modelData.day, delta: 15 })
             Text {
@@ -1084,7 +1091,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
-            enabled: modelData.minusOn
+            enabled: modelData.minusOn && !t.kid.away
             opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: modelData.kind, delta: -15 })
             Text {
@@ -1110,7 +1117,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 24
-            enabled: modelData.plusOn
+            enabled: modelData.plusOn && !t.kid.away
             opacity: enabled ? 1 : 0.35
             onClicked: root.act({ kind: modelData.kind, delta: 15 })
             Text {
