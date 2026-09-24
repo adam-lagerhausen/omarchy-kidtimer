@@ -41,22 +41,23 @@ Item {
     if (ev.kind === "lock") {
       if (!root.tape.lockArmed) {
         root.chrome = Model.chromeSettings()
-      } else if (root.tape.ours !== false) {
+      } else if (root.tape.ours !== false && !root.tape.kid.away) {
         root.hostWidget.setLock(!root.tape.kid.locked)
       }
     }
     if (ev.kind === "pinSet" && ev.pin) root.hostWidget.setParentPin(ev.pin)
-    if (ev.kind === "minus10" && root.tape.ours !== false) root.hostWidget.grantFun(-600)
-    if (ev.kind === "plus10" && root.tape.ours !== false) root.hostWidget.grantFun(600)
-    if (ev.kind === "deny" && ev.ask) root.hostWidget.denyAsk(ev.ask)
-    if (ev.kind === "approve" && ev.ask) root.hostWidget.approveAsk(ev.ask)
+    if (ev.kind === "minus10" && root.tape.ours !== false && !root.tape.kid.away) root.hostWidget.grantFun(-600)
+    if (ev.kind === "plus10" && root.tape.ours !== false && !root.tape.kid.away) root.hostWidget.grantFun(600)
+    if (ev.kind === "deny" && ev.ask && !ev.ask.away) root.hostWidget.denyAsk(ev.ask)
+    if (ev.kind === "approve" && ev.ask && !ev.ask.away) root.hostWidget.approveAsk(ev.ask)
     if (r.adopt) {
       var adoptSnap = (root.snapshots || [])[r.adopt.index]
       if (adoptSnap && root.hostWidget && root.hostWidget.adoptKid) root.hostWidget.adoptKid(adoptSnap)
     }
     if (ev.kind === "bed" || ev.kind === "up" || ev.kind === "funDay" || ev.kind === "play" || ev.kind === "break" || ev.kind === "addThing" || ev.kind === "removeThing") {
+      if (root.tape.kid.away) return
       var snap = (root.snapshots || [])[root.selectedIndex]
-      if (!snap) return
+      if (!snap || snap.reachable === false) return
       var next = Model.applyPolicy(snap, ev)
       root.hostWidget.persistPolicy(next)
     }

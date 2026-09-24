@@ -292,6 +292,7 @@ function bedtimeOverlay(status) {
 
 function grantAllowed(snap) {
   if (!snap || snap.claimed) return false
+  if (snap.reachable === false) return false
   var status = snapshotStatus(snap)
   if (status.parentLocked) return false
   if (breakSecondsOf(status) > 0) return false
@@ -782,7 +783,7 @@ function projectFun(status, allotSec) {
     leftLabel: minutesLabel(leftMin) + " LEFT",
     fillPct: fillPct(leftMin, usedMin, allotMin),
     empty: left <= 0,
-    barLow: leftMin <= 8,
+    barLow: left <= 0,
     guessedUsed: usedMin == null
   }
 }
@@ -1089,6 +1090,7 @@ function projectKid(snap, index, now, allotOverride, hour12) {
     locked: !!status.parentLocked,
     bedtime: bedtimeOverlay(status),
     breaking: breakSecondsOf(status) > 0,
+    away: !reachable,
     schoolLabel: minutesLabel(schoolSec == null ? 0 : Math.floor(schoolSec / 60)),
     fun: projectFun(status, allot),
     policy: {
@@ -1137,6 +1139,7 @@ function householdAsks(snapshots) {
         kidIndex: i,
         kidName: name,
         seconds: a.seconds,
+        away: !!(list[i] && list[i].reachable === false),
         text: askCardText(name, a.seconds, locked)
       })
     }
@@ -1187,6 +1190,7 @@ function blankKid() {
     locked: false,
     bedtime: false,
     breaking: false,
+    away: false,
     face: { live: false, caption: "", coral: false },
     fun: { usedLabel: "0m", leftLabel: "0m LEFT", fillPct: 0, empty: true, barLow: true },
     policy: { bedLabel: "", upLabel: "", playLabel: "", breakLabel: "", funDayRows: [] }

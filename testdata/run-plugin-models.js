@@ -285,6 +285,9 @@ assertEqual(parent.projectFun({ funLeft: 59, spentFun: 0 }, 3600).empty, false, 
 assertEqual(parent.projectFun({ funLeft: 59, spentFun: 0 }, 3600).fillPct > 0, true, "last minute bar still has fill")
 assertEqual(parent.projectFun({ funLeft: 0, spentFun: 3600 }, 3600).empty, true, "zero parent empty")
 assertEqual(parent.projectFun({ funLeft: 0, spentFun: 3600 }, 3600).leftLabel, "0m LEFT", "zero parent label")
+assertEqual(parent.projectFun({ funLeft: 0, spentFun: 3600 }, 3600).barLow, true, "zero bar is urgent")
+assertEqual(parent.projectFun({ funLeft: 8 * 60, spentFun: 600 }, 3600).barLow, false, "eight minutes is not urgent")
+assertEqual(parent.projectFun({ funLeft: 8 * 60, spentFun: 600 }, 3600).leftLabel, "8m LEFT", "eight minutes still left")
 assertEqual(parent.leftoverMinutes(59), 1, "parent last minute leftover")
 assertEqual(home.kid.fun.barLow, false, "ada bar not low")
 assertEqual(home.bellCount, 2, "household asks")
@@ -391,6 +394,29 @@ assertEqual(parent.grantAllowed({
 }), false, "no grant during break")
 assertEqual(parent.grantAllowed({ claimed: true, status: { bedtime_active: false } }), false, "no grant claimed")
 assertEqual(parent.grantAllowed(null), false, "no grant missing kid")
+assertEqual(parent.grantAllowed({
+  claimed: false,
+  reachable: false,
+  status: { groups: { fun: 1800 } }
+}), false, "no grant while offline")
+assertEqual(parent.grantAllowed({
+  claimed: false,
+  status: { groups: { fun: 1800 } }
+}), true, "missing reachable still grants")
+const offlineTape = parent.projectTape([{
+  name: "Ada",
+  claimed: false,
+  reachable: false,
+  status: parent.parseStatus({
+    groups: { fun: 1800 },
+    spent: { fun: 600 }
+  }),
+  asks: [{ id: "off-ask", seconds: 600 }]
+}], 0, parent.chromeHome(), null, { pinSet: true })
+assertEqual(offlineTape.kid.away, true, "offline tape is away")
+assertEqual(offlineTape.kid.face.caption, "Offline", "offline tape caption")
+assertEqual(offlineTape.asks[0].away, true, "offline ask cannot be decided")
+assertEqual(home.asks[0].away, false, "live ask can be decided")
 const bedtimeTape = parent.projectTape([bedtimeSnap], 0, parent.chromeHome(), null, { pinSet: true })
 assertEqual(bedtimeTape.kid.bedtime, true, "bedtime tape greys +10")
 assertEqual(bedtimeTape.kid.face.caption, "Bedtime", "bedtime tape caption")

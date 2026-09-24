@@ -348,7 +348,7 @@ BarWidget {
     var list = snapshots || []
     var kid = aimedKid()
     if (kidIndex !== undefined && kidIndex !== null && list[kidIndex]) kid = list[kidIndex]
-    if (!kid || !kid.id || kid.claimed) return
+    if (!kid || !kid.id || kid.claimed || kid.reachable === false) return
     sendKid(kid, "POST", "/v1/asks/" + askId + "/decide", { decision: decision })
   }
 
@@ -364,7 +364,7 @@ BarWidget {
 
   function setLock(locked) {
     var kid = aimedKid()
-    if (kid && kid.claimed) return
+    if (kid && (kid.claimed || kid.reachable === false)) return
     if (!kid || !kid.id) return
     sendKid(kid, "POST", "/v1/lock", Model.lockPayload(locked))
   }
@@ -428,6 +428,7 @@ BarWidget {
 
   function persistPolicy(look) {
     var kid = aimedKid()
+    if (kid && kid.reachable === false) return
     var rows = kidRows()
     var idx = root.selectedIndex
     var p = look && look.policy
