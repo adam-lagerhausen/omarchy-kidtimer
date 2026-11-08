@@ -113,7 +113,7 @@ Sound like a parent.
 - `PLAY` / `BREAK`
 - `45m` / `15m`
 - `Ada asked for 10 more minutes`
-- `Ada asked to unlock`
+- `Ada asked to unlock for 10 more minutes`
 - `DENY` / `APPROVE`
 
 Do not sound like a sysadmin or a hacker movie. Never say overflow, pile, metered, bypass, or regex. Minecraft is Minecraft. Do not say Fun or School.

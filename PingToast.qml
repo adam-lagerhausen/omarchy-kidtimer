@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import qs.Commons
+import qs.Commons as Commons
 
 Item {
   id: root
@@ -9,8 +9,8 @@ Item {
   readonly property var pings: hostWidget && hostWidget.pingQueue ? hostWidget.pingQueue : []
   readonly property bool shown: !!(hostWidget && hostWidget.role === "parent" && pings.length > 0)
   readonly property string plex: hostWidget && hostWidget.plex ? hostWidget.plex : "JetBrains Mono"
-  readonly property color ink: Color.foreground
-  readonly property color paper: Color.background
+  readonly property color ink: Commons.Color.foreground
+  readonly property color paper: Commons.Color.background
   readonly property color quiet: Qt.darker(ink, 1.4)
   readonly property color hover: Qt.rgba(ink.r, ink.g, ink.b, 0.08)
 
