@@ -5,6 +5,33 @@ import (
 	"testing"
 )
 
+func TestIsHouseLAN(t *testing.T) {
+	cases := []struct {
+		ip   string
+		want bool
+	}{
+		{"127.0.0.1", true},
+		{"::1", true},
+		{"192.168.1.20", true},
+		{"10.0.0.8", true},
+		{"172.16.5.1", true},
+		{"fd12:3456::1", true},
+		{"169.254.1.1", false},
+		{"fe80::1", false},
+		{"100.64.1.2", false},
+		{"8.8.8.8", false},
+		{"0.0.0.0", false},
+	}
+	for _, tc := range cases {
+		if got := IsHouseLAN(net.ParseIP(tc.ip)); got != tc.want {
+			t.Fatalf("%s: got %v want %v", tc.ip, got, tc.want)
+		}
+	}
+	if IsHouseLAN(nil) {
+		t.Fatal("nil")
+	}
+}
+
 func TestIsPrivate(t *testing.T) {
 	cases := []struct {
 		ip   string

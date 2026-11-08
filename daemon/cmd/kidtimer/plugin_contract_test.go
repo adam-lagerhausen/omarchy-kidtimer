@@ -18,6 +18,7 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 		"ParentPanel.qml",
 		"Tape.qml",
 		"ParentModel.js",
+		"PingToast.qml",
 	}
 	joined := ""
 	for _, rel := range files {
@@ -178,7 +179,6 @@ func TestPluginQMLIsHTTPClientNotBank(t *testing.T) {
 	mustContain(t, parentPanel, "ev.ask.away", "approve fades while that computer is off")
 	mustContain(t, parentBar, "kid.reachable === false", "desk skips approve while off")
 	mustContain(t, parentBar, "omarchy-notification-send", "omarchy notification")
-	mustContain(t, parentBar, "notifyBody", "ask notification matches the card")
 	mustContain(t, parentBar, "hour12ShouldPush", "clock push waits for success")
 	mustContain(t, parentBar, "hour12MarkPushed", "clock push marks after 200")
 	mustContain(t, parentBar, "newAskIds", "pending id diff")

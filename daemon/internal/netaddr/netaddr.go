@@ -56,6 +56,15 @@ func IsHousehold(ip net.IP) bool {
 	}
 }
 
+func IsHouseLAN(ip net.IP) bool {
+	switch Classify(ip) {
+	case ClassLoopback, ClassPrivate:
+		return true
+	default:
+		return false
+	}
+}
+
 func IsPrivate(ip net.IP) bool {
 	return IsHousehold(ip)
 }
